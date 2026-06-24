@@ -3486,6 +3486,7 @@ function renderPreviewControls(tab) {
   const _layoutPC      = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || { codigo: 'L' };
   const _hasLeftWallPC  = ['L','U','L+','U+','C','I','K','LP','P+','PP'].includes(_layoutPC.codigo);
   const _hasRightWallPC = ['U','E','U+','E+','C','I','K','P+'].includes(_layoutPC.codigo);
+  const leftWallEff     = cfg.invertir ? _hasRightWallPC : _hasLeftWallPC;
   const rightWallEff    = cfg.invertir ? _hasLeftWallPC : _hasRightWallPC;
   const piezasFamilia = tab === 'paneles' ? 'PN' : tab === 'puertas' ? 'PT' : 'PI';
   // Filtrar piezas por modelo activo (BOM oficial). null = sin restricción.
@@ -3624,8 +3625,8 @@ function renderPreviewControls(tab) {
       if (tt === 'pilastras') a.pilastras[i]   = v;
       if (tt === 'apertura')  a.aperturas[i]   = v;
       if (tt === 'tipo')      a.tiposCabina[i] = v;
-      if (tt === 'muroIzq')   a.muroIzq        = v ? { codigo: v, esMuro: (a.muroIzq && a.muroIzq.esMuro !== undefined) ? a.muroIzq.esMuro : true } : null;
-      if (tt === 'muroDer')   a.muroDer        = v ? { codigo: v, esMuro: (a.muroDer && a.muroDer.esMuro !== undefined) ? a.muroDer.esMuro : true } : null;
+      if (tt === 'muroIzq')   a.muroIzq        = v ? { codigo: v, esMuro: leftWallEff } : null;
+      if (tt === 'muroDer')   a.muroDer        = v ? { codigo: v, esMuro: rightWallEff } : null;
       // Si cambió el tipo cabina (Baño ↔ Mingitorio), re-render los controles para
       // mostrar/ocultar el dropdown de Apertura. Si no, basta redibujar el canvas.
       if (tt === 'tipo') {
@@ -3726,31 +3727,38 @@ function renderMurosYExtrasSection() {
   const hasRightWall = ['U','E','U+','E+','C','I','K','P+'].includes(layout.codigo);
   const leftWallEff  = cfg.invertir ? hasRightWall : hasLeftWall;
   const rightWallEff = cfg.invertir ? hasLeftWall  : hasRightWall;
+  const a            = (typeof activeAreaCfg === 'function') ? (activeAreaCfg() || {}) : {};
+  // Una esquina tiene CIERRE si es MURO, o si la modulación asignó una pilastra de cierre
+  // TERMINAL ahí. En layout L/E el lado SIN muro se cierra con PANEL + una pilastra lateral
+  // (esa pilastra vive en muroIzq/muroDer con esMuro:false). Si ese extremo es mingitorio,
+  // no lleva cierre (muroIzq/Der = null) → el control no se muestra.
+  const tieneCierreIzq = leftWallEff  || !!(a.muroIzq && a.muroIzq.codigo);
+  const tieneCierreDer = rightWallEff || !!(a.muroDer && a.muroDer.codigo);
   const pilastras    = CATALOGO.piezas.filter(p => p.familia === 'PI');
   const opts         = pilastras.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${p.alto})</option>`).join('');
 
   let html = `<div style="grid-column: 1 / -1; margin-top: 14px; padding: 14px 16px; background: var(--bg-soft); border: 1px dashed var(--line); border-radius: 8px;">
-    <div style="font-weight: 700; color: var(--brand); margin-bottom: 10px; font-size: 13px;">Pilastras de muro y extras</div>`;
+    <div style="font-weight: 700; color: var(--brand); margin-bottom: 10px; font-size: 13px;">Pilastras de cierre y extras</div>`;
 
-  if (leftWallEff || rightWallEff) {
+  if (tieneCierreIzq || tieneCierreDer) {
     html += `<div style="display: flex; gap: 14px; margin-bottom: 14px; flex-wrap: wrap;">`;
-    if (leftWallEff) html += `
+    if (tieneCierreIzq) html += `
       <label style="flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 4px;">
-        <span style="font-size: 12px; color: var(--text-soft); font-weight: 600;">Esquina IZQUIERDA (contra muro)</span>
+        <span style="font-size: 12px; color: var(--text-soft); font-weight: 600;">${leftWallEff ? 'Esquina IZQUIERDA (contra muro)' : 'Cierre IZQUIERDO (pilastra lateral del panel)'}</span>
         <select data-tab="muroIzq">
-          <option value="">— Sin pilastra de muro —</option>${opts}
+          <option value="">— Sin pilastra —</option>${opts}
         </select>
       </label>`;
-    if (rightWallEff) html += `
+    if (tieneCierreDer) html += `
       <label style="flex: 1; min-width: 220px; display: flex; flex-direction: column; gap: 4px;">
-        <span style="font-size: 12px; color: var(--text-soft); font-weight: 600;">Esquina DERECHA (contra muro)</span>
+        <span style="font-size: 12px; color: var(--text-soft); font-weight: 600;">${rightWallEff ? 'Esquina DERECHA (contra muro)' : 'Cierre DERECHO (pilastra lateral del panel)'}</span>
         <select data-tab="muroDer">
-          <option value="">— Sin pilastra de muro —</option>${opts}
+          <option value="">— Sin pilastra —</option>${opts}
         </select>
       </label>`;
     html += `</div>`;
   } else {
-    html += `<div class="form-help" style="margin-bottom: 10px;">Este layout no tiene muros laterales — no hay pilastras de esquina.</div>`;
+    html += `<div class="form-help" style="margin-bottom: 10px;">Este layout no tiene cierres laterales (extremos abiertos o con mingitorio).</div>`;
   }
 
   html += `<div style="font-weight: 600; color: var(--text-soft); margin-bottom: 4px; font-size: 12px;">Pilastras adicionales (T, costillas, intersecciones especiales)</div>
