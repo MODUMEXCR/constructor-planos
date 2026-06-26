@@ -4895,13 +4895,12 @@ async function generarPlanos() {
   }
   cfg.editandoId = null;                              // salir del modo edición
 
-  // Descargar artefactos. El PDF siempre se genera; el CSV solo si todos los
-  // SubTipos están completos (sino exportarCSV muestra un toast con el detalle).
+  // Descargar SOLO los planos (PDF). Los archivos CSV (CIP para Modumex.cr y el de
+  // SICLICK) se descargan aparte, por proyecto, desde "Mis Proyectos".
   exportarPDF(proyecto);
-  const csvOk = exportarCSV(proyecto);
 
   const accion = editando ? 'actualizado' : 'guardado';
-  toast(csvOk ? `Proyecto ${accion} · PDF + CSV descargados` : 'PDF descargado. CSV pendiente — completá los SubTipos.', csvOk ? 'ok' : 'danger');
+  toast(`Proyecto ${accion} · planos (PDF) descargados. Los archivos CIP/SICLICK se descargan desde Mis Proyectos.`, 'ok');
   nav('proyectos');
 }
 
@@ -5189,6 +5188,20 @@ function exportarCSV(proyecto) {
   document.body.removeChild(a);
   URL.revokeObjectURL(url);
   return true;
+}
+
+/* ===========================================================================
+   CSV — formato SICLICK (PENDIENTE DE PLANTILLA)
+   Genera el archivo CSV para subir a la app SICLICK. El formato exacto
+   (columnas, orden, separador, nombre de archivo) se definirá cuando Nancy
+   pase la plantilla. Por ahora el botón existe pero avisa que falta el formato.
+   Cuando llegue la plantilla, reemplazar el cuerpo por la construcción real
+   (mismo patrón que exportarCSV: armar líneas → Blob → descarga `SICLICK_...`).
+=========================================================================== */
+function exportarSiclick(proyecto) {
+  // TODO(SICLICK): implementar el formato real cuando llegue la plantilla.
+  toast('El archivo para SICLICK todavía no está configurado — pasame la plantilla (columnas y orden) y lo activo.', 'danger');
+  return false;
 }
 
 /* ===========================================================================
@@ -7019,8 +7032,9 @@ async function renderProyectos() {
       <td class="col-actions">
         <button class="btn btn-edit" data-editp="${p.id}" title="Editar en el configurador">✎ Editar</button>
         <button class="btn btn-edit" data-cot="${p.id}" title="Generar cotización">💰 Cotizar</button>
-        <button class="icon-btn icon-pdf" data-pdf="${p.id}" title="PDF de planos">📄</button>
-        <button class="icon-btn icon-xls" data-csv="${p.id}" title="CSV para Modumex.cr">📋</button>
+        <button class="icon-btn icon-pdf" data-pdf="${p.id}" title="Descargar planos (PDF)">📄</button>
+        <button class="icon-btn icon-xls" data-csv="${p.id}" title="Descargar archivo CIP (CSV para Modumex.cr)">📋</button>
+        <button class="icon-btn icon-xls" data-siclick="${p.id}" title="Descargar CSV para SICLICK">📤</button>
         <button class="icon-btn danger" data-del="${p.id}" title="Eliminar">🗑</button>
       </td>
     </tr>`).join('');
@@ -7034,6 +7048,7 @@ async function renderProyectos() {
   tb.querySelectorAll('[data-cot]').forEach(b => b.onclick = () => { const p = find(b.dataset.cot); if (p) openCotizarModal(p); });
   tb.querySelectorAll('[data-pdf]').forEach(b => b.onclick = () => { const p = find(b.dataset.pdf); if (p) exportarPDF(p); });
   tb.querySelectorAll('[data-csv]').forEach(b => b.onclick = () => { const p = find(b.dataset.csv); if (p) exportarCSV(p); });
+  tb.querySelectorAll('[data-siclick]').forEach(b => b.onclick = () => { const p = find(b.dataset.siclick); if (p) exportarSiclick(p); });
   tb.querySelectorAll('[data-del]').forEach(b => b.onclick = async () => {
     if (!confirm('¿Eliminar este proyecto?')) return;
     if (conectado) {
