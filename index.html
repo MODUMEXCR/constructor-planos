@@ -1057,8 +1057,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
               <select class="form-select" id="cfg-acabado"></select>
             </div>
             <div class="form-row">
-              <label class="form-label">Color</label>
-              <select class="form-select" id="cfg-color"></select>
+              <label class="form-label">Color <span class="muted" id="cfg-color-tier"></span></label>
+              <input class="form-input" id="cfg-color" list="cfg-color-list" autocomplete="off" placeholder="Elegí de la lista o escribí un color especial">
+              <datalist id="cfg-color-list"></datalist>
+              <div class="form-help" style="font-size:10px; margin-top:2px;">Los colores de <b>Línea</b> (en stock) están en la lista. Si escribís uno que no está, se cotiza como <b>Especial</b>.</div>
             </div>
             <div class="form-row">
               <label class="form-label">Distribuidor <span style="color: var(--text-mute); font-weight: 400;">(opcional)</span></label>
@@ -2352,7 +2354,7 @@ function initConfigurador() {
   fillModelosPorLinea(cfg.linea);   // modelos filtrados por línea
   fillSelect('cfg-terminacion', CATALOGO.terminaciones.map(t => ({ value: t.codigo, label: t.nombre })));
   fillSelect('cfg-acabado',     CATALOGO.acabados);
-  fillSelect('cfg-color',       CATALOGO.colores.map(c => ({ value: c.nombre, label: c.nombreViejo ? c.nombre + ' (' + c.nombreViejo + ')' : c.nombre })));
+  poblarColoresDatalist();   // cfg-color es input libre + datalist (permite color especial escrito)
   fillDistribuidorSelect();
   actualizarBotonSugerirSegunLinea();
 
@@ -2432,6 +2434,26 @@ function fillSelect(id, items) {
     if (typeof it === 'string') return `<option value="${it}">${it}</option>`;
     return `<option value="${it.value}">${it.label}</option>`;
   }).join('');
+}
+
+/* Pobla el datalist de colores (cfg-color es un input libre + datalist). Sugiere los
+   colores del catálogo; si el usuario escribe uno que no está, se cotiza como Especial. */
+function poblarColoresDatalist() {
+  const dl = document.getElementById('cfg-color-list');
+  if (!dl) return;
+  dl.innerHTML = (CATALOGO.colores || []).map(c => {
+    const label = c.nombreViejo ? `${c.nombre} (${c.nombreViejo})` : c.nombre;
+    const tier  = c.tier === 'linea' ? 'Línea' : 'Especial';
+    return `<option value="${escapeHtml(c.nombre)}">${escapeHtml(label)} — ${tier}</option>`;
+  }).join('');
+}
+/* Indicador del tier del color escrito (Línea = en stock · Especial = bajo pedido). */
+function actualizarIndicadorTierColor() {
+  const span = document.getElementById('cfg-color-tier');
+  if (!span) return;
+  const val = (document.getElementById('cfg-color') || {}).value || '';
+  if (!val) { span.textContent = ''; return; }
+  span.textContent = (tierDeColor(val) === 'linea') ? '· Línea (en stock)' : '· Especial (bajo pedido)';
 }
 
 /* Pobla el dropdown cfg-modelo con SOLO los modelos de la línea elegida.
@@ -2629,7 +2651,7 @@ function bindCfg() {
   };
   $('cfg-terminacion').onchange = e => { cfg.terminacion = e.target.value; updateAltura(); };
   $('cfg-acabado').onchange     = e => { cfg.acabado = e.target.value; };
-  $('cfg-color').onchange       = e => { cfg.color = e.target.value; };
+  $('cfg-color').oninput        = e => { cfg.color = e.target.value; actualizarIndicadorTierColor(); };
   $('cfg-distribuidor').onchange = e => { cfg.distribuidor = e.target.value; };
   $('cfg-repeticiones').oninput = e => { cfg.repeticiones = parseInt(e.target.value, 10) || 1; };
   $('cfg-cp').oninput           = e => { cfg.cp = e.target.value; };
@@ -5413,6 +5435,15 @@ function exportarCSV(proyecto) {
       csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap
     ].join(','));
   });
+  // Herrajes EXTRA agregados al cotizar → también van al CIP (SKU = código del herraje,
+  // SubTipo = HERRAJE-<línea>). El SKU del herraje no lleva color/sistema.
+  (proyecto.herrajesExtra || []).forEach(h => {
+    lines.push([
+      csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor),
+      csvCell(h.codigo), (h.cantidad || 1), csvCell('HERRAJE' + (h.linea ? '-' + h.linea : '')),
+      '', csvCell('Herrajes extra'), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap
+    ].join(','));
+  });
 
   // Descargar
   const csv  = lines.join('\n');
@@ -6937,6 +6968,22 @@ function tierDeColor(nombreColor) {
 }
 
 /* --- Modal "Cotizar" desde Mis Proyectos --- */
+/* Guarda en el PROYECTO los herrajes agregados al cotizar, para que salgan en el CIP CSV.
+   Reemplaza los herrajes previos del proyecto por los de esta cotización. */
+async function guardarHerrajesEnProyecto(proyecto) {
+  if (SB && sesionSupabase) {
+    if (proyecto.id == null) return;
+    const appObj = Object.assign({}, proyecto); delete appObj.id;
+    try {
+      await SB.from('proyecto').update({ app_json: appObj, actualizado_el: new Date().toISOString() })
+        .eq('proyecto_id', proyecto.id);
+    } catch (e) { console.warn('No se guardaron los herrajes en el proyecto:', e); }
+  } else {
+    const idx = (db.proyectos || []).findIndex(p => String(p.id) === String(proyecto.id));
+    if (idx >= 0) { db.proyectos[idx].herrajesExtra = proyecto.herrajesExtra; persist(); }
+  }
+}
+
 function openCotizarModal(proyecto) {
   // Región del distribuidor del proyecto: México NO cotiza; LATAM → USD fijo; Costa Rica → CRC fijo.
   const regionProy = regionDeProyecto(proyecto);
@@ -7121,7 +7168,16 @@ function openCotizarModal(proyecto) {
       db.cotizaciones.push(cot);
       persist();
       generarPdfCotizacion(cot);
-      toast('Cotización generada y descargada', 'ok');
+      // Herrajes agregados al cotizar → se guardan en el proyecto para que salgan en el CIP CSV.
+      const herrajesExtra = extrasAgregados.filter(e => e.tipo === 'herraje')
+        .map(e => ({ codigo: e.codigo, descripcion: e.descripcion, linea: e.linea, cantidad: e.cantidad }));
+      if (herrajesExtra.length) {
+        proyecto.herrajesExtra = herrajesExtra;
+        guardarHerrajesEnProyecto(proyecto);
+        toast('Cotización generada · herrajes agregados al CIP del proyecto', 'ok');
+      } else {
+        toast('Cotización generada y descargada', 'ok');
+      }
     }
   });
 }
@@ -7484,6 +7540,7 @@ function cargarProyectoEnConfigurador(p) {
   set('cfg-codigo', cfg.codigo); set('cfg-nombre', cfg.nombre);
   set('cfg-linea', cfg.linea); set('cfg-modelo', cfg.modelo); set('cfg-terminacion', cfg.terminacion);
   set('cfg-acabado', cfg.acabado); set('cfg-color', cfg.color);
+  if (typeof actualizarIndicadorTierColor === 'function') actualizarIndicadorTierColor();
   set('cfg-distribuidor', cfg.distribuidor); set('cfg-repeticiones', cfg.repeticiones);
   set('cfg-cp', cfg.cp); set('cfg-kap', cfg.kap); set('cfg-mingitorios', cfg.mingitorios);
   set('cfg-regaderas', cfg.regaderas);
@@ -7849,13 +7906,14 @@ function refrescarSelectsCatalogo() {
   fillSelect('cfg-modelo',      CATALOGO.modelos.map(m => ({ value: m.codigo, label: m.nombre })));
   fillSelect('cfg-terminacion', CATALOGO.terminaciones.map(t => ({ value: t.codigo, label: t.nombre })));
   fillSelect('cfg-acabado',     CATALOGO.acabados);
-  fillSelect('cfg-color',       CATALOGO.colores.map(c => ({ value: c.nombre, label: c.nombreViejo ? c.nombre + ' (' + c.nombreViejo + ')' : c.nombre })));
+  poblarColoresDatalist();
   // Restaurar selección previa si todavía existe
   if (prev.linea       && CATALOGO.lineas.includes(prev.linea))                                         elLinea.value = prev.linea;
   if (prev.modelo      && CATALOGO.modelos.some(m => m.codigo === prev.modelo))                         document.getElementById('cfg-modelo').value      = prev.modelo;
   if (prev.terminacion && CATALOGO.terminaciones.some(t => t.codigo === prev.terminacion))              document.getElementById('cfg-terminacion').value = prev.terminacion;
   if (prev.acabado     && CATALOGO.acabados.includes(prev.acabado))                                     document.getElementById('cfg-acabado').value     = prev.acabado;
-  if (prev.color       && CATALOGO.colores.some(c => c.nombre === prev.color))                          document.getElementById('cfg-color').value       = prev.color;
+  if (prev.color)                                                                                       document.getElementById('cfg-color').value       = prev.color;  // input libre (permite especial)
+  actualizarIndicadorTierColor();
 }
 
 function renderCatalogoPiezas() {
