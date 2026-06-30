@@ -918,6 +918,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       <a data-page="configurador" class="active">Configurador</a>
       <a data-page="proyectos">Mis Proyectos</a>
       <a data-page="catalogo">Catálogo</a>
+      <a data-page="precios">Lista de Precios</a>
       <a data-page="usuarios">Usuarios</a>
       <a data-page="distribuidores">Distribuidores</a>
     </nav>
@@ -1267,6 +1268,33 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
         <tbody id="cat-tbody-medidas"></tbody>
       </table>
     </div>
+  </section>
+
+  <!-- ===================== LISTA DE PRECIOS (solo Super Admin) ===================== -->
+  <section class="page" id="page-precios" hidden>
+    <h1 class="page-title">Lista de Precios</h1>
+    <p class="page-subtitle" style="margin-top:0;">Tarifas en $/m² por <b>familia</b> (Estándar, Reforzado, Kids…) y <b>pieza</b> (puerta, panel, pilastra, mingitorio). Editá una celda, toda una fila (familia) o toda una columna (pieza). Solo el <b>Super Admin</b> puede modificar; los cambios se guardan en la nube y los usan todos al cotizar.</p>
+    <div class="toolbar" style="gap:14px; flex-wrap:wrap; align-items:flex-end;">
+      <label style="display:flex; flex-direction:column; gap:4px; font-size:12px;">
+        <span class="muted">Tarifa (tier)</span>
+        <select class="form-select" id="precios-tier">
+          <option value="especiales">Especiales</option>
+          <option value="linea">C. de Línea</option>
+        </select>
+      </label>
+      <label style="display:flex; flex-direction:column; gap:4px; font-size:12px;">
+        <span class="muted">Moneda</span>
+        <select class="form-select" id="precios-moneda">
+          <option value="USD">Dólares (USD)</option>
+          <option value="CRC">Colones (CRC)</option>
+        </select>
+      </label>
+      <div style="flex:1;"></div>
+      <button class="btn btn-ghost" id="btn-precios-reload" title="Volver a cargar desde la nube (descarta cambios sin guardar)">↻ Recargar</button>
+      <button class="btn btn-primary" id="btn-precios-guardar">💾 Guardar cambios</button>
+    </div>
+    <div id="precios-tabla" style="margin-top:14px; overflow-x:auto;"></div>
+    <div class="form-help" id="precios-estado" style="margin-top:10px;"></div>
   </section>
 
   <!-- ===================== USUARIOS ===================== -->
@@ -1913,6 +1941,13 @@ SEED_CAT_KEYS.forEach(k => {
   }
   CATALOGO[k] = db.catalogos[k];
 });
+// Lista de precios ($/m²): se persiste localmente y se puede editar (solo Super Admin).
+// En la NUBE la tabla `tarifa_m2` es la fuente COMPARTIDA y sobreescribe esto al login
+// (refreshTarifas), así todos cotizan con los precios que ponga el Super Admin.
+if (!db.catalogos.preciosPorM2) {
+  db.catalogos.preciosPorM2 = JSON.parse(JSON.stringify(CATALOGO.preciosPorM2));
+}
+CATALOGO.preciosPorM2 = db.catalogos.preciosPorM2;
 // MIGRACIÓN colores: si los guardados no tienen `tier` (set viejo), se reemplazan por el set
 // nuevo de Línea (Sólidos fenólicos). Mutamos EN SU LUGAR para no romper la referencia
 // CATALOGO.colores === db.catalogos.colores.
@@ -2015,10 +2050,15 @@ function nav(page) {
   if (u && u.rol === 'Vendedor' && page === 'usuarios') {
     page = 'configurador';
   }
+  // Lista de Precios: SOLO Super Admin (aunque se llame por código/hash)
+  if (page === 'precios' && (!u || u.rol !== 'Super Admin')) {
+    page = 'configurador';
+  }
   document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.page === page));
   document.querySelectorAll('section.page').forEach(s => s.hidden = s.id !== 'page-' + page);
   if (page === 'proyectos')      renderProyectos();
   if (page === 'catalogo')       renderCatalogo();
+  if (page === 'precios')        renderListaPrecios();
   if (page === 'usuarios')       renderUsuarios();
   if (page === 'distribuidores') renderDistribuidores();
   // Refrescar el dropdown de distribuidor al volver al configurador (puede haberse
@@ -2047,6 +2087,7 @@ function showApp(user) {
     let visible = true;
     if (esDistribuidor) visible = soloDistribuidor;                 // Distribuidor: solo config + proyectos
     else if (page === 'usuarios' && user.rol === 'Vendedor') visible = false;  // Vendedor: sin Usuarios
+    if (page === 'precios') visible = (user.rol === 'Super Admin');  // Lista de Precios: SOLO Super Admin
     a.style.display = visible ? '' : 'none';
   });
   initConfigurador();
@@ -2101,8 +2142,139 @@ async function cargarPerfilSupabase(user) {
     rol: prof.rol || 'Distribuidor',
     distribuidorId: prof.distribuidor_id || null
   };
+  // Cargar la lista de precios compartida (tarifa_m2) ANTES de mostrar la app, así
+  // todos (incl. distribuidores) cotizan con los precios que puso el Super Admin.
+  try { await refreshTarifas(); } catch (e) { console.warn('No se pudieron cargar tarifas:', e); }
   showApp(sesionSupabase);
   return true;
+}
+
+/* Carga la lista de precios COMPARTIDA desde Supabase (tabla tarifa_m2) y la mezcla
+   sobre CATALOGO.preciosPorM2 (la nube gana por celda; lo que falte queda en el default).
+   tarifa_m2: (modelo_codigo, tier, moneda, familia) → tarifa. Clave en preciosPorM2:
+   USD → 'linea'/'especiales'; CRC → 'lineaCRC'/'especialesCRC'. */
+async function refreshTarifas() {
+  if (!(SB && sesionSupabase)) return;
+  const { data, error } = await SB.from('tarifa_m2')
+    .select('modelo_codigo,tier,moneda,familia,tarifa');
+  if (error || !data) return;
+  data.forEach(r => {
+    const mod = CATALOGO.preciosPorM2[r.modelo_codigo];
+    if (!mod) return;
+    const setKey = (r.moneda === 'CRC') ? r.tier + 'CRC' : r.tier;   // ej. 'especialesCRC'
+    if (!mod[setKey]) mod[setKey] = {};
+    mod[setKey][r.familia] = Number(r.tarifa);
+  });
+}
+
+/* ===========================================================================
+   LISTA DE PRECIOS ($/m²) — editable SOLO por Super Admin.
+   Filas = familias/modelos; columnas = piezas. Los selectores Tier (Línea/Especiales)
+   y Moneda (USD/CRC) eligen cuál de los 4 sets se edita. Las ediciones se aplican en
+   vivo a CATALOGO.preciosPorM2; "Guardar" persiste TODO a la nube (tarifa_m2, compartido)
+   y deja copia local para offline.
+=========================================================================== */
+const PRECIO_PIEZAS = [
+  { key: 'puerta',     label: 'Puerta' },
+  { key: 'panel',      label: 'Panel' },
+  { key: 'pilastra',   label: 'Pilastra' },
+  { key: 'mingitorio', label: 'Mingitorio' }
+];
+const PRECIO_MODELO_LABEL = {
+  ESTANDAR: 'Estándar', ESTANDAR170: 'Estándar 170', REFORZADO: 'Reforzado', REFORZADO170: 'Reforzado 170',
+  IMPERIAL: 'Imperial', REGADERAS: 'Regaderas', KIDS: 'Kids', SCUDO: 'Scudo', COLGANTE: 'Colgante', TL_S3: 'Thin Laminate S3'
+};
+function precioSetKey(tier, moneda) { return (moneda === 'CRC') ? tier + 'CRC' : tier; }
+
+async function renderListaPrecios() {
+  const u = currentUser();
+  if (!u || u.rol !== 'Super Admin') { nav('configurador'); return; }
+  pintarTablaPrecios();   // pintar YA con lo que haya (no esperar a la red)
+  // Luego refrescar desde la nube y repintar (por si otro Super Admin cambió precios)
+  if (SB && sesionSupabase) {
+    try { await refreshTarifas(); pintarTablaPrecios(); } catch (e) {}
+  }
+  document.getElementById('precios-tier').onchange   = pintarTablaPrecios;
+  document.getElementById('precios-moneda').onchange = pintarTablaPrecios;
+  document.getElementById('btn-precios-reload').onclick = async () => {
+    if (SB && sesionSupabase) { try { await refreshTarifas(); } catch (e) {} }
+    else { CATALOGO.preciosPorM2 = db.catalogos.preciosPorM2; }
+    pintarTablaPrecios();
+    const est = document.getElementById('precios-estado'); if (est) est.textContent = 'Precios recargados.';
+  };
+  document.getElementById('btn-precios-guardar').onclick = guardarListaPrecios;
+}
+
+function pintarTablaPrecios() {
+  const cont = document.getElementById('precios-tabla');
+  if (!cont) return;
+  const tier   = document.getElementById('precios-tier').value;    // linea | especiales
+  const moneda = document.getElementById('precios-moneda').value;  // USD | CRC
+  const setKey = precioSetKey(tier, moneda);
+  const sim = (moneda === 'CRC') ? '₡' : '$';
+  let html = `<table class="data-table" style="min-width:680px;"><thead><tr>
+      <th style="text-align:left;">Familia / Modelo</th>
+      ${PRECIO_PIEZAS.map(p => `<th>${p.label} (${sim}/m²)</th>`).join('')}
+    </tr></thead><tbody>`;
+  Object.keys(CATALOGO.preciosPorM2).forEach(mod => {
+    const set = (CATALOGO.preciosPorM2[mod] && CATALOGO.preciosPorM2[mod][setKey]) || {};
+    html += `<tr><td style="text-align:left; font-weight:600;">${escapeHtml(PRECIO_MODELO_LABEL[mod] || mod)}</td>`;
+    PRECIO_PIEZAS.forEach(p => {
+      const val = (set[p.key] != null) ? set[p.key] : '';
+      html += `<td><input type="number" min="0" step="0.01" class="form-input precio-cell"
+                 data-modelo="${mod}" data-familia="${p.key}" value="${val}" style="width:130px; text-align:right;"></td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table>`;
+  cont.innerHTML = html;
+  // Aplicar ediciones EN VIVO a CATALOGO.preciosPorM2 (no se pierden al cambiar de tier/moneda)
+  cont.querySelectorAll('input.precio-cell').forEach(inp => {
+    inp.oninput = () => {
+      const mod = inp.dataset.modelo, fam = inp.dataset.familia;
+      if (!CATALOGO.preciosPorM2[mod][setKey]) CATALOGO.preciosPorM2[mod][setKey] = {};
+      const n = parseFloat(inp.value);
+      CATALOGO.preciosPorM2[mod][setKey][fam] = isNaN(n) ? 0 : n;
+    };
+  });
+}
+
+async function guardarListaPrecios() {
+  const u = currentUser();
+  if (!u || u.rol !== 'Super Admin') { toast('Solo el Super Admin puede editar precios', 'danger'); return; }
+  const estado = document.getElementById('precios-estado');
+  // Reunir todas las tarifas (modelo × tier × moneda × pieza) desde CATALOGO.preciosPorM2
+  const combos = [['linea', 'USD', 'linea'], ['especiales', 'USD', 'especiales'],
+                  ['linea', 'CRC', 'lineaCRC'], ['especiales', 'CRC', 'especialesCRC']];
+  const filas = [];
+  Object.keys(CATALOGO.preciosPorM2).forEach(mod => {
+    combos.forEach(([tier, moneda, setKey]) => {
+      const set = CATALOGO.preciosPorM2[mod][setKey];
+      if (!set) return;
+      PRECIO_PIEZAS.forEach(p => {
+        if (set[p.key] == null) return;
+        filas.push({ modelo_codigo: mod, tier, moneda, familia: p.key, tarifa: Number(set[p.key]) });
+      });
+    });
+  });
+  if (SB && sesionSupabase) {
+    const { error } = await SB.from('tarifa_m2')
+      .upsert(filas, { onConflict: 'modelo_codigo,tier,moneda,familia' });
+    if (error) {
+      toast('Error al guardar en la nube: ' + error.message, 'danger');
+      if (estado) estado.textContent = 'Error: ' + error.message;
+      return;
+    }
+    db.catalogos.preciosPorM2 = JSON.parse(JSON.stringify(CATALOGO.preciosPorM2));  // copia local offline
+    persist();
+    toast('Lista de precios guardada en la nube · la usan todos al cotizar', 'ok');
+    if (estado) estado.textContent = `Guardado en la nube (${filas.length} tarifas). Disponible para todos.`;
+  } else {
+    db.catalogos.preciosPorM2 = JSON.parse(JSON.stringify(CATALOGO.preciosPorM2));
+    persist();
+    toast('Lista de precios guardada (local)', 'ok');
+    if (estado) estado.textContent = 'Guardado localmente (sin conexión a la nube).';
+  }
 }
 
 document.getElementById('btn-logout').addEventListener('click', async () => {
