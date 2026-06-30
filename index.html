@@ -1683,7 +1683,11 @@ const CATALOGO = {
     { codigo: 'USD', simbolo: '$',  nombre: 'Dólar (USD)' },
     { codigo: 'MXN', simbolo: '$',  nombre: 'Peso mexicano (MXN)' },
     { codigo: 'CRC', simbolo: '₡',  nombre: 'Colón costarricense (CRC)' }
-  ]
+  ],
+  // Extras de cotización (grabados láser y herrajes). Se cargan desde Supabase
+  // (tablas `grabado` y `herraje`) al iniciar sesión; offline quedan vacíos.
+  grabados: [],   // { codigo, descripcion, usd }
+  herrajes: []    // { linea, codigo, descripcion, usd, crc }
 };
 
 /* ===========================================================================
@@ -2145,8 +2149,20 @@ async function cargarPerfilSupabase(user) {
   // Cargar la lista de precios compartida (tarifa_m2) ANTES de mostrar la app, así
   // todos (incl. distribuidores) cotizan con los precios que puso el Super Admin.
   try { await refreshTarifas(); } catch (e) { console.warn('No se pudieron cargar tarifas:', e); }
+  try { await refreshExtras(); }  catch (e) { console.warn('No se pudieron cargar extras:', e); }
   showApp(sesionSupabase);
   return true;
+}
+
+/* Carga los catálogos de EXTRAS (grabados + herrajes) compartidos desde Supabase. */
+async function refreshExtras() {
+  if (!(SB && sesionSupabase)) return;
+  const [g, h] = await Promise.all([
+    SB.from('grabado').select('codigo,descripcion,usd').order('codigo'),
+    SB.from('herraje').select('linea,codigo,descripcion,usd,crc').order('linea').order('codigo')
+  ]);
+  if (g && g.data) CATALOGO.grabados = g.data.map(x => ({ codigo: x.codigo, descripcion: x.descripcion || '', usd: Number(x.usd) }));
+  if (h && h.data) CATALOGO.herrajes = h.data.map(x => ({ linea: x.linea, codigo: x.codigo, descripcion: x.descripcion || '', usd: x.usd != null ? Number(x.usd) : null, crc: x.crc != null ? Number(x.crc) : null }));
 }
 
 /* Carga la lista de precios COMPARTIDA desde Supabase (tabla tarifa_m2) y la mezcla
@@ -2182,8 +2198,13 @@ const PRECIO_PIEZAS = [
 ];
 const PRECIO_MODELO_LABEL = {
   ESTANDAR: 'Estándar', ESTANDAR170: 'Estándar 170', REFORZADO: 'Reforzado', REFORZADO170: 'Reforzado 170',
-  IMPERIAL: 'Imperial', REGADERAS: 'Regaderas', KIDS: 'Kids', SCUDO: 'Scudo', COLGANTE: 'Colgante', TL_S3: 'Thin Laminate S3'
+  IMPERIAL: 'Imperial', REGADERAS: 'Regaderas', KIDS: 'Kids', SCUDO: 'Scudo', COLGANTE: 'Colgante', TL_S3: 'Touchless S3'
 };
+// Modelos que NO van en esta lista de precios. (Vacío: Touchless S3 SÍ va — es un baño real.)
+const PRECIO_MODELOS_OCULTOS = [];
+function preciosModelos() {
+  return Object.keys(CATALOGO.preciosPorM2).filter(m => !PRECIO_MODELOS_OCULTOS.includes(m));
+}
 function precioSetKey(tier, moneda) { return (moneda === 'CRC') ? tier + 'CRC' : tier; }
 
 async function renderListaPrecios() {
@@ -2216,7 +2237,7 @@ function pintarTablaPrecios() {
       <th style="text-align:left;">Familia / Modelo</th>
       ${PRECIO_PIEZAS.map(p => `<th>${p.label} (${sim}/m²)</th>`).join('')}
     </tr></thead><tbody>`;
-  Object.keys(CATALOGO.preciosPorM2).forEach(mod => {
+  preciosModelos().forEach(mod => {
     const set = (CATALOGO.preciosPorM2[mod] && CATALOGO.preciosPorM2[mod][setKey]) || {};
     html += `<tr><td style="text-align:left; font-weight:600;">${escapeHtml(PRECIO_MODELO_LABEL[mod] || mod)}</td>`;
     PRECIO_PIEZAS.forEach(p => {
@@ -2247,7 +2268,7 @@ async function guardarListaPrecios() {
   const combos = [['linea', 'USD', 'linea'], ['especiales', 'USD', 'especiales'],
                   ['linea', 'CRC', 'lineaCRC'], ['especiales', 'CRC', 'especialesCRC']];
   const filas = [];
-  Object.keys(CATALOGO.preciosPorM2).forEach(mod => {
+  preciosModelos().forEach(mod => {
     combos.forEach(([tier, moneda, setKey]) => {
       const set = CATALOGO.preciosPorM2[mod][setKey];
       if (!set) return;
@@ -6845,9 +6866,25 @@ function cotizar(proyecto, opts) {
   });
   const subtotalFab    = lineas.reduce((s, l) => s + l.subtotal, 0);
   const totalM2        = lineas.reduce((s, l) => s + l.m2Total,  0);
+  // EXTRAS (grabados + herrajes). Herrajes: precio exacto USD/colones por región.
+  // Grabados: solo traen USD → para colones se multiplican por el tipo de cambio
+  // de grabados (opts.tcGrabados, que se escribe al cotizar).
+  const tcGrab = parseFloat(opts.tcGrabados) || 0;
+  const extras = (opts.extras || []).map(e => {
+    let precioU;
+    if (e.tipo === 'herraje') {
+      precioU = (moneda === 'CRC') ? (e.crc != null ? Number(e.crc) : 0) : (Number(e.usd) || 0) * fx;
+    } else {  // grabado (solo USD en el catálogo)
+      precioU = (moneda === 'CRC') ? (Number(e.usd) || 0) * tcGrab : (Number(e.usd) || 0) * fx;
+    }
+    const cant = Number(e.cantidad) || 0;
+    return { tipo: e.tipo, codigo: e.codigo, descripcion: e.descripcion, linea: e.linea || '',
+             cantidad: cant, precioUnit: precioU, subtotal: precioU * cant };
+  });
+  const extrasSubtotal = extras.reduce((s, e) => s + e.subtotal, 0);
   const descPorcentaje = parseFloat(opts.descuento) || 0;
-  const descMonto      = subtotalFab * descPorcentaje / 100;
-  const totalSinIVA    = subtotalFab - descMonto;
+  const descMonto      = subtotalFab * descPorcentaje / 100;   // descuento solo sobre mamparas
+  const totalSinIVA    = (subtotalFab - descMonto) + extrasSubtotal;
   const ivaPorcentaje  = parseFloat(opts.iva) || 0;
   const ivaMonto       = totalSinIVA * ivaPorcentaje / 100;
   const granTotal      = totalSinIVA + ivaMonto;
@@ -6870,6 +6907,9 @@ function cotizar(proyecto, opts) {
     color:            proyecto.color,
     remateInferior:   proyecto.terminacion === 'ZOCLO' ? 'Zoclo de acero inoxidable' : 'Patas',
     lineas,
+    extras,
+    extrasSubtotal,
+    tcGrabados:       tcGrab,
     totalM2,
     subtotalFab,
     descuentoPorcentaje: descPorcentaje,
@@ -6974,6 +7014,70 @@ function openCotizarModal(proyecto) {
       según <b>tier</b> elegido; si la moneda no es USD se multiplica por el <b>tipo de cambio</b>.
     </div>`;
 
+  // ----- Sección EXTRAS (grabados + herrajes) -----
+  const grabOpts = (CATALOGO.grabados || []).map(g =>
+    `<option value="${escapeHtml(g.codigo)}">${escapeHtml(g.codigo)} — ${escapeHtml(g.descripcion)} ($${g.usd})</option>`).join('');
+  const lineasH  = [...new Set((CATALOGO.herrajes || []).map(h => h.linea))];
+  const herrOpts = lineasH.map(ln =>
+    `<optgroup label="${escapeHtml(ln)}">` +
+    (CATALOGO.herrajes || []).filter(h => h.linea === ln).map(h =>
+      `<option value="${escapeHtml(h.linea)}|${escapeHtml(h.codigo)}">${escapeHtml(h.codigo)} — ${escapeHtml(h.descripcion)}</option>`).join('') +
+    `</optgroup>`).join('');
+  const sinCatalogo = !(CATALOGO.grabados || []).length && !(CATALOGO.herrajes || []).length;
+  body.insertAdjacentHTML('beforeend', `
+    <div style="margin-top:14px; padding:12px 14px; background:var(--bg-soft); border:1px dashed var(--line); border-radius:8px;">
+      <div style="font-weight:700; color:var(--brand); margin-bottom:8px; font-size:13px;">Extras (opcional) — grabados y herrajes</div>
+      ${sinCatalogo ? `<div class="form-help" style="color:#b45309;">Los catálogos de extras se cargan desde la nube. Si no aparecen, recargá conectado (y corré el SQL 13 si aún no).</div>` : `
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:8px;">
+        <label style="flex:2; min-width:230px; display:flex; flex-direction:column; gap:3px; font-size:12px;"><span class="muted">Grabado láser</span>
+          <select class="form-select" id="cot-grabado-sel"><option value="">— Elegir grabado —</option>${grabOpts}</select></label>
+        <label style="width:70px; display:flex; flex-direction:column; gap:3px; font-size:12px;"><span class="muted">Cant.</span>
+          <input class="form-input" type="number" id="cot-grabado-cant" min="1" value="1"></label>
+        <label style="width:130px; display:flex; flex-direction:column; gap:3px; font-size:12px;"><span class="muted">T.C. grabados (₡/USD)</span>
+          <input class="form-input" type="number" id="cot-grabado-tc" min="0" step="0.01" placeholder="ej. 516"></label>
+        <button class="btn btn-secondary" type="button" id="cot-add-grabado" style="padding:6px 12px;">+ Grabado</button>
+      </div>
+      <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:8px;">
+        <label style="flex:2; min-width:230px; display:flex; flex-direction:column; gap:3px; font-size:12px;"><span class="muted">Herraje</span>
+          <select class="form-select" id="cot-herraje-sel"><option value="">— Elegir herraje —</option>${herrOpts}</select></label>
+        <label style="width:70px; display:flex; flex-direction:column; gap:3px; font-size:12px;"><span class="muted">Cant.</span>
+          <input class="form-input" type="number" id="cot-herraje-cant" min="1" value="1"></label>
+        <button class="btn btn-secondary" type="button" id="cot-add-herraje" style="padding:6px 12px;">+ Herraje</button>
+      </div>
+      <div id="cot-extras-list" style="font-size:12px; margin-top:6px;"></div>
+      <div class="form-help" style="font-size:10px; margin-top:6px;">Herrajes: usan su precio en la moneda de la región (USD o colones). Grabados: se pasan a colones con el T.C. que pongas (solo aplica si la cotización es en colones).</div>`}
+    </div>`);
+
+  const extrasAgregados = [];
+  const renderExtras = () => {
+    const cont = body.querySelector('#cot-extras-list');
+    if (!cont) return;
+    if (!extrasAgregados.length) { cont.innerHTML = '<span class="muted">Sin extras agregados.</span>'; return; }
+    cont.innerHTML = extrasAgregados.map((e, i) =>
+      `<div style="display:flex; justify-content:space-between; gap:8px; padding:3px 0; border-bottom:1px solid var(--line);">
+        <span>${e.cantidad}× <b>${escapeHtml(e.codigo)}</b> — ${escapeHtml(e.descripcion)} <span class="muted">[${e.tipo === 'grabado' ? 'grabado' : escapeHtml(e.linea)}]</span></span>
+        <button type="button" data-rm-extra="${i}" style="background:none;border:none;color:#b91c1c;cursor:pointer;">quitar</button></div>`).join('');
+    cont.querySelectorAll('[data-rm-extra]').forEach(b => b.onclick = () => { extrasAgregados.splice(+b.dataset.rmExtra, 1); renderExtras(); });
+  };
+  const btnG = body.querySelector('#cot-add-grabado');
+  if (btnG) btnG.onclick = () => {
+    const cod = body.querySelector('#cot-grabado-sel').value; if (!cod) return;
+    const g = (CATALOGO.grabados || []).find(x => x.codigo === cod); if (!g) return;
+    const cant = Math.max(1, parseInt(body.querySelector('#cot-grabado-cant').value) || 1);
+    extrasAgregados.push({ tipo: 'grabado', codigo: g.codigo, descripcion: g.descripcion, linea: '', usd: g.usd, crc: null, cantidad: cant });
+    renderExtras();
+  };
+  const btnH = body.querySelector('#cot-add-herraje');
+  if (btnH) btnH.onclick = () => {
+    const v = body.querySelector('#cot-herraje-sel').value; if (!v) return;
+    const [linea, codigo] = v.split('|');
+    const h = (CATALOGO.herrajes || []).find(x => x.linea === linea && x.codigo === codigo); if (!h) return;
+    const cant = Math.max(1, parseInt(body.querySelector('#cot-herraje-cant').value) || 1);
+    extrasAgregados.push({ tipo: 'herraje', codigo: h.codigo, descripcion: h.descripcion, linea: h.linea, usd: h.usd, crc: h.crc, cantidad: cant });
+    renderExtras();
+  };
+  renderExtras();
+
   // Al cambiar la moneda, sugerir un tipo de cambio razonable (USD = 1, CRC ≈ 576)
   const selMoneda = body.querySelector('#cot-moneda');
   const inpTC     = body.querySelector('#cot-tc');
@@ -7000,7 +7104,9 @@ function openCotizarModal(proyecto) {
         tier:          body.querySelector('#cot-tier').value,
         tipoCambio:    body.querySelector('#cot-tc').value,
         descuento:     body.querySelector('#cot-descuento').value,
-        iva:           body.querySelector('#cot-iva').value
+        iva:           body.querySelector('#cot-iva').value,
+        extras:        extrasAgregados,
+        tcGrabados:    (body.querySelector('#cot-grabado-tc') || {}).value || 0
       };
       const cot = cotizar(proyecto, opts);
       db.cotizaciones = db.cotizaciones || [];
@@ -7127,6 +7233,25 @@ function generarPdfCotizacion(cot) {
     y += 5;
   });
 
+  // ===== EXTRAS (grabados + herrajes) =====
+  if ((cot.extras || []).length) {
+    y += 3;
+    if (y > H - 50) { doc.addPage(); y = m + 10; }
+    doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(10, 31, 61);
+    doc.text('EXTRAS', xs[0], y); y += 5;
+    doc.setFont('helvetica', 'normal'); doc.setTextColor(20, 20, 20); doc.setFontSize(9);
+    cot.extras.forEach(e => {
+      if (y > H - 50) { doc.addPage(); y = m + 10; }
+      doc.text(e.codigo, xs[0], y);
+      doc.text(String(e.cantidad), xs[1], y);
+      doc.text(fmt(e.precioUnit), xs[4], y);
+      doc.text(fmt(e.subtotal), xs[5], y);
+      const etq = (e.tipo === 'grabado' ? 'Grabado: ' : ((e.linea ? e.linea + ': ' : 'Herraje: '))) + (e.descripcion || '');
+      doc.text(etq, xs[6], y, { maxWidth: W - m - xs[6] - 2 });
+      y += 5;
+    });
+  }
+
   // ===== TOTALES =====
   y += 4;
   doc.setDrawColor(200, 200, 200);
@@ -7147,6 +7272,7 @@ function generarPdfCotizacion(cot) {
   filaTotal('Total m²:',             cot.totalM2.toFixed(2));
   filaTotal('Subtotal fabricación:', fmt(cot.subtotalFab));
   if (cot.descuentoMonto > 0) filaTotal(`Descuento (${cot.descuentoPorcentaje}%):`, '−' + fmt(cot.descuentoMonto));
+  if (cot.extrasSubtotal > 0) filaTotal('Extras (grabados/herrajes):', fmt(cot.extrasSubtotal));
   if (cot.ivaMonto > 0)       filaTotal(`IVA (${cot.ivaPorcentaje}%):`,             fmt(cot.ivaMonto));
   y += 1;
   doc.setLineWidth(0.4); doc.line(labelX - 4, y - 1, valueX + 1, y - 1);
