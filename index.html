@@ -2281,13 +2281,49 @@ function actualizarBotonSugerirSegunLinea() {
 let distribuidoresCache = [];
 async function refreshDistribuidoresCache() {
   if (!(SB && sesionSupabase)) return;
-  const { data } = await SB.from('distribuidor').select('distribuidor_id,nombre,activo').order('nombre');
-  distribuidoresCache = (data || []).map(d => ({ id: d.distribuidor_id, nombre: d.nombre, activo: d.activo !== false }));
+  const { data } = await SB.from('distribuidor').select('distribuidor_id,nombre,activo,region').order('nombre');
+  distribuidoresCache = (data || []).map(d => ({ id: d.distribuidor_id, nombre: d.nombre, activo: d.activo !== false, region: d.region || null }));
 }
 /* Lista unificada de distribuidores activos: Supabase (caché) en la nube, db local offline. */
 function distribuidoresActivos() {
   if (SB && sesionSupabase) return (distribuidoresCache || []).filter(d => d.activo !== false);
-  return (db.distribuidores || []).filter(d => d.activo !== false).map(d => ({ id: d.id, nombre: d.nombre, activo: d.activo !== false }));
+  return (db.distribuidores || []).filter(d => d.activo !== false).map(d => ({ id: d.id, nombre: d.nombre, activo: d.activo !== false, region: d.region || null }));
+}
+
+/* ===== Región del distribuidor =====
+   Reglas de negocio: México → NO cotiza (se oculta el botón Cotizar);
+   LATAM → moneda fija USD; Costa Rica → moneda fija CRC (colones);
+   sin región (null) → se comporta como antes (cotiza, moneda editable). */
+const REGIONES_DISTRIBUIDOR = ['México', 'LATAM', 'Costa Rica'];
+function normRegion(s) {
+  // minúsculas + sin acentos (ASCII-safe), para comparar regiones sin sorpresas de tildes.
+  return (s || '').toString().trim().toLowerCase()
+    .replace(/[áàä]/g, 'a').replace(/[éèë]/g, 'e').replace(/[íìï]/g, 'i')
+    .replace(/[óòö]/g, 'o').replace(/[úùü]/g, 'u');
+}
+/* Devuelve la ficha del distribuidor de un proyecto (por id, o por nombre como respaldo). */
+function distribuidorDeProyecto(proyecto) {
+  if (!proyecto) return null;
+  const list = (SB && sesionSupabase) ? (distribuidoresCache || []) : (db.distribuidores || []);
+  if (proyecto.distribuidorId != null) {
+    const byId = list.find(d => String(d.id) === String(proyecto.distribuidorId));
+    if (byId) return byId;
+  }
+  return list.find(d => d.nombre === (proyecto.distribuidor || '')) || null;
+}
+function regionDeProyecto(proyecto) {
+  const d = distribuidorDeProyecto(proyecto);
+  return d ? (d.region || null) : null;
+}
+/* Moneda FIJA por región: LATAM→USD, Costa Rica→CRC. null = sin restricción (editable). */
+function monedaDeRegion(region) {
+  if (normRegion(region) === normRegion('LATAM'))      return 'USD';
+  if (normRegion(region) === normRegion('Costa Rica')) return 'CRC';
+  return null;
+}
+/* México no cotiza en la app. */
+function regionNoCotiza(region) {
+  return normRegion(region) === normRegion('México');
 }
 
 /* Sincroniza el flag muro/terminal de los cierres con el LAYOUT actual.
@@ -6688,6 +6724,13 @@ function tierDeColor(nombreColor) {
 
 /* --- Modal "Cotizar" desde Mis Proyectos --- */
 function openCotizarModal(proyecto) {
+  // Región del distribuidor del proyecto: México NO cotiza; LATAM → USD fijo; Costa Rica → CRC fijo.
+  const regionProy = regionDeProyecto(proyecto);
+  if (regionNoCotiza(regionProy)) {
+    toast('Este distribuidor es de México: no cotiza en la app.', 'danger');
+    return;
+  }
+  const monedaFija = monedaDeRegion(regionProy);   // 'USD' | 'CRC' | null (sin región = editable)
   const body = document.createElement('div');
   // El producto cotizado por default = el modelo con el que se diseñó el proyecto
   const productoDefault = proyecto.modelo || 'ESTANDAR';
@@ -6728,9 +6771,9 @@ function openCotizarModal(proyecto) {
         </select>
       </div>
       <div class="form-row">
-        <label class="form-label">Moneda</label>
-        <select class="form-select" id="cot-moneda">
-          ${CATALOGO.monedas.map(m => `<option value="${m.codigo}">${m.nombre}</option>`).join('')}
+        <label class="form-label">Moneda${monedaFija ? ` <span class="muted">(fija por región: ${escapeHtml(regionProy)})</span>` : ''}</label>
+        <select class="form-select" id="cot-moneda"${monedaFija ? ' disabled' : ''}>
+          ${CATALOGO.monedas.map(m => `<option value="${m.codigo}" ${ (monedaFija ? m.codigo === monedaFija : m.codigo === 'USD') ? 'selected' : ''}>${m.nombre}</option>`).join('')}
         </select>
       </div>
       <div class="form-row">
@@ -7031,7 +7074,7 @@ async function renderProyectos() {
       <td>${p.layout || '—'}</td>
       <td class="col-actions">
         <button class="btn btn-edit" data-editp="${p.id}" title="Editar en el configurador">✎ Editar</button>
-        <button class="btn btn-edit" data-cot="${p.id}" title="Generar cotización">💰 Cotizar</button>
+        ${regionNoCotiza(regionDeProyecto(p)) ? '' : `<button class="btn btn-edit" data-cot="${p.id}" title="Generar cotización">💰 Cotizar</button>`}
         <button class="icon-btn icon-pdf" data-pdf="${p.id}" title="Descargar planos (PDF)">📄</button>
         <button class="icon-btn icon-xls" data-csv="${p.id}" title="Descargar archivo CIP (CSV para Modumex.cr)">📋</button>
         <button class="icon-btn icon-xls" data-siclick="${p.id}" title="Descargar CSV para SICLICK">📤</button>
@@ -7915,14 +7958,14 @@ async function renderDistribuidores() {
   if (conectado) {
     tb.innerHTML = `<tr><td colspan="6"><div class="empty-state">Cargando distribuidores…</div></td></tr>`;
     const { data, error } = await SB.from('distribuidor')
-      .select('distribuidor_id,nombre,contacto,email,telefono,ubicacion,activo').order('nombre');
+      .select('distribuidor_id,nombre,contacto,email,telefono,ubicacion,region,activo').order('nombre');
     if (error) {
       tb.innerHTML = `<tr><td colspan="6"><div class="empty-state"><strong>Error al leer distribuidores</strong><br>${escapeHtml(error.message)}</div></td></tr>`;
       return;
     }
     lista = (data || []).map(d => ({
       id: d.distribuidor_id, nombre: d.nombre || '', contacto: d.contacto || '',
-      email: d.email || '', telefono: d.telefono || '', ubicacion: d.ubicacion || '', activo: d.activo !== false
+      email: d.email || '', telefono: d.telefono || '', ubicacion: d.ubicacion || '', region: d.region || '', activo: d.activo !== false
     }));
   } else {
     lista = (db.distribuidores || []).slice();
@@ -7986,6 +8029,14 @@ async function editarDistribuidor(d) {
       <div class="form-row"><label class="form-label">Contraseña ${d ? '(dejar vacío para no cambiar)' : ''}</label><input class="form-input" id="m-pass" type="text" placeholder="${d ? '••••••••' : 'Clave de acceso del distribuidor'}"></div>
       <div class="form-row"><label class="form-label">Teléfono</label><input class="form-input" id="m-tel"></div>
       <div class="form-row"><label class="form-label">País / Ciudad</label><input class="form-input" id="m-loc" placeholder="Costa Rica / San José"></div>
+      <div class="form-row">
+        <label class="form-label">Región <span class="muted">(define moneda y si cotiza)</span></label>
+        <select class="form-select" id="m-region">
+          <option value="">— Sin región (cotiza como hoy) —</option>
+          ${REGIONES_DISTRIBUIDOR.map(r => `<option value="${r}">${r}</option>`).join('')}
+        </select>
+        <div class="form-help" style="font-size:10px; margin-top:2px;">México: no cotiza en la app · LATAM: precios en USD · Costa Rica: precios en colones.</div>
+      </div>
       <div class="form-row switch-row" style="margin-top:6px;">
         <input type="checkbox" id="m-activo" checked>
         <label for="m-activo">Activo</label>
@@ -7997,6 +8048,7 @@ async function editarDistribuidor(d) {
     body.querySelector('#m-email').value    = d.email    || '';
     body.querySelector('#m-tel').value      = d.telefono || '';
     body.querySelector('#m-loc').value      = d.ubicacion || '';
+    body.querySelector('#m-region').value   = d.region || '';
     body.querySelector('#m-activo').checked = d.activo;
     // El correo es también el login: el Super Admin SÍ puede cambiarlo (se actualiza la cuenta de acceso).
   }
@@ -8010,6 +8062,7 @@ async function editarDistribuidor(d) {
       const pass     = body.querySelector('#m-pass').value;
       const telefono = body.querySelector('#m-tel').value.trim();
       const ubicacion= body.querySelector('#m-loc').value.trim();
+      const region   = body.querySelector('#m-region').value;   // '' = sin región
       const activo   = body.querySelector('#m-activo').checked;
       if (!nombre) { toast('Nombre obligatorio', 'danger'); return false; }
       if (!email)  { toast('El correo es obligatorio (es el acceso del distribuidor)', 'danger'); return false; }
@@ -8021,14 +8074,14 @@ async function editarDistribuidor(d) {
           if (!d) {
             // Crear ficha + cuenta de acceso (rol Distribuidor) → Edge Function.
             const { data, error } = await SB.functions.invoke('gestion-usuarios', {
-              body: { accion: 'crear_distribuidor', nombre, contacto, email, telefono, ubicacion, activo, password: pass }
+              body: { accion: 'crear_distribuidor', nombre, contacto, email, telefono, ubicacion, region: region || null, activo, password: pass }
             });
             if (error || (data && data.error)) throw new Error((data && data.error) || error.message);
           } else {
             // Editar ficha por supabase-js (RLS exige Super Admin). El correo (login) y la
             // contraseña tocan Auth → van por la Edge Function.
             const { error: e1 } = await SB.from('distribuidor')
-              .update({ nombre, contacto, telefono, ubicacion, activo }).eq('distribuidor_id', d.id);
+              .update({ nombre, contacto, telefono, ubicacion, region: region || null, activo }).eq('distribuidor_id', d.id);
             if (e1) throw e1;
             const emailCambio = email && email !== d.email;
             if (emailCambio || pass) {
@@ -8051,7 +8104,7 @@ async function editarDistribuidor(d) {
       // ---------- Modo local (offline) ----------
       // Mantiene una cuenta en db.usuarios (rol Distribuidor) ligada por distribuidorId
       // para que el login offline del distribuidor siga funcionando.
-      const data = { nombre, contacto, email, telefono, ubicacion, activo };
+      const data = { nombre, contacto, email, telefono, ubicacion, region: region || null, activo };
       let distId;
       if (d) { Object.assign(d, data); distId = d.id; }
       else   { distId = uid(); db.distribuidores.push({ id: distId, ...data }); }
