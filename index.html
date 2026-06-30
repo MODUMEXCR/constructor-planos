@@ -988,8 +988,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           <h3><span class="step">4</span>Personaliza el área de tu proyecto</h3>
 
           <div class="form-row" style="margin-bottom:14px;">
-            <label class="form-label">Hoja / Piso <span style="color: var(--text-mute); font-weight: 400;">(opcional — áreas con la misma hoja se dibujan juntas, lado a lado)</span></label>
-            <input class="form-input" id="cfg-hoja" list="cfg-hoja-list" autocomplete="off" placeholder="ej. Piso 1 · vacío = hoja propia">
+            <label class="form-label">Hoja / Piso <span style="color: var(--text-mute); font-weight: 400;">(opcional — rótulo de la hoja; cada área va en su propia página)</span></label>
+            <input class="form-input" id="cfg-hoja" list="cfg-hoja-list" autocomplete="off" placeholder="ej. Piso 1">
             <datalist id="cfg-hoja-list"></datalist>
           </div>
 
@@ -2474,13 +2474,22 @@ function actualizarBotonSugerirSegunLinea() {
 let distribuidoresCache = [];
 async function refreshDistribuidoresCache() {
   if (!(SB && sesionSupabase)) return;
-  const { data } = await SB.from('distribuidor').select('distribuidor_id,nombre,activo,region').order('nombre');
-  distribuidoresCache = (data || []).map(d => ({ id: d.distribuidor_id, nombre: d.nombre, activo: d.activo !== false, region: d.region || null }));
+  const { data } = await SB.from('distribuidor')
+    .select('distribuidor_id,nombre,contacto,telefono,ubicacion,activo,region,pais,descuento').order('nombre');
+  distribuidoresCache = (data || []).map(d => ({
+    id: d.distribuidor_id, nombre: d.nombre, contacto: d.contacto || '', telefono: d.telefono || '',
+    ubicacion: d.ubicacion || '', activo: d.activo !== false, region: d.region || null,
+    pais: d.pais || '', descuento: d.descuento != null ? Number(d.descuento) : 0
+  }));
 }
 /* Lista unificada de distribuidores activos: Supabase (caché) en la nube, db local offline. */
 function distribuidoresActivos() {
   if (SB && sesionSupabase) return (distribuidoresCache || []).filter(d => d.activo !== false);
-  return (db.distribuidores || []).filter(d => d.activo !== false).map(d => ({ id: d.id, nombre: d.nombre, activo: d.activo !== false, region: d.region || null }));
+  return (db.distribuidores || []).filter(d => d.activo !== false).map(d => ({
+    id: d.id, nombre: d.nombre, contacto: d.contacto || '', telefono: d.telefono || '',
+    ubicacion: d.ubicacion || '', activo: d.activo !== false, region: d.region || null,
+    pais: d.pais || '', descuento: d.descuento != null ? Number(d.descuento) : 0
+  }));
 }
 
 /* ===== Región del distribuidor =====
@@ -5584,25 +5593,18 @@ function exportarPDF(proyecto) {
     pageLabel: 'Portada'
   });
 
-  // ===== PÁGINAS 2..N: una HOJA por piso/módulo (top-down, como el SVG del configurador)
-  // Las áreas que comparten la etiqueta "Hoja/Piso" (configByArea[area].hoja) se dibujan
-  // LADO A LADO en una misma página (estilo ESEN). Las que no tienen etiqueta van solas.
-  const hojas = [];                 // [{ label, idxs:[areaIdx,...] }]
-  const porEtiqueta = {};
-  (proyecto.areas || []).forEach((areaName, areaIdx) => {
+  // ===== PÁGINAS 2..N: UNA ÁREA POR HOJA (cada área = su propia página, a ancho completo).
+  // Antes, las áreas con la misma etiqueta "Hoja/Piso" se dibujaban lado a lado (2/3/4 en una
+  // página) y se deformaban. Decisión de Dayanna (2026-06-24): cada área va en su propia hoja.
+  // La etiqueta "Hoja/Piso" se conserva solo como rótulo de la página.
+  const hojas = (proyecto.areas || []).map((areaName, areaIdx) => {
     const etq = (((proyecto.configByArea || {})[areaName] || {}).hoja || '').toString().trim();
-    if (etq) {
-      if (!porEtiqueta[etq]) { porEtiqueta[etq] = { label: etq, idxs: [] }; hojas.push(porEtiqueta[etq]); }
-      porEtiqueta[etq].idxs.push(areaIdx);
-    } else {
-      hojas.push({ label: null, idxs: [areaIdx] });
-    }
+    return { label: etq || null, idxs: [areaIdx] };
   });
   const totalHojas = hojas.length;
   hojas.forEach((hoja, hi) => {
     const pageInfo = { pageNum: hi + 1, totalPages: totalHojas };
-    if (hoja.idxs.length === 1) drawAreaPlanView(doc, proyecto, hoja.idxs[0], pageInfo);
-    else                        drawSheet(doc, proyecto, hoja.idxs, pageInfo, hoja.label);
+    drawAreaPlanView(doc, proyecto, hoja.idxs[0], pageInfo);   // siempre 1 área por página
   });
 
   // ===== PÁGINA FINAL: cuadro de cantidades por familia (para el taller)
@@ -6943,17 +6945,24 @@ function openCotizarModal(proyecto) {
     return;
   }
   const monedaFija = monedaDeRegion(regionProy);   // 'USD' | 'CRC' | null (sin región = editable)
+  // IVA por defecto según región: Costa Rica 13%, LATAM/otros 0% (editable).
+  const ivaDefaultPct = (normRegion(regionProy) === normRegion('Costa Rica')) ? 13 : 0;
   const body = document.createElement('div');
   // El producto cotizado por default = el modelo con el que se diseñó el proyecto
   const productoDefault = proyecto.modelo || 'ESTANDAR';
   // El tier de precios se deriva del COLOR del proyecto (Línea = en stock → tarifa Línea).
   const tierColor = tierDeColor(proyecto.color);
-  const distribsActivos = (db.distribuidores || []).filter(d => d.activo);
+  // Distribuidor del proyecto (autoselección + autocompletado de país/descuento/contacto).
+  const distribs   = distribuidoresActivos();
+  const distProy   = distribuidorDeProyecto(proyecto);
+  const distIdSel  = distProy ? distProy.id : '';
+  const paisDefault = (distProy && distProy.pais) || (normRegion(regionProy) === normRegion('Costa Rica') ? 'Costa Rica' : '');
+  const descDefault = (distProy && distProy.descuento) || 0;
   body.innerHTML = `
     <div class="form-grid" style="grid-template-columns:1fr 1fr;">
       <div class="form-row">
-        <label class="form-label">N° Cotización</label>
-        <input class="form-input" id="cot-numero" placeholder="ej. COT-0001">
+        <label class="form-label">N° Cotización <span class="muted">(= Expediente)</span></label>
+        <input class="form-input" id="cot-numero" value="${escapeHtml(proyecto.codigo || '')}" placeholder="ej. COT-0001">
       </div>
       <div class="form-row">
         <label class="form-label">Producto a cotizar</label>
@@ -6967,13 +6976,14 @@ function openCotizarModal(proyecto) {
         <label class="form-label">Distribuidor</label>
         <select class="form-select" id="cot-distribuidor">
           <option value="">— Sin distribuidor —</option>
-          ${distribsActivos.map(d => `<option value="${d.id}">${escapeHtml(d.nombre)}</option>`).join('')}
+          ${distribs.map(d => `<option value="${d.id}" ${String(d.id) === String(distIdSel) ? 'selected' : ''}>${escapeHtml(d.nombre)}</option>`).join('')}
         </select>
+        <div class="form-help" id="cot-dist-contacto" style="font-size:10px; margin-top:2px;"></div>
       </div>
       <div class="form-row">
-        <label class="form-label">País</label>
+        <label class="form-label">País <span class="muted">(del distribuidor)</span></label>
         <select class="form-select" id="cot-pais">
-          ${CATALOGO.paises.map(p => `<option ${p === 'Costa Rica' ? 'selected' : ''}>${p}</option>`).join('')}
+          ${CATALOGO.paises.map(p => `<option ${p === paisDefault ? 'selected' : ''}>${p}</option>`).join('')}
         </select>
       </div>
       <div class="form-row">
@@ -6996,22 +7006,17 @@ function openCotizarModal(proyecto) {
         </select>
       </div>
       <div class="form-row">
-        <label class="form-label">Tipo de cambio (por USD)</label>
-        <input class="form-input" type="number" id="cot-tc" min="0" step="0.01" value="1">
-        <div class="form-help" style="font-size:10px; margin-top:2px;">USD y colones (CRC) usan los precios exactos de la lista. Para otras monedas (ej. MXN) poné el tipo de cambio por USD.</div>
+        <label class="form-label">Descuento (%) <span class="muted">(del distribuidor)</span></label>
+        <input class="form-input" type="number" id="cot-descuento" min="0" max="80" value="${descDefault}" step="0.1">
       </div>
       <div class="form-row">
-        <label class="form-label">Descuento (%)</label>
-        <input class="form-input" type="number" id="cot-descuento" min="0" max="80" value="0" step="0.1">
-      </div>
-      <div class="form-row">
-        <label class="form-label">IVA (%)</label>
-        <input class="form-input" type="number" id="cot-iva" min="0" max="30" value="0" step="0.1">
+        <label class="form-label">IVA (%) ${ivaDefaultPct ? '<span class="muted">(CR 13%)</span>' : '<span class="muted">(LATAM 0%)</span>'}</label>
+        <input class="form-input" type="number" id="cot-iva" min="0" max="30" value="${ivaDefaultPct}" step="0.1">
       </div>
     </div>
     <div class="form-help" style="margin-top:14px;">
-      Las piezas y cantidades se toman del proyecto guardado. Precios = tarifa oficial $/m² (Mayo 2026)
-      según <b>tier</b> elegido; si la moneda no es USD se multiplica por el <b>tipo de cambio</b>.
+      Las piezas y cantidades se toman del proyecto guardado. Precios = tarifa $/m² de la <b>Lista de Precios</b>
+      según el <b>tier</b> (lo define el color) y la <b>moneda</b> de la región (USD o colones).
     </div>`;
 
   // ----- Sección EXTRAS (grabados + herrajes) -----
@@ -7078,31 +7083,34 @@ function openCotizarModal(proyecto) {
   };
   renderExtras();
 
-  // Al cambiar la moneda, sugerir un tipo de cambio razonable (USD = 1, CRC ≈ 576)
-  const selMoneda = body.querySelector('#cot-moneda');
-  const inpTC     = body.querySelector('#cot-tc');
-  const syncTC = () => {
-    const exacta = (selMoneda.value === 'USD' || selMoneda.value === 'CRC');  // tarifa exacta de lista
-    inpTC.disabled = exacta;
-    if (exacta) inpTC.value = 1;
+  // Al cambiar el distribuidor, autocompletar país, descuento y contacto/teléfono.
+  const selDist = body.querySelector('#cot-distribuidor');
+  const sincDistribuidor = () => {
+    const dsel = distribs.find(x => String(x.id) === String(selDist.value));
+    const cinfo = body.querySelector('#cot-dist-contacto');
+    if (dsel) {
+      if (dsel.pais) body.querySelector('#cot-pais').value = dsel.pais;
+      if (dsel.descuento != null) body.querySelector('#cot-descuento').value = dsel.descuento;
+      if (cinfo) cinfo.textContent = [dsel.contacto, dsel.telefono].filter(Boolean).join(' · ');
+    } else if (cinfo) { cinfo.textContent = ''; }
   };
-  selMoneda.addEventListener('change', syncTC);
-  syncTC();
+  selDist.addEventListener('change', sincDistribuidor);
+  sincDistribuidor();   // estado inicial (distribuidor del proyecto)
 
   openModal({
-    title: `Generar cotización — ${proyecto.codigo}`,
+    title: `Generar cotización — ${proyecto.codigo}${proyecto.nombre ? ' · ' + proyecto.nombre : ''}`,
     body,
     acceptLabel: 'Generar PDF',
     onAccept: () => {
       const opts = {
-        numero:        body.querySelector('#cot-numero').value.trim() || `COT-${Date.now()}`,
+        numero:        body.querySelector('#cot-numero').value.trim() || proyecto.codigo || `COT-${Date.now()}`,
         producto:      body.querySelector('#cot-producto').value,
-        distribuidor:  (db.distribuidores.find(d => d.id == body.querySelector('#cot-distribuidor').value) || {}),
+        distribuidor:  (distribs.find(d => String(d.id) === String(body.querySelector('#cot-distribuidor').value)) || {}),
         pais:          body.querySelector('#cot-pais').value,
         tiempoEntrega: body.querySelector('#cot-tiempo').value,
         moneda:        body.querySelector('#cot-moneda').value,
         tier:          body.querySelector('#cot-tier').value,
-        tipoCambio:    body.querySelector('#cot-tc').value,
+        tipoCambio:    1,   // mamparas usan precio exacto USD/colones de la Lista de Precios (sin TC acá)
         descuento:     body.querySelector('#cot-descuento').value,
         iva:           body.querySelector('#cot-iva').value,
         extras:        extrasAgregados,
@@ -8326,7 +8334,14 @@ async function editarDistribuidor(d) {
       <div class="form-row"><label class="form-label">Correo electrónico <span class="muted">(es el usuario de acceso)</span></label><input class="form-input" id="m-email" type="email"></div>
       <div class="form-row"><label class="form-label">Contraseña ${d ? '(dejar vacío para no cambiar)' : ''}</label><input class="form-input" id="m-pass" type="text" placeholder="${d ? '••••••••' : 'Clave de acceso del distribuidor'}"></div>
       <div class="form-row"><label class="form-label">Teléfono</label><input class="form-input" id="m-tel"></div>
-      <div class="form-row"><label class="form-label">País / Ciudad</label><input class="form-input" id="m-loc" placeholder="Costa Rica / San José"></div>
+      <div class="form-row"><label class="form-label">Ciudad / dirección <span class="muted">(opcional)</span></label><input class="form-input" id="m-loc" placeholder="ej. San José, Escazú"></div>
+      <div class="form-row">
+        <label class="form-label">País <span class="muted">(sale en la cotización)</span></label>
+        <select class="form-select" id="m-pais">
+          <option value="">— Elegir país —</option>
+          ${CATALOGO.paises.map(p => `<option value="${p}">${p}</option>`).join('')}
+        </select>
+      </div>
       <div class="form-row">
         <label class="form-label">Región <span class="muted">(define moneda y si cotiza)</span></label>
         <select class="form-select" id="m-region">
@@ -8334,6 +8349,10 @@ async function editarDistribuidor(d) {
           ${REGIONES_DISTRIBUIDOR.map(r => `<option value="${r}">${r}</option>`).join('')}
         </select>
         <div class="form-help" style="font-size:10px; margin-top:2px;">México: no cotiza en la app · LATAM: precios en USD · Costa Rica: precios en colones.</div>
+      </div>
+      <div class="form-row">
+        <label class="form-label">Descuento (%) <span class="muted">(cae solo en la cotización)</span></label>
+        <input class="form-input" type="number" id="m-descuento" min="0" max="80" step="0.1" value="0">
       </div>
       <div class="form-row switch-row" style="margin-top:6px;">
         <input type="checkbox" id="m-activo" checked>
@@ -8347,6 +8366,8 @@ async function editarDistribuidor(d) {
     body.querySelector('#m-tel').value      = d.telefono || '';
     body.querySelector('#m-loc').value      = d.ubicacion || '';
     body.querySelector('#m-region').value   = d.region || '';
+    body.querySelector('#m-pais').value     = d.pais || '';
+    body.querySelector('#m-descuento').value = (d.descuento != null ? d.descuento : 0);
     body.querySelector('#m-activo').checked = d.activo;
     // El correo es también el login: el Super Admin SÍ puede cambiarlo (se actualiza la cuenta de acceso).
   }
@@ -8361,6 +8382,8 @@ async function editarDistribuidor(d) {
       const telefono = body.querySelector('#m-tel').value.trim();
       const ubicacion= body.querySelector('#m-loc').value.trim();
       const region   = body.querySelector('#m-region').value;   // '' = sin región
+      const pais     = body.querySelector('#m-pais').value;     // '' = sin país
+      const descuento= parseFloat(body.querySelector('#m-descuento').value) || 0;
       const activo   = body.querySelector('#m-activo').checked;
       if (!nombre) { toast('Nombre obligatorio', 'danger'); return false; }
       if (!email)  { toast('El correo es obligatorio (es el acceso del distribuidor)', 'danger'); return false; }
@@ -8372,14 +8395,14 @@ async function editarDistribuidor(d) {
           if (!d) {
             // Crear ficha + cuenta de acceso (rol Distribuidor) → Edge Function.
             const { data, error } = await SB.functions.invoke('gestion-usuarios', {
-              body: { accion: 'crear_distribuidor', nombre, contacto, email, telefono, ubicacion, region: region || null, activo, password: pass }
+              body: { accion: 'crear_distribuidor', nombre, contacto, email, telefono, ubicacion, region: region || null, pais: pais || null, descuento, activo, password: pass }
             });
             if (error || (data && data.error)) throw new Error((data && data.error) || error.message);
           } else {
             // Editar ficha por supabase-js (RLS exige Super Admin). El correo (login) y la
             // contraseña tocan Auth → van por la Edge Function.
             const { error: e1 } = await SB.from('distribuidor')
-              .update({ nombre, contacto, telefono, ubicacion, region: region || null, activo }).eq('distribuidor_id', d.id);
+              .update({ nombre, contacto, telefono, ubicacion, region: region || null, pais: pais || null, descuento, activo }).eq('distribuidor_id', d.id);
             if (e1) throw e1;
             const emailCambio = email && email !== d.email;
             if (emailCambio || pass) {
@@ -8402,7 +8425,7 @@ async function editarDistribuidor(d) {
       // ---------- Modo local (offline) ----------
       // Mantiene una cuenta en db.usuarios (rol Distribuidor) ligada por distribuidorId
       // para que el login offline del distribuidor siga funcionando.
-      const data = { nombre, contacto, email, telefono, ubicacion, region: region || null, activo };
+      const data = { nombre, contacto, email, telefono, ubicacion, region: region || null, pais: pais || null, descuento, activo };
       let distId;
       if (d) { Object.assign(d, data); distId = d.id; }
       else   { distId = uid(); db.distribuidores.push({ id: distId, ...data }); }
