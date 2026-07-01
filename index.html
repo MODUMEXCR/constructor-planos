@@ -1420,7 +1420,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
 const SUPABASE_URL = 'https://bgivvqwdzecbrryscddl.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_ztj6QJpQo2wrPEL2KFt3QQ_Vrqvndkg';   // publishable key (segura con RLS)
 const SB = (window.supabase && window.supabase.createClient)
-  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+  // persistSession:false → la sesión vive SOLO en memoria de esta pestaña. Al cerrar o
+  // recargar la app hay que volver a iniciar sesión. Esto evita que en un equipo COMPARTIDO
+  // quede guardada la sesión de la persona anterior. autoRefreshToken mantiene viva la
+  // sesión mientras la pestaña está abierta.
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, {
+      auth: { persistSession: false, autoRefreshToken: true }
+    })
   : null;   // null si no cargó la librería (sin internet) → cae a modo local
 let sesionSupabase = null;   // perfil logueado: { id, nombre, email, rol, distribuidorId }
 
@@ -8722,6 +8728,7 @@ async function renderUsuarios() {
       </td>
       <td class="col-actions">
         <button class="btn btn-edit" data-edit-usr="${u.id}">✎ Editar</button>
+        ${soySuper && String(u.id) !== String(yo?.id) ? `<button class="btn btn-danger" data-del-usr="${u.id}">🗑 Eliminar</button>` : ''}
       </td>
     </tr>`).join('');
 
@@ -8739,6 +8746,25 @@ async function renderUsuarios() {
   });
   tb.querySelectorAll('[data-edit-usr]').forEach(b => b.onclick = () => {
     const u = lista.find(x => String(x.id) === String(b.dataset.editUsr)); if (u) editarUsuario(u);
+  });
+  // Eliminar usuario — SOLO Super Admin, y nunca la cuenta propia (evita quedar sin acceso).
+  tb.querySelectorAll('[data-del-usr]').forEach(b => b.onclick = async () => {
+    if (!soySuper) return;
+    const u = lista.find(x => String(x.id) === String(b.dataset.delUsr));
+    if (!u) return;
+    if (String(u.id) === String(yo?.id)) { toast('No podés eliminar tu propia cuenta', 'danger'); return; }
+    if (!confirm(`¿Eliminar al usuario "${u.nombre || u.email}"? Esta acción no se puede deshacer.`)) return;
+    if (conectado) {
+      const { data, error } = await SB.functions.invoke('gestion-usuarios', {
+        body: { accion: 'eliminar', id: u.id }
+      });
+      if (error || (data && data.error)) { toast('Error: ' + ((data && data.error) || error.message), 'danger'); return; }
+    } else {
+      db.usuarios = (db.usuarios || []).filter(x => String(x.id) !== String(u.id));
+      persist();
+    }
+    renderUsuarios();
+    toast('Usuario eliminado', 'ok');
   });
 }
 document.getElementById('usr-filtro-estado').addEventListener('change', renderUsuarios);
@@ -9071,14 +9097,15 @@ function escapeHtml(s) {
 =========================================================================== */
 (async function autoLogin() {
   if (SB) {
-    // Modo conectado: restaurar sesión de Supabase si existe
+    // SEGURIDAD (equipos compartidos): NO restauramos ninguna sesión guardada. Borramos
+    // cualquier token de Supabase que hubiera quedado en localStorage de versiones anteriores
+    // (cuando la sesión sí se persistía) para que no entre como el usuario anterior.
     try {
-      const { data } = await SB.auth.getSession();
-      if (data && data.session && data.session.user) {
-        const ok = await cargarPerfilSupabase(data.session.user);
-        if (ok) return;
-      }
-    } catch (e) { console.warn('Supabase getSession falló:', e); }
+      Object.keys(localStorage)
+        .filter(k => /^sb-.*-auth-token$/.test(k))
+        .forEach(k => localStorage.removeItem(k));
+    } catch (e) {}
+    // Siempre pedir login al abrir la app (la sesión es solo en memoria: persistSession:false).
     showLogin();
     return;
   }
