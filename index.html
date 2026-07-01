@@ -917,6 +917,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     <nav class="nav">
       <a data-page="configurador" class="active">Configurador</a>
       <a data-page="proyectos">Mis Proyectos</a>
+      <a data-page="cotizaciones">Cotizaciones</a>
       <a data-page="catalogo">Catálogo</a>
       <a data-page="precios">Lista de Precios</a>
       <a data-page="usuarios">Usuarios</a>
@@ -1156,6 +1157,22 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     </table>
   </section>
 
+  <!-- ===================== COTIZACIONES (todas) ===================== -->
+  <section class="page" id="page-cotizaciones" hidden>
+    <h1 class="page-title">Cotizaciones</h1>
+    <p class="page-subtitle" style="margin-top:0;">Podés volver a descargar el PDF de cada cotización. <b>No se editan desde aquí:</b> para cambiar una, editá el proyecto en <b>Mis Proyectos</b> (se cambia el plano) y volvé a cotizar.</p>
+    <div class="toolbar">
+      <input class="form-input" id="cot-buscar" placeholder="Buscar por N°, proyecto o distribuidor" style="max-width:320px;">
+    </div>
+    <table class="data-table">
+      <thead><tr>
+        <th>Fecha</th><th>N°</th><th>Proyecto</th><th>Distribuidor</th>
+        <th>Producto</th><th>Total</th><th class="col-actions">Acción</th>
+      </tr></thead>
+      <tbody id="cotz-tbody"></tbody>
+    </table>
+  </section>
+
   <!-- ===================== CATÁLOGO (multi-tab) ===================== -->
   <section class="page" id="page-catalogo" hidden>
     <h1 class="page-title">Catálogo</h1>
@@ -1297,6 +1314,26 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
     </div>
     <div id="precios-tabla" style="margin-top:14px; overflow-x:auto;"></div>
     <div class="form-help" id="precios-estado" style="margin-top:10px;"></div>
+
+    <!-- Superior 2.0: estructura distinta (todo en USD, con tiers extra) → tabla aparte -->
+    <h2 class="page-title" style="font-size:18px; margin-top:26px;">Superior 2.0 <span class="muted" style="font-size:13px; font-weight:400;">(precios en USD)</span></h2>
+    <p class="page-subtitle" style="margin-top:0;">Superior 2.0 va siempre en <b>USD</b> (para Costa Rica se convierte con tipo de cambio al cotizar). Tiene tarifas propias: Línea, Línea CR (recargo), Especiales, Acero Inox, Antigrafiti.</p>
+    <div class="toolbar" style="gap:14px; flex-wrap:wrap; align-items:flex-end;">
+      <label style="display:flex; flex-direction:column; gap:4px; font-size:12px;">
+        <span class="muted">Tarifa (tier)</span>
+        <select class="form-select" id="precios-sup-tier">
+          <option value="linea">C. de Línea</option>
+          <option value="lineaCR">C. de Línea CR</option>
+          <option value="especiales">Especiales</option>
+          <option value="aceroInox">Acero Inoxidable</option>
+          <option value="antigrafiti">Esmaltada Antigrafiti</option>
+        </select>
+      </label>
+      <div style="flex:1;"></div>
+      <button class="btn btn-primary" id="btn-precios-sup-guardar">💾 Guardar Superior</button>
+    </div>
+    <div id="precios-sup-tabla" style="margin-top:14px; overflow-x:auto;"></div>
+    <div class="form-help" id="precios-sup-estado" style="margin-top:10px;"></div>
   </section>
 
   <!-- ===================== USUARIOS ===================== -->
@@ -1427,6 +1464,7 @@ const CATALOGO = {
     { codigo: 'SUP_ESTANDAR170', nombre: 'Estándar 170',     linea: 'Superior' },
     { codigo: 'SUP_REFORZADO',   nombre: 'Reforzado',        linea: 'Superior' },
     { codigo: 'SUP_REFORZADO170',nombre: 'Reforzado 170',    linea: 'Superior' },
+    { codigo: 'SUP_COLGANTE',    nombre: 'Colgante',         linea: 'Superior' },
     // Touchless
     { codigo: 'TL_S3',           nombre: 'S3',               linea: 'Touchless' }
   ],
@@ -1453,6 +1491,7 @@ const CATALOGO = {
     SUP_ESTANDAR170:   { puerta: 170, panel: 170, pilastra: 180, mingitorio: 120 },
     SUP_REFORZADO:     { puerta: 150, panel: 150, pilastra: 210, mingitorio: 120 },
     SUP_REFORZADO170:  { puerta: 170, panel: 170, pilastra: 210, mingitorio: 120 },
+    SUP_COLGANTE:      { puerta: 180, panel: 180, pilastra: 220, mingitorio: 120 },
     // Touchless S3 (alturas estimadas — confirmar con ficha cuando esté disponible)
     TL_S3:             { puerta: 180, panel: 180, pilastra: 210, mingitorio: 120 }
   },
@@ -1625,7 +1664,7 @@ const CATALOGO = {
     { codigo: 'CN04', familia: 'CN', sufijo: null, ancho: 4, alto: 180, desc: 'Canaleta 4 cm × 180 cm (ajuste de modulación)' },
     { codigo: 'CN05', familia: 'CN', sufijo: null, ancho: 5, alto: 180, desc: 'Canaleta 5 cm × 180 cm (ajuste de modulación · tope)' }
   ],
-  roles: ['Super Admin', 'Administrador', 'Distribuidor'],
+  roles: ['Super Admin', 'Administrador', 'Vendedor', 'Distribuidor'],
 
   /* ----- Datos para módulo de cotización (espejo de COTIZADORES/*.xlsm) ----- */
   // (productosCotizacion eliminado — ahora cotización usa directamente CATALOGO.modelos)
@@ -1670,7 +1709,40 @@ const CATALOGO = {
     COLGANTE:     { linea: { puerta: 232.29, panel: 195.80, pilastra: 268.34, mingitorio: 228.66 }, especiales: { puerta: 277.47, panel: 233.88, pilastra: 320.52, mingitorio: 273.13 },
                     lineaCRC: { puerta: 133914.42, panel: 112870.21, pilastra: 154690.42, mingitorio: 131820.32 }, especialesCRC: { puerta: 168374.12, panel: 141923.55, pilastra: 194492.55, mingitorio: 165736.09 } },  // Esp CR FX~607
     TL_S3:        { linea: { puerta: 369.26, panel: 313.14, pilastra: 268.34, mingitorio: 363.66 }, especiales: { puerta: 438.73, panel: 371.69, pilastra: 320.52, mingitorio: 432.04 },  // lista S3 sin pilastra → fallback Estándar
-                    lineaCRC: { puerta: 196159.89, panel: 166269.89, pilastra: 157403.47, mingitorio: 193173.47 }, especialesCRC: { puerta: 262748.32, panel: 214269.26, pilastra: 184766.11, mingitorio: 249059.26 } }
+                    lineaCRC: { puerta: 196159.89, panel: 166269.89, pilastra: 157403.47, mingitorio: 193173.47 }, especialesCRC: { puerta: 262748.32, panel: 214269.26, pilastra: 184766.11, mingitorio: 249059.26 } },
+    // ---- SUPERIOR 2.0 (hoja '2.0 Std y Ref') — TODO en USD; 4 tiers + Línea CR (recargo, USD).
+    //      `usdOnly:true` → para colones se multiplica por el T.C. que se escribe al cotizar.
+    //      Reforzado usa "Pl Reforzada" en el panel; Estándar usa "Paneles".
+    SUP_ESTANDAR:    { usdOnly: true,
+      linea:       { puerta: 335.34, panel: 282.66, pilastra: 387.35, mingitorio: 330.09 },
+      lineaCR:     { puerta: 368.51, panel: 310.62, pilastra: 425.66, mingitorio: 362.73 },
+      especiales:  { puerta: 388.29, panel: 327.29, pilastra: 448.51, mingitorio: 382.44 },
+      aceroInox:   { puerta: 436.98, panel: 382.47, pilastra: 524.12, mingitorio: 424.96 },
+      antigrafiti: { puerta: 316.63, panel: 263.86, pilastra: 351.81, mingitorio: 293.18 } },
+    SUP_ESTANDAR170: { usdOnly: true,
+      linea:       { puerta: 335.34, panel: 282.66, pilastra: 387.35, mingitorio: 330.09 },
+      lineaCR:     { puerta: 368.51, panel: 310.62, pilastra: 425.66, mingitorio: 362.73 },
+      especiales:  { puerta: 388.29, panel: 327.29, pilastra: 448.51, mingitorio: 382.44 },
+      aceroInox:   { puerta: 436.98, panel: 382.47, pilastra: 524.12, mingitorio: 424.96 },
+      antigrafiti: { puerta: 316.63, panel: 263.86, pilastra: 351.81, mingitorio: 293.18 } },
+    SUP_REFORZADO:   { usdOnly: true,   // panel = Pl Reforzada
+      linea:       { puerta: 335.34, panel: 440.17, pilastra: 387.35, mingitorio: 330.09 },
+      lineaCR:     { puerta: 368.51, panel: 483.70, pilastra: 425.66, mingitorio: 362.73 },
+      especiales:  { puerta: 388.29, panel: 509.69, pilastra: 448.51, mingitorio: 382.44 },
+      aceroInox:   { puerta: 436.98, panel: 537.41, pilastra: 524.12, mingitorio: 424.96 },
+      antigrafiti: { puerta: 316.63, panel: 366.23, pilastra: 351.81, mingitorio: 293.18 } },
+    SUP_REFORZADO170:{ usdOnly: true,   // panel = Pl Reforzada
+      linea:       { puerta: 335.34, panel: 440.17, pilastra: 387.35, mingitorio: 330.09 },
+      lineaCR:     { puerta: 368.51, panel: 483.70, pilastra: 425.66, mingitorio: 362.73 },
+      especiales:  { puerta: 388.29, panel: 509.69, pilastra: 448.51, mingitorio: 382.44 },
+      aceroInox:   { puerta: 436.98, panel: 537.41, pilastra: 524.12, mingitorio: 424.96 },
+      antigrafiti: { puerta: 316.63, panel: 366.23, pilastra: 351.81, mingitorio: 293.18 } },
+    SUP_COLGANTE:    { usdOnly: true,   // hoja '2.0 Colgante' (mismos $/m² que 2.0 Std)
+      linea:       { puerta: 335.34, panel: 282.66, pilastra: 387.35, mingitorio: 330.09 },
+      lineaCR:     { puerta: 368.51, panel: 310.62, pilastra: 425.66, mingitorio: 362.73 },
+      especiales:  { puerta: 388.29, panel: 327.29, pilastra: 448.51, mingitorio: 382.44 },
+      aceroInox:   { puerta: 436.98, panel: 382.47, pilastra: 524.12, mingitorio: 424.96 },
+      antigrafiti: { puerta: 316.63, panel: 263.86, pilastra: 351.81, mingitorio: 293.18 } }
   },
   paises: [
     'México','Guatemala','Honduras','El Salvador','Nicaragua','Costa Rica','Panamá',
@@ -1870,6 +1942,7 @@ CATALOGO.piezas = db.piezas;
     { codigo: 'SUP_ESTANDAR170',  nombre: 'Estándar 170',  linea: 'Superior' },
     { codigo: 'SUP_REFORZADO',    nombre: 'Reforzado',     linea: 'Superior' },
     { codigo: 'SUP_REFORZADO170', nombre: 'Reforzado 170', linea: 'Superior' },
+    { codigo: 'SUP_COLGANTE',     nombre: 'Colgante',      linea: 'Superior' },
     { codigo: 'TL_S3',            nombre: 'S3',            linea: 'Touchless' }
   ];
   modelosNuevosSupTL.forEach(m => {
@@ -1883,6 +1956,7 @@ CATALOGO.piezas = db.piezas;
     SUP_ESTANDAR170:  { puerta: 170, panel: 170, pilastra: 180, mingitorio: 120 },
     SUP_REFORZADO:    { puerta: 150, panel: 150, pilastra: 210, mingitorio: 120 },
     SUP_REFORZADO170: { puerta: 170, panel: 170, pilastra: 210, mingitorio: 120 },
+    SUP_COLGANTE:     { puerta: 180, panel: 180, pilastra: 220, mingitorio: 120 },
     TL_S3:            { puerta: 180, panel: 180, pilastra: 210, mingitorio: 120 }
   };
   if (db.catalogos.alturasPorModelo) {
@@ -1952,6 +2026,14 @@ SEED_CAT_KEYS.forEach(k => {
 // (refreshTarifas), así todos cotizan con los precios que ponga el Super Admin.
 if (!db.catalogos.preciosPorM2) {
   db.catalogos.preciosPorM2 = JSON.parse(JSON.stringify(CATALOGO.preciosPorM2));
+} else {
+  // Agregar al persistido los MODELOS NUEVOS del literal que falten (ej. SUP_* / Superior 2.0),
+  // sin pisar los que el Super Admin pudo haber editado. Así las altas de modelo nuevas aplican.
+  Object.keys(CATALOGO.preciosPorM2).forEach(k => {
+    if (!db.catalogos.preciosPorM2[k]) {
+      db.catalogos.preciosPorM2[k] = JSON.parse(JSON.stringify(CATALOGO.preciosPorM2[k]));
+    }
+  });
 }
 CATALOGO.preciosPorM2 = db.catalogos.preciosPorM2;
 // MIGRACIÓN colores: si los guardados no tienen `tier` (set viejo), se reemplazan por el set
@@ -2045,24 +2127,30 @@ function openModal({ title, body, onAccept, acceptLabel = 'Guardar' }) {
   });
 }
 
+/* ===== Permisos por rol =====
+   Vendedor: cotiza, diseña, ve TODAS las cotizaciones y gestiona distribuidores;
+   NO ve Catálogo / Lista de Precios / Usuarios, y NO configura el descuento. */
+const PAGINAS_POR_ROL = {
+  'Super Admin':   ['configurador','proyectos','cotizaciones','catalogo','precios','usuarios','distribuidores'],
+  'Administrador': ['configurador','proyectos','cotizaciones','catalogo','usuarios','distribuidores'],
+  'Vendedor':      ['configurador','proyectos','cotizaciones','distribuidores'],
+  'Distribuidor':  ['configurador','proyectos','cotizaciones']   // ve SOLO sus cotizaciones (RLS)
+};
+function paginasPermitidas(rol) { return PAGINAS_POR_ROL[rol] || PAGINAS_POR_ROL['Distribuidor']; }
+/* Ve TODOS los proyectos/cotizaciones/distribuidores (incluye Vendedor). */
+function rolVeTodo(u) { return !!u && ['Super Admin','Administrador','Vendedor'].includes(u.rol); }
+/* Puede configurar el descuento: SOLO Administrador y Super Admin. */
+function puedeEditarDescuento(u) { return !!u && ['Super Admin','Administrador'].includes(u.rol); }
+
 function nav(page) {
-  // PERMISOS: el rol Distribuidor solo puede navegar a Configurador y Mis Proyectos.
-  // Si intenta otra página (por hash o llamada programática), redirigir a Configurador.
+  // PERMISOS: si el rol no tiene permitida la página (por hash o llamada programática),
+  // se redirige al Configurador.
   const u = currentUser();
-  if (u && u.rol === 'Distribuidor' && page !== 'configurador' && page !== 'proyectos') {
-    page = 'configurador';
-  }
-  // Vendedor no puede entrar a Usuarios (la gestión de usuarios es del Super Admin / Administrador)
-  if (u && u.rol === 'Vendedor' && page === 'usuarios') {
-    page = 'configurador';
-  }
-  // Lista de Precios: SOLO Super Admin (aunque se llame por código/hash)
-  if (page === 'precios' && (!u || u.rol !== 'Super Admin')) {
-    page = 'configurador';
-  }
+  if (u && !paginasPermitidas(u.rol).includes(page)) page = 'configurador';
   document.querySelectorAll('.nav a').forEach(a => a.classList.toggle('active', a.dataset.page === page));
   document.querySelectorAll('section.page').forEach(s => s.hidden = s.id !== 'page-' + page);
   if (page === 'proyectos')      renderProyectos();
+  if (page === 'cotizaciones')   renderCotizaciones();
   if (page === 'catalogo')       renderCatalogo();
   if (page === 'precios')        renderListaPrecios();
   if (page === 'usuarios')       renderUsuarios();
@@ -2086,15 +2174,9 @@ function showApp(user) {
   // Distribuidor: solo Configurador + Mis Proyectos (filtrados por su distribuidor).
   // Vendedor: igual que admin por ahora (puede ajustarse después).
   // Super Admin / Administrador: acceso completo.
-  const esDistribuidor = user.rol === 'Distribuidor';
+  const permitidas = paginasPermitidas(user.rol);
   document.querySelectorAll('.nav [data-page]').forEach(a => {
-    const page = a.dataset.page;
-    const soloDistribuidor = (page === 'configurador' || page === 'proyectos');
-    let visible = true;
-    if (esDistribuidor) visible = soloDistribuidor;                 // Distribuidor: solo config + proyectos
-    else if (page === 'usuarios' && user.rol === 'Vendedor') visible = false;  // Vendedor: sin Usuarios
-    if (page === 'precios') visible = (user.rol === 'Super Admin');  // Lista de Precios: SOLO Super Admin
-    a.style.display = visible ? '' : 'none';
+    a.style.display = permitidas.includes(a.dataset.page) ? '' : 'none';
   });
   initConfigurador();
   nav('configurador');
@@ -2202,8 +2284,9 @@ const PRECIO_MODELO_LABEL = {
   ESTANDAR: 'Estándar', ESTANDAR170: 'Estándar 170', REFORZADO: 'Reforzado', REFORZADO170: 'Reforzado 170',
   IMPERIAL: 'Imperial', REGADERAS: 'Regaderas', KIDS: 'Kids', SCUDO: 'Scudo', COLGANTE: 'Colgante', TL_S3: 'Touchless S3'
 };
-// Modelos que NO van en esta lista de precios. (Vacío: Touchless S3 SÍ va — es un baño real.)
-const PRECIO_MODELOS_OCULTOS = [];
+// Modelos que NO van en este editor de Lista de Precios. Superior 2.0 (usdOnly) tiene otra
+// estructura (4 tiers en USD, sin colón exacto) → se edita aparte/en código por ahora.
+const PRECIO_MODELOS_OCULTOS = ['SUP_ESTANDAR', 'SUP_ESTANDAR170', 'SUP_REFORZADO', 'SUP_REFORZADO170'];
 function preciosModelos() {
   return Object.keys(CATALOGO.preciosPorM2).filter(m => !PRECIO_MODELOS_OCULTOS.includes(m));
 }
@@ -2226,6 +2309,86 @@ async function renderListaPrecios() {
     const est = document.getElementById('precios-estado'); if (est) est.textContent = 'Precios recargados.';
   };
   document.getElementById('btn-precios-guardar').onclick = guardarListaPrecios;
+  // --- Superior 2.0 (tabla aparte: USD, tiers propios) ---
+  pintarTablaPreciosSuperior();
+  const supTier = document.getElementById('precios-sup-tier');
+  if (supTier) supTier.onchange = pintarTablaPreciosSuperior;
+  const supBtn = document.getElementById('btn-precios-sup-guardar');
+  if (supBtn) supBtn.onclick = guardarPreciosSuperior;
+}
+
+/* Modelos Superior 2.0 (usdOnly) que se editan en la tabla aparte. */
+function preciosModelosSuperior() {
+  return Object.keys(CATALOGO.preciosPorM2).filter(m => (CATALOGO.preciosPorM2[m] || {}).usdOnly);
+}
+const PRECIO_SUP_TIERS = ['linea', 'lineaCR', 'especiales', 'aceroInox', 'antigrafiti'];
+function nombreModeloSup(cod) {
+  const m = (CATALOGO.modelos || []).find(x => x.codigo === cod);
+  return m ? m.nombre : cod.replace('SUP_', '');
+}
+
+function pintarTablaPreciosSuperior() {
+  const cont = document.getElementById('precios-sup-tabla');
+  if (!cont) return;
+  const tier = (document.getElementById('precios-sup-tier') || {}).value || 'linea';
+  let html = `<table class="data-table" style="min-width:680px;"><thead><tr>
+      <th style="text-align:left;">Modelo</th>
+      ${PRECIO_PIEZAS.map(p => `<th>${p.label} ($/m²)</th>`).join('')}
+    </tr></thead><tbody>`;
+  preciosModelosSuperior().forEach(mod => {
+    const set = (CATALOGO.preciosPorM2[mod] && CATALOGO.preciosPorM2[mod][tier]) || {};
+    html += `<tr><td style="text-align:left; font-weight:600;">${escapeHtml(nombreModeloSup(mod))}</td>`;
+    PRECIO_PIEZAS.forEach(p => {
+      const val = (set[p.key] != null) ? set[p.key] : '';
+      html += `<td><input type="number" min="0" step="0.01" class="form-input precio-sup-cell"
+                 data-modelo="${mod}" data-familia="${p.key}" value="${val}" style="width:130px; text-align:right;"></td>`;
+    });
+    html += `</tr>`;
+  });
+  html += `</tbody></table>`;
+  cont.innerHTML = html;
+  cont.querySelectorAll('input.precio-sup-cell').forEach(inp => {
+    inp.oninput = () => {
+      const mod = inp.dataset.modelo, fam = inp.dataset.familia;
+      if (!CATALOGO.preciosPorM2[mod][tier]) CATALOGO.preciosPorM2[mod][tier] = {};
+      const n = parseFloat(inp.value);
+      CATALOGO.preciosPorM2[mod][tier][fam] = isNaN(n) ? 0 : n;
+    };
+  });
+}
+
+async function guardarPreciosSuperior() {
+  const u = currentUser();
+  if (!u || u.rol !== 'Super Admin') { toast('Solo el Super Admin puede editar precios', 'danger'); return; }
+  const estado = document.getElementById('precios-sup-estado');
+  const filas = [];
+  preciosModelosSuperior().forEach(mod => {
+    PRECIO_SUP_TIERS.forEach(tier => {
+      const set = CATALOGO.preciosPorM2[mod][tier];
+      if (!set) return;
+      PRECIO_PIEZAS.forEach(p => {
+        if (set[p.key] == null) return;
+        filas.push({ modelo_codigo: mod, tier, moneda: 'USD', familia: p.key, tarifa: Number(set[p.key]) });
+      });
+    });
+  });
+  if (SB && sesionSupabase) {
+    const { error } = await SB.from('tarifa_m2').upsert(filas, { onConflict: 'modelo_codigo,tier,moneda,familia' });
+    if (error) {
+      toast('Error al guardar Superior: ' + error.message, 'danger');
+      if (estado) estado.textContent = 'Error: ' + error.message + ' (¿corriste el SQL 15?)';
+      return;
+    }
+    db.catalogos.preciosPorM2 = JSON.parse(JSON.stringify(CATALOGO.preciosPorM2));
+    persist();
+    toast('Precios Superior 2.0 guardados en la nube', 'ok');
+    if (estado) estado.textContent = `Guardado en la nube (${filas.length} tarifas USD de Superior).`;
+  } else {
+    db.catalogos.preciosPorM2 = JSON.parse(JSON.stringify(CATALOGO.preciosPorM2));
+    persist();
+    toast('Precios Superior 2.0 guardados (local)', 'ok');
+    if (estado) estado.textContent = 'Guardado localmente.';
+  }
 }
 
 function pintarTablaPrecios() {
@@ -6838,18 +7001,33 @@ function familiaTarifa(familiaPieza) {
   }
 }
 
-function calcularPrecioPieza(pieza, productoCodigo, terminacionCodigo, tier, moneda) {
-  // productoCodigo = código de modelo (ESTANDAR/REFORZADO/IMPERIAL/SCUDO/KIDS/COLGANTE/TL_S3…)
-  // tier = 'linea' | 'especiales'. moneda: si es 'CRC' usa las tarifas en COLONES exactas de
-  // la lista; cualquier otra usa USD (la conversión por TC, si aplica, la hace cotizar()).
+function calcularPrecioPieza(pieza, productoCodigo, terminacionCodigo, tier, moneda, tipoCambioColones) {
+  // productoCodigo = código de modelo (ESTANDAR/REFORZADO/IMPERIAL/SCUDO/KIDS/COLGANTE/TL_S3/SUP_*…)
+  // tier = 'linea'|'especiales' (y para Superior: 'aceroInox'|'antigrafiti'). moneda: 'CRC' usa
+  // colones exactos de la lista; otras usan USD. Superior (usdOnly): todo en USD, colones = USD×TC.
   const modelo  = CATALOGO.preciosPorM2[productoCodigo] || CATALOGO.preciosPorM2.ESTANDAR;
+  const altoDerivado = alturaPiezaSegunModelo(pieza.familia, productoCodigo, terminacionCodigo);
+  const m2  = (pieza.ancho * altoDerivado) / 10000;
+  const fam = familiaTarifa(pieza.familia);
+
+  // SUPERIOR 2.0 (usdOnly): precios en USD por tier (linea/especiales/aceroInox/antigrafiti).
+  // Para colones se multiplica por el T.C. ingresado; la Línea en CR usa el recargo `lineaCR`.
+  if (modelo.usdOnly) {
+    const tiersValidos = ['linea', 'especiales', 'aceroInox', 'antigrafiti'];
+    const setKey = tiersValidos.includes(tier) ? tier : 'especiales';
+    let usd = (modelo[setKey] && modelo[setKey][fam] != null) ? modelo[setKey][fam] : 0;
+    if (moneda === 'CRC') {
+      if (setKey === 'linea' && modelo.lineaCR && modelo.lineaCR[fam] != null) usd = modelo.lineaCR[fam];
+      return m2 * usd * (parseFloat(tipoCambioColones) || 0);   // colones = USD × T.C.
+    }
+    return m2 * usd;   // USD (LATAM)
+  }
+
+  // Modelos normales: 2 tiers × USD/CRC exacto de la lista.
   const tierKey = (tier === 'linea') ? 'linea' : 'especiales';
   const key     = (moneda === 'CRC') ? tierKey + 'CRC' : tierKey;
   const t = modelo[key] || modelo[tierKey] || modelo.especiales || modelo.linea || modelo;
-  // Alto derivado del modelo (NO el del catálogo, que es solo el de referencia ESTANDAR)
-  const altoDerivado = alturaPiezaSegunModelo(pieza.familia, productoCodigo, terminacionCodigo);
-  const m2 = (pieza.ancho * altoDerivado) / 10000;
-  const tarifa = t[familiaTarifa(pieza.familia)] || 0;
+  const tarifa = t[fam] || 0;
   return m2 * tarifa;   // USD, o CRC exacto si moneda === 'CRC'
 }
 
@@ -6884,7 +7062,7 @@ function cotizar(proyecto, opts) {
     // Alto derivado del modelo cotizado (no del catálogo)
     const altoEfectivo = alturaPiezaSegunModelo(p.familia, opts.producto, terminacion);
     const m2Unit       = (p.ancho * altoEfectivo) / 10000;
-    const precioU      = calcularPrecioPieza(p, opts.producto, terminacion, tier, moneda) * fx;
+    const precioU      = calcularPrecioPieza(p, opts.producto, terminacion, tier, moneda, opts.tcColones) * fx;
     return {
       codigo:        p.codigo,
       descripcion:   describirPiezaCotizacion(p, opts.producto, altoEfectivo),
@@ -6967,6 +7145,71 @@ function tierDeColor(nombreColor) {
   return (col && col.tier) ? col.tier : 'especiales';
 }
 
+/* Guarda la cotización en Supabase (tabla `cotizacion`) para que sea visible en la
+   página "Cotizaciones" para Vendedor / Administrador / Super Admin. El detalle completo
+   va en app_json (para re-generar el PDF); las columnas se usan para listar. */
+async function guardarCotizacionSupabase(cot) {
+  if (!(SB && sesionSupabase)) return;                 // offline → queda en db.cotizaciones
+  if (cot.proyectoId == null) return;                  // necesita un proyecto_id de la nube
+  const row = {
+    proyecto_id:     cot.proyectoId,
+    numero:          cot.numero,
+    producto_modelo: cot.producto,
+    tier:            cot.tier || 'especiales',
+    moneda:          cot.moneda || 'USD',
+    tipo_cambio:     cot.tipoCambio || 1,
+    distribuidor_id: (cot.distribuidor && cot.distribuidor.id) || null,
+    pais:            cot.pais || null,
+    tiempo_entrega:  cot.tiempoEntrega || null,
+    descuento_pct:   cot.descuentoPorcentaje || 0,
+    iva_pct:         cot.ivaPorcentaje || 0,
+    subtotal_fab:    cot.subtotalFab || 0,
+    total_sin_iva:   cot.totalSinIVA || 0,
+    iva_monto:       cot.ivaMonto || 0,
+    gran_total:      cot.granTotal || 0,
+    app_json:        cot
+  };
+  const { error } = await SB.from('cotizacion').insert(row);
+  if (error) console.warn('No se guardó la cotización en la nube:', error.message || error);
+}
+
+/* Página "Cotizaciones": lista TODAS (nube: tabla cotizacion; local: db.cotizaciones).
+   Cada fila permite re-descargar el PDF (el detalle vive en app_json / el objeto local). */
+async function renderCotizaciones() {
+  const tb = document.getElementById('cotz-tbody');
+  if (!tb) return;
+  const q = (document.getElementById('cot-buscar').value || '').toLowerCase().trim();
+  let lista = [];
+  if (SB && sesionSupabase) {
+    tb.innerHTML = `<tr><td colspan="7"><div class="empty-state">Cargando…</div></td></tr>`;
+    const { data, error } = await SB.from('cotizacion')
+      .select('cotizacion_id,numero,fecha,gran_total,moneda,app_json').order('fecha', { ascending: false });
+    if (error) { tb.innerHTML = `<tr><td colspan="7"><div class="empty-state">Error: ${escapeHtml(error.message)}</div></td></tr>`; return; }
+    lista = (data || []).map(r => Object.assign({}, r.app_json || {},
+      { numero: r.numero, fecha: r.fecha, granTotal: r.gran_total, moneda: r.moneda }));
+  } else {
+    lista = (db.cotizaciones || []).slice().reverse();
+  }
+  lista = lista.filter(c => !q ||
+    (c.numero || '').toLowerCase().includes(q) ||
+    (c.proyectoNombre || '').toLowerCase().includes(q) ||
+    ((c.distribuidor && c.distribuidor.nombre) || '').toLowerCase().includes(q));
+  if (!lista.length) { tb.innerHTML = `<tr><td colspan="7"><div class="empty-state">No hay cotizaciones</div></td></tr>`; return; }
+  const sim = m => (m === 'CRC') ? '₡' : '$';
+  tb.innerHTML = lista.map((c, i) => `<tr>
+      <td>${c.fecha ? new Date(c.fecha).toLocaleDateString('es-ES') : '—'}</td>
+      <td><strong>${escapeHtml(c.numero || '—')}</strong></td>
+      <td>${escapeHtml(c.proyectoNombre || c.proyectoCodigo || '—')}</td>
+      <td>${escapeHtml((c.distribuidor && c.distribuidor.nombre) || '—')}</td>
+      <td>${escapeHtml(c.productoNombre || '—')}</td>
+      <td>${sim(c.moneda)}${(c.granTotal || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+      <td class="col-actions"><button class="icon-btn icon-pdf" data-cotpdf="${i}" title="Descargar PDF">📄</button></td>
+    </tr>`).join('');
+  tb.querySelectorAll('[data-cotpdf]').forEach(b => b.onclick = () => { const c = lista[+b.dataset.cotpdf]; if (c) generarPdfCotizacion(c); });
+  const buscar = document.getElementById('cot-buscar');
+  if (buscar && !buscar._bound) { buscar._bound = true; buscar.addEventListener('input', () => renderCotizaciones()); }
+}
+
 /* --- Modal "Cotizar" desde Mis Proyectos --- */
 /* Guarda en el PROYECTO los herrajes agregados al cotizar, para que salgan en el CIP CSV.
    Reemplaza los herrajes previos del proyecto por los de esta cotización. */
@@ -6999,12 +7242,19 @@ function openCotizarModal(proyecto) {
   const productoDefault = proyecto.modelo || 'ESTANDAR';
   // El tier de precios se deriva del COLOR del proyecto (Línea = en stock → tarifa Línea).
   const tierColor = tierDeColor(proyecto.color);
+  // Superior 2.0 (usdOnly): tiene 4 tarifas elegibles (Línea/Especiales/Acero Inox/Antigrafiti)
+  // y todo en USD → para colones se multiplica por un T.C. que se escribe en el modal.
+  const esSuperior = !!(CATALOGO.preciosPorM2[productoDefault] || {}).usdOnly;
+  const tierOpts = esSuperior
+    ? [['linea','C. de Línea'], ['especiales','Especiales'], ['aceroInox','Acero Inoxidable'], ['antigrafiti','Esmaltada Antigrafiti']]
+    : [['especiales','Especiales'], ['linea','C. de Línea']];
   // Distribuidor del proyecto (autoselección + autocompletado de país/descuento/contacto).
   const distribs   = distribuidoresActivos();
   const distProy   = distribuidorDeProyecto(proyecto);
   const distIdSel  = distProy ? distProy.id : '';
   const paisDefault = (distProy && distProy.pais) || (normRegion(regionProy) === normRegion('Costa Rica') ? 'Costa Rica' : '');
   const descDefault = (distProy && distProy.descuento) || 0;
+  const puedeDesc   = puedeEditarDescuento(currentUser());   // Vendedor NO edita el descuento
   body.innerHTML = `
     <div class="form-grid" style="grid-template-columns:1fr 1fr;">
       <div class="form-row">
@@ -7046,15 +7296,20 @@ function openCotizarModal(proyecto) {
         </select>
       </div>
       <div class="form-row">
-        <label class="form-label">Tarifa (tier) <span style="color: var(--text-mute); font-weight: 400;">— según color (${escapeHtml(proyecto.color || '—')})</span></label>
+        <label class="form-label">Tarifa (tier) <span style="color: var(--text-mute); font-weight: 400;">${esSuperior ? '— Superior 2.0' : '— según color (' + escapeHtml(proyecto.color || '—') + ')'}</span></label>
         <select class="form-select" id="cot-tier">
-          <option value="especiales" ${tierColor === 'especiales' ? 'selected' : ''}>Especiales</option>
-          <option value="linea" ${tierColor === 'linea' ? 'selected' : ''}>C. de Línea</option>
+          ${tierOpts.map(([v, l]) => `<option value="${v}" ${tierColor === v ? 'selected' : ''}>${l}</option>`).join('')}
         </select>
       </div>
+      ${esSuperior ? `
       <div class="form-row">
-        <label class="form-label">Descuento (%) <span class="muted">(del distribuidor)</span></label>
-        <input class="form-input" type="number" id="cot-descuento" min="0" max="80" value="${descDefault}" step="0.1">
+        <label class="form-label">T.C. a colones (₡/USD) <span class="muted">(Superior, solo si es CR)</span></label>
+        <input class="form-input" type="number" id="cot-tc-colones" min="0" step="0.01" placeholder="ej. 576" value="${monedaFija === 'CRC' ? 576 : ''}">
+        <div class="form-help" style="font-size:10px; margin-top:2px;">Superior 2.0 está en USD; para Costa Rica se multiplica por este tipo de cambio.</div>
+      </div>` : ''}
+      <div class="form-row">
+        <label class="form-label">Descuento (%) <span class="muted">${puedeDesc ? '(del distribuidor)' : '(fijado por Admin)'}</span></label>
+        <input class="form-input" type="number" id="cot-descuento" min="0" max="80" value="${descDefault}" step="0.1" ${puedeDesc ? '' : 'disabled'}>
       </div>
       <div class="form-row">
         <label class="form-label">IVA (%) ${ivaDefaultPct ? '<span class="muted">(CR 13%)</span>' : '<span class="muted">(LATAM 0%)</span>'}</label>
@@ -7161,13 +7416,15 @@ function openCotizarModal(proyecto) {
         descuento:     body.querySelector('#cot-descuento').value,
         iva:           body.querySelector('#cot-iva').value,
         extras:        extrasAgregados,
-        tcGrabados:    (body.querySelector('#cot-grabado-tc') || {}).value || 0
+        tcGrabados:    (body.querySelector('#cot-grabado-tc') || {}).value || 0,
+        tcColones:     (body.querySelector('#cot-tc-colones') || {}).value || 0   // Superior 2.0 → colones
       };
       const cot = cotizar(proyecto, opts);
       db.cotizaciones = db.cotizaciones || [];
       db.cotizaciones.push(cot);
       persist();
       generarPdfCotizacion(cot);
+      guardarCotizacionSupabase(cot);   // guardar en la nube → visible en "Cotizaciones" para todos
       // Herrajes agregados al cotizar → se guardan en el proyecto para que salgan en el CIP CSV.
       const herrajesExtra = extrasAgregados.filter(e => e.tipo === 'herraje')
         .map(e => ({ codigo: e.codigo, descripcion: e.descripcion, linea: e.linea, cantidad: e.cantidad }));
@@ -7372,9 +7629,9 @@ async function renderProyectos() {
   const q     = document.getElementById('proy-buscar').value.toLowerCase().trim();
   const u = currentUser();
   const conectado = !!(SB && sesionSupabase);
-  const esAdmin = !!u && (u.rol === 'Super Admin' || u.rol === 'Administrador');
+  const esAdmin = rolVeTodo(u);   // Super Admin / Administrador / Vendedor → ven todos los proyectos
 
-  // Filtro por distribuidor: visible solo para Admin / Super Admin (el Distribuidor solo ve lo suyo).
+  // Filtro por distribuidor: visible solo para quien ve todo (el Distribuidor solo ve lo suyo).
   const fDistEl = document.getElementById('proy-filtro-distribuidor');
   if (fDistEl) fDistEl.style.display = esAdmin ? '' : 'none';
   const fDist = (fDistEl && esAdmin) ? fDistEl.value.toLowerCase().trim() : '';
@@ -8313,23 +8570,25 @@ async function renderDistribuidores() {
   const estado = document.getElementById('dst-filtro-estado').value;
   const q = document.getElementById('dst-buscar').value.toLowerCase().trim();
   const yo = currentUser();
-  const soySuper = !!yo && yo.rol === 'Super Admin';
+  const puedeGestion = rolVeTodo(yo);              // crear/editar: Super Admin / Administrador / Vendedor
+  const puedeBorrar  = puedeEditarDescuento(yo);   // eliminar: solo Super Admin / Administrador
   const conectado = !!(SB && sesionSupabase);
   const btnNuevo = document.getElementById('btn-nuevo-distribuidor');
-  if (btnNuevo) btnNuevo.style.display = soySuper ? '' : 'none';   // solo Super Admin crea
+  if (btnNuevo) btnNuevo.style.display = puedeGestion ? '' : 'none';
 
   let lista = [];
   if (conectado) {
     tb.innerHTML = `<tr><td colspan="6"><div class="empty-state">Cargando distribuidores…</div></td></tr>`;
     const { data, error } = await SB.from('distribuidor')
-      .select('distribuidor_id,nombre,contacto,email,telefono,ubicacion,region,activo').order('nombre');
+      .select('distribuidor_id,nombre,contacto,email,telefono,ubicacion,region,pais,descuento,activo').order('nombre');
     if (error) {
       tb.innerHTML = `<tr><td colspan="6"><div class="empty-state"><strong>Error al leer distribuidores</strong><br>${escapeHtml(error.message)}</div></td></tr>`;
       return;
     }
     lista = (data || []).map(d => ({
       id: d.distribuidor_id, nombre: d.nombre || '', contacto: d.contacto || '',
-      email: d.email || '', telefono: d.telefono || '', ubicacion: d.ubicacion || '', region: d.region || '', activo: d.activo !== false
+      email: d.email || '', telefono: d.telefono || '', ubicacion: d.ubicacion || '', region: d.region || '',
+      pais: d.pais || '', descuento: d.descuento != null ? Number(d.descuento) : 0, activo: d.activo !== false
     }));
   } else {
     lista = (db.distribuidores || []).slice();
@@ -8339,7 +8598,7 @@ async function renderDistribuidores() {
     .filter(d => !q || ((d.nombre || '') + (d.contacto || '') + (d.email || '')).toLowerCase().includes(q));
 
   if (lista.length === 0) {
-    tb.innerHTML = `<tr><td colspan="6"><div class="empty-state"><strong>No hay distribuidores</strong>${soySuper ? 'Agregá uno con el botón "Nuevo Distribuidor".' : ''}</div></td></tr>`;
+    tb.innerHTML = `<tr><td colspan="6"><div class="empty-state"><strong>No hay distribuidores</strong>${puedeGestion ? 'Agregá uno con el botón "Nuevo Distribuidor".' : ''}</div></td></tr>`;
     return;
   }
   tb.innerHTML = lista.map(d => `
@@ -8350,9 +8609,9 @@ async function renderDistribuidores() {
       <td>${escapeHtml(d.telefono || '')}</td>
       <td><span class="badge ${d.activo ? 'badge-ok' : 'badge-bad'}">${d.activo ? 'Activo' : 'Inactivo'}</span></td>
       <td class="col-actions">
-        ${soySuper ? `
-        <button class="btn btn-edit" data-edit-dst="${d.id}">✎ Editar</button>
-        <button class="btn btn-danger" data-del-dst="${d.id}">🗑 Eliminar</button>` : '<span class="muted">—</span>'}
+        ${puedeGestion ? `<button class="btn btn-edit" data-edit-dst="${d.id}">✎ Editar</button>` : ''}
+        ${puedeBorrar  ? `<button class="btn btn-danger" data-del-dst="${d.id}">🗑 Eliminar</button>` : ''}
+        ${!puedeGestion && !puedeBorrar ? '<span class="muted">—</span>' : ''}
       </td>
     </tr>`).join('');
   tb.querySelectorAll('[data-edit-dst]').forEach(b => b.onclick = () => {
@@ -8381,8 +8640,8 @@ document.getElementById('btn-nuevo-distribuidor').addEventListener('click', () =
 
 async function editarDistribuidor(d) {
   const yo = currentUser();
-  const soySuper = !!yo && yo.rol === 'Super Admin';
-  if (!soySuper) { toast('Solo el Super Admin gestiona distribuidores', 'danger'); return; }
+  if (!rolVeTodo(yo)) { toast('No autorizado para gestionar distribuidores', 'danger'); return; }
+  const puedeDesc = puedeEditarDescuento(yo);   // solo Admin / Super Admin editan el descuento
   const conectado = !!(SB && sesionSupabase);
   const body = document.createElement('div');
   body.innerHTML = `
@@ -8409,8 +8668,8 @@ async function editarDistribuidor(d) {
         <div class="form-help" style="font-size:10px; margin-top:2px;">México: no cotiza en la app · LATAM: precios en USD · Costa Rica: precios en colones.</div>
       </div>
       <div class="form-row">
-        <label class="form-label">Descuento (%) <span class="muted">(cae solo en la cotización)</span></label>
-        <input class="form-input" type="number" id="m-descuento" min="0" max="80" step="0.1" value="0">
+        <label class="form-label">Descuento (%) <span class="muted">${puedeDesc ? '(cae solo en la cotización)' : '(solo Admin/Super Admin lo cambian)'}</span></label>
+        <input class="form-input" type="number" id="m-descuento" min="0" max="80" step="0.1" value="0" ${puedeDesc ? '' : 'disabled'}>
       </div>
       <div class="form-row switch-row" style="margin-top:6px;">
         <input type="checkbox" id="m-activo" checked>
