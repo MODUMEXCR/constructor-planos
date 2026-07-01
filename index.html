@@ -2736,7 +2736,8 @@ function regionNoCotiza(region) {
 }
 
 /* Sincroniza el flag muro/terminal de los cierres con el LAYOUT actual.
-   L/E = 1 muro (el otro lado es cierre TERMINAL con panel para cerrar el cubículo);
+   L = 1 muro (el otro lado es cierre TERMINAL con panel para cerrar el cubículo);
+   E = ISLA (0 muros, cierra con PANEL a ambos lados: izq = panelCierreIzq, der = paneles[N-1]);
    U = 2 muros. Mingitorio en el extremo → sin cierre (null). Se llama al cambiar el
    layout o invertir, para que dibujo, validación y SubTipo del CSV reflejen el layout
    sin tener que re-aplicar la sugerencia. (PMR Cuarto maneja sus muros aparte.) */
@@ -2746,7 +2747,7 @@ function sincronizarMurosConLayout() {
   const layout = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || { codigo: 'L' };
   if (layout.pmrCuarto) return;
   const hasLeft  = ['L','U','L+','U+','C','I','K','LP','P+','PP'].includes(layout.codigo);
-  const hasRight = ['U','E','U+','E+','C','I','K','P+'].includes(layout.codigo);
+  const hasRight = ['U','U+','E+','C','I','K','P+'].includes(layout.codigo);
   const leftWallEff  = cfg.invertir ? hasRight : hasLeft;
   const rightWallEff = cfg.invertir ? hasLeft  : hasRight;
   const N = (a.tiposCabina || []).length || cfg.cabinas || 0;
@@ -2756,6 +2757,9 @@ function sincronizarMurosConLayout() {
   else if (a.muroIzq && a.muroIzq.codigo) a.muroIzq.esMuro = leftWallEff;
   if (ultimaEsMingit) a.muroDer = null;
   else if (a.muroDer && a.muroDer.codigo) a.muroDer.esMuro = rightWallEff;
+  // El panel de cierre IZQUIERDO solo existe si ese lado está ABIERTO (isla) y no es
+  // mingitorio; si pasa a muro o mingitorio, se descarta (la pared/urinal cierra ese lado).
+  if (leftWallEff || primeraEsMingit) a.panelCierreIzq = null;
 }
 
 /* Pobla el dropdown de Distribuidor con los distribuidores ACTIVOS.
@@ -3112,7 +3116,7 @@ function layoutIconSvg(l) {
   walls += `<line x1="${xL}" y1="${top}" x2="${xR}" y2="${top}" stroke="#0a1f3d" stroke-width="1.6"/>`;
   // side walls según layout
   const hasLeft  = ['L','U','L+','U+','C'].includes(l.codigo);
-  const hasRight = ['U','E','U+','E+','C'].includes(l.codigo);
+  const hasRight = ['U','U+','E+','C'].includes(l.codigo);
   if (hasLeft)  walls += `<line x1="${xL}" y1="${top}" x2="${xL}" y2="${bot}" stroke="#0a1f3d" stroke-width="1.6"/>`;
   if (hasRight) walls += `<line x1="${xR}" y1="${top}" x2="${xR}" y2="${bot}" stroke="#0a1f3d" stroke-width="1.6"/>`;
   // accesibilidad
@@ -3188,7 +3192,7 @@ function actualizarValidacionModulacion() {
   const layout = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || { codigo: 'L' };
   const esPmrCuartoVal = !!layout.pmrCuarto;
   const hasLeft  = ['L','U','L+','U+','C','I','K','LP','P+','PP'].includes(layout.codigo);
-  const hasRight = ['U','E','U+','E+','C','I','K','P+'].includes(layout.codigo);
+  const hasRight = ['U','U+','E+','C','I','K','P+'].includes(layout.codigo);
   const leftWall  = cfg.invertir ? hasRight : hasLeft;
   const rightWall = cfg.invertir ? hasLeft  : hasRight;
   // Mingitorios en los extremos NO llevan pilastra de cierre (se montan contra el muro).
@@ -3253,6 +3257,12 @@ function actualizarValidacionModulacion() {
     if (pieza) suma += pieza.ancho;
   } else if (!ultimaEsMingit) {
     faltantes.push('Cierre derecho');
+  }
+  // ISLA (E): no tiene muros → DEBE cerrarse con un PANEL a AMBOS lados
+  // (izq = panelCierreIzq · der = paneles[N-1]). Se exige explícitamente.
+  if (layout.codigo === 'E') {
+    if (!primeraEsMingit && !a.panelCierreIzq)          faltantes.push('Panel de cierre izquierdo');
+    if (!ultimaEsMingit  && !((a.paneles || [])[N - 1])) faltantes.push('Panel de cierre derecho');
   }
   // Si faltan piezas no validamos (mostrar advertencia neutral)
   if (faltantes.length > 0) {
@@ -3328,7 +3338,7 @@ function buildBathroomSvg() {
 
   // Muros efectivos (con invertir)
   const hasLeft  = ['L','U','L+','U+','C','I','K','LP','P+','PP'].includes(layout.codigo);
-  const hasRight = ['U','E','U+','E+','C','I','K','P+'].includes(layout.codigo);
+  const hasRight = ['U','U+','E+','C','I','K','P+'].includes(layout.codigo);
   const leftWall  = cfg.invertir ? hasRight : hasLeft;
   const rightWall = cfg.invertir ? hasLeft  : hasRight;
   const esLayoutK = layout.codigo === 'K';
@@ -3506,6 +3516,13 @@ function buildBathroomSvg() {
     const depth = (pz && pz.familia === 'PN') ? pz.ancho : panelBaseCm;
     return cabHeight * depth / panelBaseCm;
   };
+  // Largo visual de un panel dado su CÓDIGO (para el panel de cierre izquierdo dedicado,
+  // que no vive en el array `paneles` sino en areaCfg.panelCierreIzq).
+  const panelLenPxCode = (code) => {
+    const pz = code ? CATALOGO.piezas.find(p => p.codigo === code) : null;
+    const depth = (pz && pz.familia === 'PN') ? pz.ancho : panelBaseCm;
+    return cabHeight * depth / panelBaseCm;
+  };
 
   let svg = `<svg viewBox="0 0 ${displayW} ${totalH}" width="${displayW}" height="${totalH}">`;
   // Patrón hatched diagonal (estilo CAD concreto/mampostería) — se usa en todos los muros
@@ -3562,13 +3579,21 @@ function buildBathroomSvg() {
       // Lado 'izq' (sin muro izq): panel en el extremo izquierdo, pilastra al lado derecho.
       // Lado 'der' (sin muro der): panel en el extremo derecho, pilastra al lado izquierdo.
       const muroSel = s.lado === 'izq' ? 'muroIzq' : 'muroDer';
-      const panelIdx = s.lado === 'izq' ? 0 : (N - 1);
-      const panelX  = s.lado === 'izq' ? x : (x + w - 6);    // panel en el extremo exterior
-      const capX    = s.lado === 'izq' ? x + 4 : (x + w - 12); // cap al lado interior
+      // Panel de cierre: DERECHO usa paneles[N-1]; IZQUIERDO usa el slot dedicado
+      // areaCfg.panelCierreIzq (isla tipo E), con fallback a paneles[0] para proyectos viejos.
+      const esIzq   = s.lado === 'izq';
+      const panelSel = esIzq ? 'panelCierreIzq' : `panel-${N - 1}`;
+      const panelLenTerm = esIzq
+        ? panelLenPxCode(areaCfg.panelCierreIzq || (areaCfg.paneles || [])[0])
+        : panelLenPx(N - 1);
+      const panelX  = esIzq ? x : (x + w - 6);    // panel en el extremo exterior
+      const capX    = esIzq ? x + 4 : (x + w - 12); // cap al lado interior
       // PANEL vertical grueso cerrando el cubículo (al extremo del slot)
-      svg += `<g data-piece="panel-${panelIdx}">`;
-      svg += `<rect x="${panelX}" y="20" width="6" height="${panelLenPx(panelIdx)}" fill="#0a1f3d"/>`;
+      svg += `<g data-piece="${panelSel}">`;
+      svg += `<rect x="${panelX}" y="20" width="6" height="${panelLenTerm}" fill="#0a1f3d"/>`;
       svg += `</g>`;
+      // Etiqueta IZQ / DER para identificar cada panel de cierre en el previsualizador
+      svg += `<text x="${panelX + 3}" y="${20 + panelLenTerm + 11}" font-size="9" font-weight="700" fill="#0a1f3d" text-anchor="middle">${esIzq ? 'IZQ' : 'DER'}</text>`;
       // PILASTRA (cap + barra horizontal al frente, AL LADO del panel hacia la cabina)
       svg += `<g data-piece="${muroSel}">`;
       svg += `<rect x="${capX}" y="17" width="8" height="6" fill="#0a1f3d"/>`;
@@ -3950,7 +3975,7 @@ function renderPreviewControls(tab) {
   // panel propio (la pared cierra ese lado). Ej. layout U = muro a ambos lados → N-1 paneles.
   const _layoutPC      = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || { codigo: 'L' };
   const _hasLeftWallPC  = ['L','U','L+','U+','C','I','K','LP','P+','PP'].includes(_layoutPC.codigo);
-  const _hasRightWallPC = ['U','E','U+','E+','C','I','K','P+'].includes(_layoutPC.codigo);
+  const _hasRightWallPC = ['U','U+','E+','C','I','K','P+'].includes(_layoutPC.codigo);
   const leftWallEff     = cfg.invertir ? _hasRightWallPC : _hasLeftWallPC;
   const rightWallEff    = cfg.invertir ? _hasLeftWallPC : _hasRightWallPC;
   const piezasFamilia = tab === 'paneles' ? 'PN' : tab === 'puertas' ? 'PT' : 'PI';
@@ -4000,9 +4025,13 @@ function renderPreviewControls(tab) {
       } else {
         optionsHtml = piezasParaEste.map(opt).join('');
       }
+      // En una ISLA (extremo derecho ABIERTO, sin muro), el panel de la última cabina
+      // es el PANEL DE CIERRE DERECHO → se rotula así para que el usuario lo identifique.
+      const esCierreDerAbierto = (tab === 'paneles' && i === N - 1 && !rightWallEff);
+      const spanPanel = esCierreDerAbierto ? `Panel de cierre DERECHO (Cabina ${i + 1})` : `Cabina ${i + 1} · ${tab}`;
       dropdownHtml = `
         <label>
-          <span>Cabina ${i + 1} · ${tab}</span>
+          <span>${spanPanel}</span>
           <select data-tab="${tab}" data-idx="${i}">
             <option value="">— Elegir —</option>
             ${optionsHtml}
@@ -4046,6 +4075,25 @@ function renderPreviewControls(tab) {
         </label>`;
     }
   }
+  // PANEL DE CIERRE IZQUIERDO (isla tipo E): control dedicado al INICIO de la lista de
+  // paneles, cuando el lado izquierdo está ABIERTO (sin muro) y la 1ª cabina no es urinal.
+  // (El cierre DERECHO se rotula sobre el panel de la última cabina, más arriba.)
+  {
+    const tcPrimera = (activeAreaCfg() || {}).tiposCabina || [];
+    const primeraEsMingitPC = tcPrimera[0] === 'Mingitorio';
+    if (tab === 'paneles' && !leftWallEff && !primeraEsMingitPC) {
+      const optsPN = piezasFamilia2.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${p.alto})</option>`).join('');
+      const ctrlIzq = `
+        <label>
+          <span>Panel de cierre IZQUIERDO (isla)</span>
+          <select data-tab="panelCierreIzq">
+            <option value="">— Elegir —</option>
+            ${optsPN}
+          </select>
+        </label>`;
+      html = ctrlIzq + html;
+    }
+  }
   cont.innerHTML = html;
 
   // Agregar sección "Pilastras de muro y extras" al final del tab Pilastras
@@ -4081,6 +4129,7 @@ function renderPreviewControls(tab) {
     if (t === 'tipo')      s.value = ((a.tiposCabina[idx] || '') === 'Mingitorio') ? 'Mingitorio' : 'Baño';
     if (t === 'muroIzq')   s.value = (a.muroIzq && a.muroIzq.codigo) || '';
     if (t === 'muroDer')   s.value = (a.muroDer && a.muroDer.codigo) || '';
+    if (t === 'panelCierreIzq') s.value = a.panelCierreIzq || '';
     s.onchange = e => {
       const v = e.target.value;
       const i = e.target.dataset.idx !== undefined ? +e.target.dataset.idx : -1;
@@ -4092,6 +4141,7 @@ function renderPreviewControls(tab) {
       if (tt === 'tipo')      a.tiposCabina[i] = v;
       if (tt === 'muroIzq')   a.muroIzq        = v ? { codigo: v, esMuro: leftWallEff } : null;
       if (tt === 'muroDer')   a.muroDer        = v ? { codigo: v, esMuro: rightWallEff } : null;
+      if (tt === 'panelCierreIzq') a.panelCierreIzq = v;
       // Si cambió el tipo cabina (Baño ↔ Mingitorio), re-render los controles para
       // mostrar/ocultar el dropdown de Apertura. Si no, basta redibujar el canvas.
       if (tt === 'tipo') {
@@ -4138,6 +4188,7 @@ function pieceSelectorFor(tab, idx) {
     case 'tipo':     return `[data-piece="cabina-${idx}"]`;     // tipo cabina afecta el fixture
     case 'muroIzq':  return `[data-piece="muroIzq"]`;
     case 'muroDer':  return `[data-piece="muroDer"]`;
+    case 'panelCierreIzq': return `[data-piece="panelCierreIzq"]`;
     default: return null;
   }
 }
@@ -4189,7 +4240,7 @@ function bindHighlights(cont) {
 function renderMurosYExtrasSection() {
   const layout = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || { codigo: 'L' };
   const hasLeftWall  = ['L','U','L+','U+','C','I','K','LP','P+','PP'].includes(layout.codigo);
-  const hasRightWall = ['U','E','U+','E+','C','I','K','P+'].includes(layout.codigo);
+  const hasRightWall = ['U','U+','E+','C','I','K','P+'].includes(layout.codigo);
   const leftWallEff  = cfg.invertir ? hasRightWall : hasLeftWall;
   const rightWallEff = cfg.invertir ? hasLeftWall  : hasRightWall;
   const a            = (typeof activeAreaCfg === 'function') ? (activeAreaCfg() || {}) : {};
@@ -4437,7 +4488,7 @@ function alturaPiezaSegunModelo(familia, modeloCodigo /*, terminacionCodigo */) 
 function sugerirModulacion({ claro, N, layoutCodigo, nMingit }) {
   const layout       = CATALOGO.layouts.find(l => l.codigo === layoutCodigo) || CATALOGO.layouts[0];
   const hasLeftWall  = ['L','U','L+','U+','C','I','K','LP','P+','PP'].includes(layoutCodigo);
-  const hasRightWall = ['U','E','U+','E+','C','I','K','P+'].includes(layoutCodigo);
+  const hasRightWall = ['U','U+','E+','C','I','K','P+'].includes(layoutCodigo);
   const accLayout    = layout.acc;
 
   // Resolver intercambio de muros por invertir
@@ -4908,7 +4959,7 @@ function aplicarSugerencia(s) {
 
   // Resolver muros efectivos para defaults
   const hasLeftWall  = ['L','U','L+','U+','C','I','K','LP','P+','PP'].includes(layout.codigo);
-  const hasRightWall = ['U','E','U+','E+','C','I','K','P+'].includes(layout.codigo);
+  const hasRightWall = ['U','U+','E+','C','I','K','P+'].includes(layout.codigo);
   const leftWallEff  = cfg.invertir ? hasRightWall : hasLeftWall;
   const rightWallEff = cfg.invertir ? hasLeftWall  : hasRightWall;
 
@@ -5003,6 +5054,10 @@ function aplicarSugerencia(s) {
     const ultimaEsMingit  = (a.tiposCabina || [])[N - 1] === 'Mingitorio';
     a.muroIzq = primeraEsMingit ? null : { codigo: codMuroIzq, esMuro: leftWallEff };
     a.muroDer = ultimaEsMingit  ? null : { codigo: codMuroDer, esMuro: rightWallEff };
+    // PANEL DE CIERRE IZQUIERDO (lado abierto, sin muro → isla tipo E): panel lateral
+    // dedicado. El cierre DERECHO ya usa paneles[N-1] (asignado arriba cuando el lado
+    // derecho está abierto). Si el lado izq es MURO o mingitorio → no lleva panel (null).
+    a.panelCierreIzq = (leftWallEff || primeraEsMingit) ? null : panelCodeDefault;
   }
 
   // AJUSTE DE INSTALACIÓN — cm que el herraje absorbe automáticamente.
@@ -5303,6 +5358,8 @@ function piezasAgregadas() {
     // Pilastras de esquina contra muro (una por lado, si las hay)
     if (a.muroIzq && a.muroIzq.codigo) add(a.muroIzq.codigo);
     if (a.muroDer && a.muroDer.codigo) add(a.muroDer.codigo);
+    // Panel de cierre IZQUIERDO (isla tipo E) — panel lateral dedicado
+    if (a.panelCierreIzq) add(a.panelCierreIzq);
     // Pilastras extras (costillas, T, entrada de puerta a muro)
     (a.pilastrasExtras || []).forEach(ex => add(ex.codigo));
     // Paneles extras (relleno fin de pared, caso S00031)
@@ -5313,7 +5370,7 @@ function piezasAgregadas() {
     // abierto lleva su mampara de cierre. El extremo contra MURO no lleva (lo cubre la pared).
     const layA = CATALOGO.layouts.find(l => l.codigo === (a.layout || cfg.layout)) || { codigo: 'L' };
     const hasLa = ['L','U','L+','U+','C','I','K','LP','P+','PP'].includes(layA.codigo);
-    const hasRa = ['U','E','U+','E+','C','I','K','P+'].includes(layA.codigo);
+    const hasRa = ['U','U+','E+','C','I','K','P+'].includes(layA.codigo);
     const invA = (a.invertir !== undefined) ? a.invertir : cfg.invertir;
     const lWa = invA ? hasRa : hasLa, rWa = invA ? hasLa : hasRa;
     const tcA = a.tiposCabina || [];
@@ -5447,7 +5504,7 @@ function determinarSubTipoModumex(pieza, ctx) {
   const { areaCfg, indiceCabina, layoutCodigo, invertir, totalCabinas } = ctx;
   const familia      = pieza.familia;
   const hasLeftWall  = ['L','U','L+','U+','C','I','K','LP','P+','PP'].includes(layoutCodigo);
-  const hasRightWall = ['U','E','U+','E+','C','I','K','P+'].includes(layoutCodigo);
+  const hasRightWall = ['U','U+','E+','C','I','K','P+'].includes(layoutCodigo);
   const leftWallEff  = invertir ? hasRightWall : hasLeftWall;
   const rightWallEff = invertir ? hasLeftWall  : hasRightWall;
   const esEndMuro    = (indiceCabina === 0 && leftWallEff) ||
@@ -5466,7 +5523,7 @@ function determinarSubTipoModumex(pieza, ctx) {
     // Si bisagra IZQ, la hoja barre a la DER → muro debe estar a la DER de la cabina.
     // Si bisagra DER, la hoja barre a la IZQ → muro debe estar a la IZQ de la cabina.
     const hasLeftWall  = ['L','U','L+','U+','C','I','K','LP','P+','PP'].includes(layoutCodigo);
-    const hasRightWall = ['U','E','U+','E+','C','I','K','P+'].includes(layoutCodigo);
+    const hasRightWall = ['U','U+','E+','C','I','K','P+'].includes(layoutCodigo);
     const leftWallEff  = invertir ? hasRightWall : hasLeftWall;
     const rightWallEff = invertir ? hasLeftWall  : hasRightWall;
     const muroALaDerCabina = (indiceCabina === totalCabinas - 1 && rightWallEff);
@@ -5475,7 +5532,12 @@ function determinarSubTipoModumex(pieza, ctx) {
       ((bisagra === 'IZQ' && muroALaDerCabina) || (bisagra === 'DER' && muroALaIzqCabina));
     return barreContraMuro ? base + '-AM' : base;
   }
-  if (familia === 'PN') return esEndMuro ? 'PNLAT' : 'PNCEN';
+  if (familia === 'PN') {
+    // Panel de cierre en extremo. Contra muro → PNLAT. En ISLA (E) la última cabina cierra
+    // con panel LATERAL en el lado derecho abierto (el izquierdo va aparte en panelCierreIzq).
+    const esTerminalAbiertoDer = (layoutCodigo === 'E' && indiceCabina === totalCabinas - 1 && !rightWallEff);
+    return (esEndMuro || esTerminalAbiertoDer) ? 'PNLAT' : 'PNCEN';
+  }
   if (familia === 'PI') {
     // Las pilastras entre cabinas son SIEMPRE centrales (PLCEN); las que van contra
     // muro se manejan vía areaCfg.muroIzq / muroDer (no via pilastras[i]).
@@ -5605,6 +5667,11 @@ function exportarCSV(proyecto) {
         const sub = (areaCfg.muroDer.esMuro !== false) ? 'PLLATMUR' : 'PLLAT';
         agregar(p, sub, areaName);
       }
+    }
+    // ----- Panel de cierre IZQUIERDO (isla tipo E) — panel lateral dedicado (PNLAT) -----
+    if (areaCfg.panelCierreIzq) {
+      const p = CATALOGO.piezas.find(x => x.codigo === areaCfg.panelCierreIzq);
+      if (p) agregar(p, 'PNLAT', areaName);
     }
 
     // ----- Pilastras extras (T, costillas, intersecciones especiales) -----
@@ -5933,6 +6000,7 @@ function drawCuadroCantidades(doc, proyecto) {
     }
     if (a.muroIzq && a.muroIzq.codigo) acc(a.muroIzq.codigo);
     if (a.muroDer && a.muroDer.codigo) acc(a.muroDer.codigo);
+    if (a.panelCierreIzq) acc(a.panelCierreIzq);   // panel de cierre izquierdo (isla E)
     (a.pilastrasExtras || []).forEach(ex => acc(ex.codigo));
     (a.panelesExtras   || []).forEach(ex => acc(ex.codigo));
     (a.canaletas       || []).forEach(c  => acc(c.codigo));
@@ -6206,7 +6274,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
   // ----- Construir secuencia de piezas según layout + configByArea -----
   const layoutCodigo = areaLayout;
   const hasLeft  = ['L','U','L+','U+','C','I','K','LP','P+','PP'].includes(layoutCodigo);
-  const hasRight = ['U','E','U+','E+','C','I','K','P+'].includes(layoutCodigo);
+  const hasRight = ['U','U+','E+','C','I','K','P+'].includes(layoutCodigo);
   const leftWallEff  = areaInvertir ? hasRight : hasLeft;
   const rightWallEff = areaInvertir ? hasLeft  : hasRight;
   const N = areaCabinas;
@@ -6220,7 +6288,9 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     seq.push({
       tipo:   esMuroIzq ? 'pilastra-muro' : 'pilastra-terminal',
       codigo: muroIzqDataPdf.codigo,
-      lado:   'izq'
+      lado:   'izq',
+      // Panel de cierre izquierdo dedicado (isla tipo E), fallback a paneles[0] si es viejo
+      panelDivCode: areaCfg.panelCierreIzq || (areaCfg.paneles || [])[0]
     });
   } else if (leftWallEff) {
     seq.push({ tipo: 'muro' });
@@ -6548,9 +6618,10 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
       // Pilastra terminal: panel al EXTREMO + cap AL LADO del panel (interior).
       const panelX = s.lado === 'izq' ? x : (x + w - 3);
       const capX   = s.lado === 'izq' ? (x + 2) : (x + w - 5);
+      const panelLenTermMm = panelLenMm(s.panelDivCode);
       doc.setFillColor(10, 31, 61);
       // Panel vertical grueso al extremo exterior — largo según la profundidad real del panel
-      doc.rect(panelX, drawTop, 3, panelLenMm(s.panelDivCode), 'F');
+      doc.rect(panelX, drawTop, 3, panelLenTermMm, 'F');
       // Cap al lado del panel (interior de cubículo)
       doc.rect(capX, drawTop - 2, 3, 4, 'F');
       // Pilastra horizontal al frente
@@ -6558,6 +6629,10 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
       doc.setFont('helvetica', 'normal'); doc.setFontSize(6);
       doc.setTextColor(120, 120, 120);
       doc.text('R15', capX + 1.5, drawTop - 4, { align: 'center' });
+      // Etiqueta IZQ / DER para identificar cada panel de cierre en el plano
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(6);
+      doc.setTextColor(10, 31, 61);
+      doc.text(s.lado === 'izq' ? 'IZQ' : 'DER', panelX + 1.5, drawTop + panelLenTermMm + 4, { align: 'center' });
 
     } else if (s.tipo === 'puerta') {
       // ===== CABINA vista desde arriba =====
@@ -8383,6 +8458,7 @@ function eliminarPieza(codigo) {
       (a.pilastras || []).includes(codigo) ||
       (a.muroIzq && a.muroIzq.codigo === codigo) ||
       (a.muroDer && a.muroDer.codigo === codigo) ||
+      (a.panelCierreIzq === codigo) ||
       (a.pilastrasExtras || []).some(e => e.codigo === codigo) ||
       (a.panelesExtras   || []).some(e => e.codigo === codigo)
     )
