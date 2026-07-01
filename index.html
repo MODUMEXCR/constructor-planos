@@ -1113,9 +1113,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
             </div>
           </div>
 
-          <button class="btn btn-primary" id="btn-generar" style="margin-top:18px;width:100%;justify-content:center;">
-            Obtener Planos
-          </button>
+          <div style="display:flex; gap:8px; margin-top:18px; flex-wrap:wrap;">
+            <button class="btn btn-secondary" id="btn-guardar" style="flex:1; min-width:140px; justify-content:center;" title="Guarda el proyecto sin descargar nada. Ideal para trabajos a medio hacer.">
+              💾 Guardar
+            </button>
+            <button class="btn btn-primary" id="btn-generar" style="flex:1; min-width:140px; justify-content:center;">
+              Obtener Planos
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -2818,9 +2823,10 @@ function bindCfg() {
     recalcularSugerencia();
   };
 
-  // Auto-modulación: inputs dimensiones del lugar + botón sugerir
-  $('cfg-largo').oninput   = recalcularSugerencia;
-  $('cfg-ancho').oninput   = recalcularSugerencia;
+  // Auto-modulación: inputs dimensiones del lugar + botón sugerir.
+  // Las medidas se guardan POR ÁREA (no globales) para que cada área conserve las suyas.
+  $('cfg-largo').oninput   = e => { const a = activeAreaCfg(); if (a) a.largo = e.target.value; recalcularSugerencia(); };
+  $('cfg-ancho').oninput   = e => { const a = activeAreaCfg(); if (a) a.ancho = e.target.value; recalcularSugerencia(); };
   $('btn-sugerir').onclick = recalcularSugerencia;
   $('cfg-linea').onchange       = e => {
     cfg.linea = e.target.value;
@@ -2867,14 +2873,9 @@ function bindCfg() {
     const v = $('cfg-area-input').value.trim();
     if (!v) return;
     if (cfg.areas.includes(v)) { toast('Esa área ya existe', 'danger'); return; }
-    // El área nueva hereda cabinas/layout/invertir del área activa actual (si la hay)
-    const prevA   = activeAreaCfg();
+    // El área nueva arranca EN BLANCO (no hereda cabinas/layout/medidas del área anterior).
+    // Cada área guarda su propia configuración; ésta se completa al configurarla.
     const newArea = makeDefaultAreaCfg();
-    if (prevA) {
-      newArea.cabinas  = prevA.cabinas  || 3;
-      newArea.layout   = prevA.layout   || 'L';
-      newArea.invertir = prevA.invertir || false;
-    }
     cfg.areas.push(v);
     cfg.configByArea[v] = newArea;
     cfg.areaActivaIdx   = cfg.areas.length - 1;
@@ -2890,6 +2891,8 @@ function bindCfg() {
   });
 
   $('btn-generar').onclick = generarPlanos;
+  const btnGuardar = document.getElementById('btn-guardar');
+  if (btnGuardar) btnGuardar.onclick = guardarSinDescargar;
 }
 
 function updateAltura() {
@@ -2927,6 +2930,11 @@ function makeDefaultAreaCfg() {
     cabinas:  3,
     layout:   'L',
     invertir: false,
+    // Medidas del lugar POR ÁREA (antes eran globales del DOM → se "heredaban" al cambiar
+    // de área). Vacío = área sin configurar (queda en blanco). preferCorta = pared de cabinas.
+    largo:    '',
+    ancho:    '',
+    preferCorta: false,
     // Hoja/Piso: etiqueta opcional para AGRUPAR áreas en una misma página del PDF
     // (lado a lado, estilo ESEN). Vacío = el área va en su propia hoja.
     hoja:     '',
@@ -2976,6 +2984,13 @@ function activarArea(idx) {
     if (slider) slider.value             = a.cabinas;
     if (slval)  slval.textContent        = a.cabinas;
     if (inv)    inv.checked              = !!a.invertir;
+    // Medidas del lugar POR ÁREA: cargar las del área (vacío si no se ha configurado).
+    // Así al pasar de un área a otra cambian las medidas a las de esa área.
+    cfg.preferCorta = !!a.preferCorta;
+    const largoEl = document.getElementById('cfg-largo');
+    const anchoEl = document.getElementById('cfg-ancho');
+    if (largoEl) largoEl.value = (a.largo != null ? a.largo : '');
+    if (anchoEl) anchoEl.value = (a.ancho != null ? a.ancho : '');
     document.querySelectorAll('.layout-option').forEach(o =>
       o.classList.toggle('selected', o.dataset.layout === a.layout)
     );
@@ -3279,7 +3294,11 @@ function actualizarValidacionModulacion() {
   const claroAjustado = claro - nPilMuro + 1.5 * nPuertas;
   const diff = claroAjustado - suma;     // > 0 = sobra (falta material), < 0 = falta (no cabe)
   const absDiff = Math.abs(diff);
-  const tolHerraje = 0.5 * nPilMuro;   // 0.5 cm por muro (sin base); sin muro → 0 → revisar canaleta
+  // Layout L: tiene 1 muro + 1 extremo ABIERTO que absorbe la holgura → el calce con el claro
+  // NO es crítico: se acepta una tolerancia amplia de ±5 cm (pedido de Dayanna). Otros layouts
+  // usan 0.5 cm por muro (herraje).
+  const esLayoutL  = (layout.codigo === 'L');
+  const tolHerraje = esLayoutL ? 5 : (0.5 * nPilMuro);
 
   el.style.display = 'block';
   // Signo de diff: > 0 = HUECO (piezas suman menos que el claro → falta material → la
@@ -3305,8 +3324,10 @@ function actualizarValidacionModulacion() {
     }
   } else if (absDiff <= tolHerraje) {
     verde();
-    const sufijo = absDiff > 0.5 ? ` (herraje absorbe ${absDiff.toFixed(1)} cm)` : '';
-    el.textContent = `✓ Modulación calza exacta — suma ${suma} cm vs claro ${claro} cm${sufijo}`;
+    const sufijo = esLayoutL
+      ? (absDiff > 0.5 ? ` (layout L: el extremo abierto absorbe ${absDiff.toFixed(1)} cm — tolerancia ±5 cm)` : '')
+      : (absDiff > 0.5 ? ` (herraje absorbe ${absDiff.toFixed(1)} cm)` : '');
+    el.textContent = `✓ Modulación calza — suma ${suma} cm vs claro ${claro} cm${sufijo}`;
   } else if (diff > 0 && absDiff <= 5) {
     // Hueco pequeño → se rellena con canaleta
     amarillo();
@@ -3998,8 +4019,8 @@ function renderPreviewControls(tab) {
     // El usuario elige PN si el siguiente es baño (panel lateral completo) o MG si es otro mingitorio (panel mingitorio).
     let dropdownHtml;
     if (tab === 'paneles' && esMingitorio) {
-      const optsMG = piezasMG.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${p.alto})</option>`).join('');
-      const optsPN = piezasFamilia2.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${p.alto})</option>`).join('');
+      const optsMG = piezasMG.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia, cfg.modelo)})</option>`).join('');
+      const optsPN = piezasFamilia2.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia, cfg.modelo)})</option>`).join('');
       dropdownHtml = `
         <label>
           <span>Cabina ${i + 1} · panel/mingitorio</span>
@@ -4011,7 +4032,7 @@ function renderPreviewControls(tab) {
         </label>`;
     } else {
       const piezasParaEste = piezasFamilia2;
-      const opt = p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${p.alto})</option>`;
+      const opt = p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia, cfg.modelo)})</option>`;
       let optionsHtml;
       if (tab === 'paneles' && cfg.modelo === 'KIDS') {
         // Kids: 120 y 130 son los paneles ESTÁNDAR (lo que sugiere la modulación).
@@ -4082,7 +4103,7 @@ function renderPreviewControls(tab) {
     const tcPrimera = (activeAreaCfg() || {}).tiposCabina || [];
     const primeraEsMingitPC = tcPrimera[0] === 'Mingitorio';
     if (tab === 'paneles' && !leftWallEff && !primeraEsMingitPC) {
-      const optsPN = piezasFamilia2.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${p.alto})</option>`).join('');
+      const optsPN = piezasFamilia2.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia, cfg.modelo)})</option>`).join('');
       const ctrlIzq = `
         <label>
           <span>Panel de cierre IZQUIERDO (isla)</span>
@@ -4251,7 +4272,7 @@ function renderMurosYExtrasSection() {
   const tieneCierreIzq = leftWallEff  || !!(a.muroIzq && a.muroIzq.codigo);
   const tieneCierreDer = rightWallEff || !!(a.muroDer && a.muroDer.codigo);
   const pilastras    = CATALOGO.piezas.filter(p => p.familia === 'PI');
-  const opts         = pilastras.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${p.alto})</option>`).join('');
+  const opts         = pilastras.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia, cfg.modelo)})</option>`).join('');
 
   let html = `<div style="grid-column: 1 / -1; margin-top: 14px; padding: 14px 16px; background: var(--bg-soft); border: 1px dashed var(--line); border-radius: 8px;">
     <div style="font-weight: 700; color: var(--brand); margin-bottom: 10px; font-size: 13px;">Pilastras de cierre y extras</div>`;
@@ -4302,7 +4323,7 @@ function bindExtrasSection(cont, a) {
       <div style="display: flex; gap: 6px; align-items: center;">
         <select data-extra-idx="${idx}" data-extra-field="codigo" style="flex: 0 0 160px;">
           <option value="">— Pieza —</option>
-          ${pilastras.map(p => `<option value="${p.codigo}" ${ex.codigo === p.codigo ? 'selected' : ''}>${p.codigo} (${p.ancho}×${p.alto})</option>`).join('')}
+          ${pilastras.map(p => `<option value="${p.codigo}" ${ex.codigo === p.codigo ? 'selected' : ''}>${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia, cfg.modelo)})</option>`).join('')}
         </select>
         <input type="text" placeholder='Descripción (ej. "T entre damas y mingitorios" o "contra muro")' data-extra-idx="${idx}" data-extra-field="descripcion" value="${escapeHtml(ex.descripcion || '')}" style="flex: 1; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;">
         <button class="icon-btn danger" data-remove-extra="${idx}" title="Eliminar">✕</button>
@@ -4366,7 +4387,7 @@ function bindExtrasSection(cont, a) {
    pared. También sirve para paneles de cerramiento lateral en zonas mixtas. */
 function renderPanelesExtrasSection() {
   const panelesPN = CATALOGO.piezas.filter(p => p.familia === 'PN');
-  const opts      = panelesPN.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${p.alto})</option>`).join('');
+  const opts      = panelesPN.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia, cfg.modelo)})</option>`).join('');
 
   return `<div style="grid-column: 1 / -1; margin-top: 14px; padding: 14px 16px; background: var(--bg-soft); border: 1px dashed var(--line); border-radius: 8px;">
     <div style="font-weight: 700; color: var(--brand); margin-bottom: 10px; font-size: 13px;">Paneles adicionales (relleno de muro)</div>
@@ -4392,7 +4413,7 @@ function bindPanelesExtrasSection(cont, a) {
       <div style="display: flex; gap: 6px; align-items: center;">
         <select data-pextra-idx="${idx}" data-pextra-field="codigo" style="flex: 0 0 160px;">
           <option value="">— Pieza —</option>
-          ${panelesPN.map(p => `<option value="${p.codigo}" ${ex.codigo === p.codigo ? 'selected' : ''}>${p.codigo} (${p.ancho}×${p.alto})</option>`).join('')}
+          ${panelesPN.map(p => `<option value="${p.codigo}" ${ex.codigo === p.codigo ? 'selected' : ''}>${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia, cfg.modelo)})</option>`).join('')}
         </select>
         <input type="text" placeholder='Descripción (ej. "relleno fin de pared izquierda")' data-pextra-idx="${idx}" data-pextra-field="descripcion" value="${escapeHtml(ex.descripcion || '')}" style="flex: 1; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;">
         <button class="icon-btn danger" data-remove-pextra="${idx}" title="Eliminar">✕</button>
@@ -4761,16 +4782,20 @@ function sugerirModulacion({ claro, N, layoutCodigo, nMingit }) {
   const diffReal   = claroAjustado - sumaPiezas;   // signed
   const absDiffReal = Math.abs(diffReal);
   const margenHerraje = 0.5 * nPilastrasAMuro;     // 0.5 cm por muro (0.5 a cada lado con muro)
-  const tolExacto = margenHerraje;                 // U(2 muros)=1.0 · L/E(1 muro)=0.5 · sin muro=0 → canaleta
+  // Layout L: el extremo ABIERTO absorbe la holgura → tolerancia amplia ±5 cm (no crítica).
+  const esLayoutL = (layoutCodigo === 'L');
+  const tolExacto = esLayoutL ? 5 : margenHerraje;  // U(2 muros)=1.0 · L=5 · E/sin muro=0 → canaleta
   let ajuste;
   if (absDiffReal <= tolExacto) {
-    const msgHerraje = margenHerraje > 0 && absDiffReal > 0.5
-      ? ` (ajuste de ${absDiffReal.toFixed(1)} cm absorbido por el herraje de ${nPilastrasAMuro} pilastra(s) a muro)`
-      : '';
+    const msgHerraje = esLayoutL
+      ? (absDiffReal > 0.5 ? ` (layout L: el extremo abierto absorbe ${absDiffReal.toFixed(1)} cm — tolerancia ±5 cm)` : '')
+      : (margenHerraje > 0 && absDiffReal > 0.5
+          ? ` (ajuste de ${absDiffReal.toFixed(1)} cm absorbido por el herraje de ${nPilastrasAMuro} pilastra(s) a muro)`
+          : '');
     ajuste = {
       tipo: 'exacto',
-      msg: '✓ Calza exacto' + msgHerraje,
-      ajusteInstalacionCm: (margenHerraje > 0 && absDiffReal > 0.1) ? absDiffReal : 0
+      msg: '✓ Calza' + (esLayoutL ? '' : ' exacto') + msgHerraje,
+      ajusteInstalacionCm: ((esLayoutL || margenHerraje > 0) && absDiffReal > 0.1) ? absDiffReal : 0
     };
   }
   // La canaleta SOLO rellena un hueco (diffReal > 0). Si las piezas se pasan (diffReal < 0)
@@ -5166,6 +5191,8 @@ function actualizarInfoPared() {
   el.innerHTML = `Área <b>${info.m2.toFixed(2)} m²</b> · cabinas en pared <b>${labelActual}</b> de <b>${info.paredCabinas} cm</b> · pared opuesta ${info.paredOpuesta} cm <button class="btn-link" id="btn-swap-pared" type="button">usar pared ${labelOtra} (${info.paredOpuesta} cm)</button>`;
   document.getElementById('btn-swap-pared').onclick = () => {
     cfg.preferCorta = !cfg.preferCorta;
+    const a = (typeof activeAreaCfg === 'function') ? activeAreaCfg() : null;
+    if (a) a.preferCorta = cfg.preferCorta;   // preferencia de pared POR ÁREA
     recalcularSugerencia();
   };
 }
@@ -5380,7 +5407,31 @@ function piezasAgregadas() {
   return Object.values(acc).sort((x, y) => x.codigo.localeCompare(y.codigo));
 }
 
-async function generarPlanos() {
+// "Obtener Planos": guarda el proyecto Y descarga el PDF.
+async function generarPlanos() { return guardarProyectoActual(true); }
+// "Guardar": guarda el proyecto SIN descargar nada (para trabajos a medio hacer);
+// luego salta a la próxima área en blanco para seguir configurando.
+async function guardarSinDescargar() { return guardarProyectoActual(false); }
+
+/* Devuelve el índice de la próxima área SIN configurar (sin piezas elegidas), buscando
+   a partir de la activa (con wrap). -1 si todas las áreas están configuradas. */
+function proximaAreaEnBlanco() {
+  const configurada = (a) => {
+    if (!a) return false;
+    const algo = (arr) => (arr || []).some(v => v && v !== '');
+    return algo(a.puertas) || algo(a.paneles) || algo(a.pilastras) || !!a.panelCierreIzq
+        || !!(a.muroIzq && a.muroIzq.codigo) || !!(a.muroDer && a.muroDer.codigo)
+        || (a.pilastrasExtras || []).length > 0 || (a.panelesExtras || []).length > 0;
+  };
+  const n = cfg.areas.length;
+  for (let k = 1; k <= n; k++) {
+    const idx = (cfg.areaActivaIdx + k) % n;
+    if (!configurada(cfg.configByArea[cfg.areas[idx]])) return idx;
+  }
+  return -1;
+}
+
+async function guardarProyectoActual(descargar) {
   // validaciones mínimas
   if (!cfg.codigo) { toast('Falta el Número de Expediente', 'danger'); return; }
   if (!cfg.nombre) { toast('Falta el nombre del proyecto', 'danger'); return; }
@@ -5449,13 +5500,26 @@ async function generarPlanos() {
     }
     persist();
   }
-  cfg.editandoId = null;                              // salir del modo edición
+  const accion = editando ? 'actualizado' : 'guardado';
 
+  if (!descargar) {
+    // GUARDAR (sin descargar): quedarse EDITANDO el mismo proyecto para que un nuevo
+    // "Guardar" lo ACTUALICE (no duplique). Luego saltar a la próxima área en blanco.
+    cfg.editandoId = proyecto.id;
+    const idxBlank = proximaAreaEnBlanco();
+    if (idxBlank >= 0 && idxBlank !== cfg.areaActivaIdx) {
+      activarArea(idxBlank);
+      toast(`Proyecto ${accion} (sin descargar). Pasando al área "${cfg.areas[idxBlank]}" (en blanco).`, 'ok');
+    } else {
+      toast(`Proyecto ${accion} (sin descargar). Podés seguir configurando.`, 'ok');
+    }
+    return;
+  }
+
+  cfg.editandoId = null;                              // salir del modo edición
   // Descargar SOLO los planos (PDF). Los archivos CSV (CIP para Modumex.cr y el de
   // SICLICK) se descargan aparte, por proyecto, desde "Mis Proyectos".
   exportarPDF(proyecto);
-
-  const accion = editando ? 'actualizado' : 'guardado';
   toast(`Proyecto ${accion} · planos (PDF) descargados. Los archivos CIP/SICLICK se descargan desde Mis Proyectos.`, 'ok');
   nav('proyectos');
 }
@@ -5987,7 +6051,8 @@ function drawCuadroCantidades(doc, proyecto) {
       const p = CATALOGO.piezas.find(x => x.codigo === codigo);
       if (!p) return;
       const k = p.codigo;
-      buf[k] = buf[k] || { familia: p.familia, codigo: p.codigo, ancho: p.ancho, alto: p.alto, cantidad: 0 };
+      // Alto según el MODELO del proyecto (ej. pilastra Reforzado = 210, no el 180 del catálogo base).
+      buf[k] = buf[k] || { familia: p.familia, codigo: p.codigo, ancho: p.ancho, alto: alturaPiezaSegunModelo(p.familia, proyecto.modelo), cantidad: 0 };
       buf[k].cantidad++;
     };
     for (let i = 0; i < N; i++) {
