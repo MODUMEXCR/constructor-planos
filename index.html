@@ -943,8 +943,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           <div class="form-grid">
             <div class="form-row">
               <label class="form-label">Número de Expediente</label>
-              <input type="text" class="form-input" id="cfg-codigo" placeholder="S00088, CR0022, etc.">
-              <div class="form-help" id="cfg-codigo-hint">Asignación manual por comercial</div>
+              <div class="input-with-button">
+                <input type="text" class="form-input" id="cfg-codigo" placeholder="S00088, CR0022, etc.">
+                <button class="btn btn-secondary" id="btn-consecutivo" type="button" title="Generar Nº consecutivo (no se repite)">Nº</button>
+              </div>
+              <div class="form-help" id="cfg-codigo-hint">Asignación manual, o generá un consecutivo con el botón «Nº»</div>
             </div>
             <div class="form-row">
               <label class="form-label">Nombre del proyecto</label>
@@ -1010,7 +1013,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
                 <input type="number" class="form-input" id="cfg-largo" placeholder="ej. 400" min="50" max="2000">
               </label>
               <label>
-                <span>Ancho del lugar (cm) — claro interior</span>
+                <span>Profundidad del lugar (cm) — fondo</span>
                 <input type="number" class="form-input" id="cfg-ancho" placeholder="ej. 300" min="50" max="2000">
               </label>
               <button class="btn btn-secondary" id="btn-sugerir" type="button">💡 Sugerir</button>
@@ -1072,8 +1075,16 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
               <input type="number" class="form-input" id="cfg-repeticiones" min="1" max="50" value="1">
             </div>
             <div class="form-row">
-              <label class="form-label">Código Postal</label>
-              <input type="text" class="form-input" id="cfg-cp" placeholder="00000">
+              <label class="form-label">Ubicación · País</label>
+              <select class="form-select" id="cfg-ubic-pais"></select>
+            </div>
+            <div class="form-row">
+              <label class="form-label">Ubicación · Región / Zona</label>
+              <input type="text" class="form-input" id="cfg-ubic-region" placeholder="ej. San José, CDMX, Guanacaste">
+            </div>
+            <div class="form-row">
+              <label class="form-label">Ubicación · Dirección</label>
+              <input type="text" class="form-input" id="cfg-ubic-direccion" placeholder="Calle, número, referencia">
             </div>
             <div class="form-row">
               <label class="form-label">KAP (abre puerta de pie)</label>
@@ -1589,10 +1600,14 @@ const CATALOGO = {
     // PUERTAS ESTÁNDAR (alto 150) — ficha oficial LEEDER M1 noviembre 2025
     { codigo: 'PT55',  familia: 'PT', sufijo: null, ancho:  55, alto: 150, desc: 'Puerta 55 cm × 150 cm' },
     { codigo: 'PT60',  familia: 'PT', sufijo: null, ancho:  60, alto: 150, desc: 'Puerta 60 cm × 150 cm' },
+    { codigo: 'PT62',  familia: 'PT', sufijo: null, ancho:  62, alto: 150, desc: 'Puerta 62 cm × 150 cm (se cobra como 70)' },
+    { codigo: 'PT64',  familia: 'PT', sufijo: null, ancho:  64, alto: 150, desc: 'Puerta 64 cm × 150 cm (se cobra como 70)' },
     { codigo: 'PT70',  familia: 'PT', sufijo: null, ancho:  70, alto: 150, desc: 'Puerta 70 cm × 150 cm' },
     { codigo: 'PT75',  familia: 'PT', sufijo: null, ancho:  75, alto: 150, desc: 'Puerta 75 cm × 150 cm' },
     { codigo: 'PT85',  familia: 'PT', sufijo: null, ancho:  85, alto: 150, desc: 'Puerta 85 cm × 150 cm' },
     { codigo: 'PT90',  familia: 'PT', sufijo: null, ancho:  90, alto: 150, desc: 'Puerta 90 cm × 150 cm' },
+    { codigo: 'PT92',  familia: 'PT', sufijo: null, ancho:  92, alto: 150, desc: 'Puerta 92 cm × 150 cm (se cobra como 100)' },
+    { codigo: 'PT94',  familia: 'PT', sufijo: null, ancho:  94, alto: 150, desc: 'Puerta 94 cm × 150 cm (se cobra como 100)' },
     { codigo: 'PT100', familia: 'PT', sufijo: null, ancho: 100, alto: 150, desc: 'Puerta 100 cm × 150 cm (PMR)' },
     // Puertas regadera (sufijo A, alto 180)
     // PUERTAS REGADERAS (alto 180) — ficha oficial Modelo Regaderas
@@ -1883,10 +1898,14 @@ CATALOGO.piezas = db.piezas;
 // MIGRACIÓN AUTOMÁTICA — Ficha oficial LEEDER M1 noviembre 2025
 // Agrega piezas oficiales nuevas y quita las obsoletas. No borra ningún proyecto del usuario.
 (function migrarCatalogoLeederM1() {
-  const codigosObsoletos = ['PT35', 'PT62', 'PT92', 'PI20', 'PN160', 'MG40120', 'MG40150'];
+  const codigosObsoletos = ['PT35', 'PI20', 'PN160', 'MG40120', 'MG40150'];   // PT62/PT92 YA NO son obsoletas
   const piezasOficiales = [
     { codigo: 'PT55',   familia: 'PT', sufijo: null, ancho:  55, alto: 150, desc: 'Puerta 55 cm × 150 cm' },
     { codigo: 'PT90',   familia: 'PT', sufijo: null, ancho:  90, alto: 150, desc: 'Puerta 90 cm × 150 cm' },
+    { codigo: 'PT62',   familia: 'PT', sufijo: null, ancho:  62, alto: 150, desc: 'Puerta 62 cm × 150 cm (se cobra como 70)' },
+    { codigo: 'PT64',   familia: 'PT', sufijo: null, ancho:  64, alto: 150, desc: 'Puerta 64 cm × 150 cm (se cobra como 70)' },
+    { codigo: 'PT92',   familia: 'PT', sufijo: null, ancho:  92, alto: 150, desc: 'Puerta 92 cm × 150 cm (se cobra como 100)' },
+    { codigo: 'PT94',   familia: 'PT', sufijo: null, ancho:  94, alto: 150, desc: 'Puerta 94 cm × 150 cm (se cobra como 100)' },
     { codigo: 'PT55A',  familia: 'PT', sufijo: 'A',  ancho:  55, alto: 180, desc: 'Puerta REGADERA 55 cm × 180 cm' },
     { codigo: 'PT90A',  familia: 'PT', sufijo: 'A',  ancho:  90, alto: 180, desc: 'Puerta REGADERA 90 cm × 180 cm' },
     { codigo: 'PT100A', familia: 'PT', sufijo: 'A',  ancho: 100, alto: 180, desc: 'Puerta REGADERA 100 cm × 180 cm (PMR)' },
@@ -2504,7 +2523,7 @@ const cfg = {
   modelo: 'ESTANDAR', terminacion: 'ZOCLO',
   acabado: 'Laminado Compacto', color: 'ALUMINA 2103',
   distribuidor: '',                   // opcional — nombre del distribuidor (de db.distribuidores)
-  repeticiones: 1, cp: '',
+  repeticiones: 1, ubicPais: '', ubicRegion: '', ubicDireccion: '',
   kap: 0, mingitorios: 0, regaderas: 0,
   preferCorta: false,                 // si true, las cabinas van en la pared corta
   // por área:
@@ -2517,6 +2536,7 @@ function initConfigurador() {
   fillModelosPorLinea(cfg.linea);   // modelos filtrados por línea
   fillSelect('cfg-terminacion', CATALOGO.terminaciones.map(t => ({ value: t.codigo, label: t.nombre })));
   fillSelect('cfg-acabado',     CATALOGO.acabados);
+  fillSelect('cfg-ubic-pais',   [{ value: '', label: '— Elegir país —' }].concat(CATALOGO.paises.map(p => ({ value: p, label: p }))));
   poblarColoresDatalist();   // cfg-color es input libre + datalist (permite color especial escrito)
   fillDistribuidorSelect();
   actualizarBotonSugerirSegunLinea();
@@ -2768,6 +2788,11 @@ function fillDistribuidorSelect() {
 function bindCfg() {
   const $ = id => document.getElementById(id);
   $('cfg-codigo').oninput = e => cfg.codigo = e.target.value.trim();
+  { const b = $('btn-consecutivo'); if (b) b.onclick = async () => {
+      const num = await generarConsecutivoExpediente();
+      $('cfg-codigo').value = num; cfg.codigo = num;
+      toast('Nº de Expediente generado: ' + num, 'ok');
+    }; }
   $('cfg-nombre').oninput = e => cfg.nombre = e.target.value.trim();
   $('cfg-cabinas').oninput = e => {
     const a = activeAreaCfg();
@@ -2817,7 +2842,9 @@ function bindCfg() {
   $('cfg-color').oninput        = e => { cfg.color = e.target.value; actualizarIndicadorTierColor(); };
   $('cfg-distribuidor').onchange = e => { cfg.distribuidor = e.target.value; };
   $('cfg-repeticiones').oninput = e => { cfg.repeticiones = parseInt(e.target.value, 10) || 1; };
-  $('cfg-cp').oninput           = e => { cfg.cp = e.target.value; };
+  $('cfg-ubic-pais').onchange     = e => { cfg.ubicPais = e.target.value; };
+  $('cfg-ubic-region').oninput    = e => { cfg.ubicRegion = e.target.value; };
+  $('cfg-ubic-direccion').oninput = e => { cfg.ubicDireccion = e.target.value; };
   $('cfg-hoja').oninput         = e => { const a = activeAreaCfg(); if (a) a.hoja = e.target.value; };
   $('cfg-kap').onchange         = e => { cfg.kap = +e.target.value; };
   $('cfg-mingitorios').onchange = e => { cfg.mingitorios = +e.target.value; };
@@ -3240,7 +3267,7 @@ function actualizarValidacionModulacion() {
   const claroAjustado = claro - nPilMuro + 1.5 * nPuertas;
   const diff = claroAjustado - suma;     // > 0 = sobra (falta material), < 0 = falta (no cabe)
   const absDiff = Math.abs(diff);
-  const tolHerraje = 0.5 + 0.5 * nPilMuro;
+  const tolHerraje = 0.5 * nPilMuro;   // 0.5 cm por muro (sin base); sin muro → 0 → revisar canaleta
 
   el.style.display = 'block';
   // Signo de diff: > 0 = HUECO (piezas suman menos que el claro → falta material → la
@@ -3753,7 +3780,12 @@ function buildBathroomSvg() {
   // ===== Cota TOTAL (debajo de las cotas individuales) =====
   // El claro se mide entre caras interiores de los muros (los 15 cm de muro no cuentan)
   const murosTotCm = seq.filter(s => s.tipo === 'muro').reduce((t, s) => t + s.ancho, 0);
-  const claroTotalCm = totalCm - murosTotCm;
+  const claroCalculado = totalCm - murosTotCm;   // suma de piezas
+  // El CLARO TOTAL que se muestra es el que ESCRIBE EL CLIENTE (medida del lugar), no el calculado.
+  const claroCliente = (areaCfg.claroCliente && areaCfg.claroCliente > 0)
+    ? areaCfg.claroCliente
+    : ((typeof leerDimensionesLugar === 'function') ? ((leerDimensionesLugar() || {}).paredCabinas || 0) : 0);
+  const claroTotalCm = (claroCliente > 0) ? claroCliente : claroCalculado;
   const xT1 = padding + ((seq[0] && seq[0].tipo === 'muro') ? 15 * scale : 0);
   const xT2 = padding + drawW - ((seq[seq.length - 1] && seq[seq.length - 1].tipo === 'muro') ? 15 * scale : 0);
   svg += `<line x1="${xT1}" y1="${dimTotalY}" x2="${xT2}" y2="${dimTotalY}" stroke="#0a1f3d" stroke-width="1"/>`;
@@ -3771,6 +3803,14 @@ function buildBathroomSvg() {
     svg += `<text x="${ax}" y="${ay}" font-size="9" fill="#b91c1c" font-weight="700" text-anchor="end">Ajuste de instalación: ${ajusteCm.toFixed(1)} cm</text>`;
     svg += `<line x1="${ax + 2}" y1="${ay + 2}" x2="${padding + drawW - 2}" y2="${20 + cabHeight - 4}" stroke="#b91c1c" stroke-width="0.6" stroke-dasharray="3,2"/>`;
     svg += `</g>`;
+  }
+
+  // ===== Profundidad (fondo) del lugar — rótulo informativo arriba a la izquierda =====
+  {
+    const profCm = (typeof leerDimensionesLugar === 'function') ? ((leerDimensionesLugar() || {}).paredOpuesta || 0) : 0;
+    if (profCm > 0) {
+      svg += `<text x="${padding + 2}" y="16" font-size="9" fill="#0a1f3d" font-weight="700">Profundidad (fondo): ${profCm} cm</text>`;
+    }
   }
 
   // ===== C2: Marcas de centros de descarga sanitaria (del levantamiento) =====
@@ -4492,7 +4532,7 @@ function sugerirModulacion({ claro, N, layoutCodigo, nMingit }) {
         }
       }
     }
-    const tolExactoP = 0.5 + (esCierrePanel ? 0 : 0.5);   // base + herraje (solo con muro der)
+    const tolExactoP = (esCierrePanel ? 0 : 0.5);   // 0.5 cm por muro der (PP cierra con panel → 0)
     const absDiffP = Math.abs(bestP.diff);
     let ajusteP;
     if (absDiffP <= tolExactoP) {
@@ -4667,8 +4707,8 @@ function sugerirModulacion({ claro, N, layoutCodigo, nMingit }) {
   const sumaPiezas = best.total;
   const diffReal   = claroAjustado - sumaPiezas;   // signed
   const absDiffReal = Math.abs(diffReal);
-  const margenHerraje = 0.5 * nPilastrasAMuro;     // cm que absorben los herrajes
-  const tolExacto = 0.5 + margenHerraje;
+  const margenHerraje = 0.5 * nPilastrasAMuro;     // 0.5 cm por muro (0.5 a cada lado con muro)
+  const tolExacto = margenHerraje;                 // U(2 muros)=1.0 · L/E(1 muro)=0.5 · sin muro=0 → canaleta
   let ajuste;
   if (absDiffReal <= tolExacto) {
     const msgHerraje = margenHerraje > 0 && absDiffReal > 0.5
@@ -4717,7 +4757,7 @@ function sugerirModulacion({ claro, N, layoutCodigo, nMingit }) {
     nPuertas > 0  ? `− ${puertasTxt} = ${(claroAjustado - sumPuertas).toFixed(1)} cm para pilastras` : null,
     `Pilastras de cierre: ${pilEsqTxt}${nInternas > 0 ? ' + ' + nInternas + '×PI' + best.anchoPilInt + ' (central)' : ''}`,
     esPmrCuarto ? `Cuarto PMR: PI${best.anchoPilRelleno} de relleno junto a la puerta + panel divisor profundo (no consume ancho)` : null,
-    margenHerraje > 0 ? `Tolerancia herraje: ±${tolExacto.toFixed(1)} cm (0.5 base + 0.5 × ${nPilastrasAMuro} pilastra(s) a muro)` : null
+    margenHerraje > 0 ? `Tolerancia herraje: ±${tolExacto.toFixed(1)} cm (0.5 cm por muro × ${nPilastrasAMuro}); fuera de eso, revisar canaleta` : null
   ].filter(Boolean);
 
   return {
@@ -4966,6 +5006,9 @@ function aplicarSugerencia(s) {
   // AJUSTE DE INSTALACIÓN — cm que el herraje absorbe automáticamente.
   // Se anota en el plano cuando > 0 para que el instalador sepa cuánto ajustar.
   a.ajusteInstalacionCm = (s.ajuste && s.ajuste.ajusteInstalacionCm) || 0;
+  // Guardar el CLARO que escribió el cliente (medida del lugar) para mostrarlo tal cual en plano/PDF.
+  { const _dim = (typeof leerDimensionesLugar === 'function') ? leerDimensionesLugar() : null;
+    if (_dim && _dim.paredCabinas) a.claroCliente = _dim.paredCabinas; }
   // Mezcla baño+urinal: cada urinal ocupa un SLOT más ancho que reparte el sobrante del claro
   // (quedan espaciados, contra la pared en U). null/≤60 → urinal en su ancho normal (60).
   a.mingitAncho = (s.anchoUrinal && s.anchoUrinal > 60) ? s.anchoUrinal : null;
@@ -5023,6 +5066,35 @@ function leerDimensionesLugar() {
     paredOpuesta: cfg.preferCorta ? mayor : menor,
     usandoCorta: cfg.preferCorta
   };
+}
+
+/* Ubicación del proyecto (Dirección, Región / Zona, País) para rótulo/cajetín/cotización.
+   Cae a `cp`/`ubicacion` viejos si el proyecto no tiene los campos nuevos. */
+function ubicacionProyecto(p) {
+  if (!p) return '—';
+  const partes = [p.ubicDireccion, p.ubicRegion, p.ubicPais].filter(Boolean);
+  if (partes.length) return partes.join(', ');
+  return p.cp || p.ubicacion || '—';
+}
+
+/* Genera el próximo Nº de Expediente CONSECUTIVO (la app lo maneja para que no se repita).
+   Toma el número más alto de los códigos existentes (proyectos, nube o local), conserva su
+   prefijo de letras y su ancho, y suma 1. El mismo Nº se usa para el proyecto y la cotización. */
+async function generarConsecutivoExpediente() {
+  let codigos = (db.proyectos || []).map(p => p.codigo).filter(Boolean);
+  if (SB && sesionSupabase) {
+    try { const { data } = await SB.from('proyecto').select('codigo'); if (data) codigos = data.map(r => r.codigo).filter(Boolean); }
+    catch (e) { console.warn('No se pudieron leer códigos de la nube:', e); }
+  }
+  const usados = new Set(codigos.map(c => String(c).trim()));
+  let maxN = 0, prefijo = '', ancho = 5;
+  usados.forEach(c => {
+    const m = /^([A-Za-z]*)(\d+)$/.exec(c);
+    if (m) { const n = parseInt(m[2], 10); if (n >= maxN) { maxN = n; prefijo = m[1]; ancho = Math.max(4, m[2].length); } }
+  });
+  let n = maxN, cand;
+  do { n++; cand = prefijo + String(n).padStart(ancho, '0'); } while (usados.has(cand));
+  return cand;
 }
 
 function actualizarInfoPared() {
@@ -5294,7 +5366,9 @@ async function generarPlanos() {
     color:      cfg.color,
     distribuidor: cfg.distribuidor || '',
     repeticiones: cfg.repeticiones,
-    cp:         cfg.cp,
+    ubicPais:      cfg.ubicPais || '',
+    ubicRegion:    cfg.ubicRegion || '',
+    ubicDireccion: cfg.ubicDireccion || '',
     kap:        cfg.kap,
     mingitorios: cfg.mingitorios,
     regaderas:  cfg.regaderas,
@@ -5734,7 +5808,7 @@ function exportarPDF(proyecto) {
   let yd = m + 108;   // empieza debajo del banner amarillo del modelo
   const desc = [
     `DESCRIPCIÓN DEL MODELO A INSTALAR:`,
-    `Suministro e instalación de mamparas sanitarias de sólido fenólico.`,
+    `Suministro e instalación de mamparas sanitarias de laminado compacto.`,
     `Puertas y pilastras de 12.7mm de espesor y paneles laterales de 12mm.`,
     `Línea ${proyecto.linea} ${proyecto.modelo === 'ESTANDAR' ? 'ESTÁNDAR' : 'REFORZADO'},`,
     `fijación a piso con ${proyecto.terminacion === 'ZOCLO' ? 'zoclo de acero inoxidable' : 'patas'};`,
@@ -5752,7 +5826,7 @@ function exportarPDF(proyecto) {
   const rotLines = [
     ['EXPEDIENTE:',  proyecto.codigo + ' — ' + proyecto.nombre],
     ['OBRA:',       'MAMPARAS SANITARIAS'],
-    ['UBICACIÓN:',  proyecto.cp || '—'],
+    ['UBICACIÓN:',  ubicacionProyecto(proyecto)],
     ['FECHA:',      new Date(proyecto.fecha).toLocaleDateString('es-ES')],
     ['REVISIÓN:',   '00'],
     ['VERSIÓN:',    '1.0'],
@@ -5995,7 +6069,7 @@ function drawCajetinEsen(doc, proyecto, opts) {
   const term    = termMap[proyecto.terminacion] || proyecto.terminacion || 'P/D';
   const fecha   = proyecto.fecha ? new Date(proyecto.fecha).toLocaleDateString('es-ES') : '—';
   const obra    = proyecto.obra || proyecto.nombre || '—';
-  const ubic    = proyecto.cp || proyecto.ubicacion || '—';
+  const ubic    = ubicacionProyecto(proyecto);
   const presup  = proyecto.presupuesto || proyecto.codigo || '—';
   const acabado = proyecto.acabado || 'Laminado compacto 12.7mm';
   const color   = proyecto.color || '—';
@@ -6739,7 +6813,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
   // El claro se mide entre caras interiores de los muros (los 15 cm de muro no cuentan)
   const dimTotalY = Math.min(floorY + (esPmrLayPdf ? extraPmrPdf : swingExtra), cotaClampY) + 22;
   const murosTotCm = seq.filter(s => s.tipo === 'muro').reduce((t, s) => t + s.ancho, 0);
-  const claroTotalCm = totalCm - murosTotCm;
+  // CLARO TOTAL = el que escribió el cliente (areaCfg.claroCliente); si no hay, el calculado.
+  const claroTotalCm = (areaCfg.claroCliente && areaCfg.claroCliente > 0) ? areaCfg.claroCliente : (totalCm - murosTotCm);
   const xT1 = drawX + ((seq[0] && seq[0].tipo === 'muro') ? 15 * scale : 0);
   const xT2 = drawX + drawW - ((seq[seq.length - 1] && seq[seq.length - 1].tipo === 'muro') ? 15 * scale : 0);
   doc.setDrawColor(10, 31, 61); doc.setLineWidth(0.5);
@@ -7001,13 +7076,21 @@ function familiaTarifa(familiaPieza) {
   }
 }
 
+/* Ancho de puerta para COBRAR: 62 y 64 se cobran como 70; 92 y 94 como 100
+   (la medida estándar que sigue hacia arriba). Otras medidas se cobran tal cual. */
+function anchoCobradoPuerta(ancho) {
+  const mapa = { 62: 70, 64: 70, 92: 100, 94: 100 };
+  return mapa[ancho] || ancho;
+}
 function calcularPrecioPieza(pieza, productoCodigo, terminacionCodigo, tier, moneda, tipoCambioColones) {
   // productoCodigo = código de modelo (ESTANDAR/REFORZADO/IMPERIAL/SCUDO/KIDS/COLGANTE/TL_S3/SUP_*…)
   // tier = 'linea'|'especiales' (y para Superior: 'aceroInox'|'antigrafiti'). moneda: 'CRC' usa
   // colones exactos de la lista; otras usan USD. Superior (usdOnly): todo en USD, colones = USD×TC.
   const modelo  = CATALOGO.preciosPorM2[productoCodigo] || CATALOGO.preciosPorM2.ESTANDAR;
   const altoDerivado = alturaPiezaSegunModelo(pieza.familia, productoCodigo, terminacionCodigo);
-  const m2  = (pieza.ancho * altoDerivado) / 10000;
+  // Puertas 62/64 se cobran como 70; 92/94 como 100 (la medida estándar que sigue hacia arriba).
+  const anchoCobrado = (pieza.familia === 'PT') ? anchoCobradoPuerta(pieza.ancho) : pieza.ancho;
+  const m2  = (anchoCobrado * altoDerivado) / 10000;
   const fam = familiaTarifa(pieza.familia);
 
   // SUPERIOR 2.0 (usdOnly): precios en USD por tier (linea/especiales/aceroInox/antigrafiti).
@@ -7117,6 +7200,7 @@ function cotizar(proyecto, opts) {
     tipoCambio:       fx,
     color:            proyecto.color,
     remateInferior:   proyecto.terminacion === 'ZOCLO' ? 'Zoclo de acero inoxidable' : 'Patas',
+    ubicacion:        ubicacionProyecto(proyecto),
     lineas,
     extras,
     extrasSubtotal,
@@ -7203,9 +7287,13 @@ async function renderCotizaciones() {
       <td>${escapeHtml((c.distribuidor && c.distribuidor.nombre) || '—')}</td>
       <td>${escapeHtml(c.productoNombre || '—')}</td>
       <td>${sim(c.moneda)}${(c.granTotal || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-      <td class="col-actions"><button class="icon-btn icon-pdf" data-cotpdf="${i}" title="Descargar PDF">📄</button></td>
+      <td class="col-actions">
+        <button class="icon-btn icon-pdf" data-cotpdf="${i}" title="Descargar PDF">📄</button>
+        <button class="icon-btn icon-xls" data-cotxls="${i}" title="Descargar Excel">📊</button>
+      </td>
     </tr>`).join('');
   tb.querySelectorAll('[data-cotpdf]').forEach(b => b.onclick = () => { const c = lista[+b.dataset.cotpdf]; if (c) generarPdfCotizacion(c); });
+  tb.querySelectorAll('[data-cotxls]').forEach(b => b.onclick = () => { const c = lista[+b.dataset.cotxls]; if (c) exportarCotizacionExcel(c); });
   const buscar = document.getElementById('cot-buscar');
   if (buscar && !buscar._bound) { buscar._bound = true; buscar.addEventListener('input', () => renderCotizaciones()); }
 }
@@ -7476,7 +7564,7 @@ function generarPdfCotizacion(cot) {
   // Subtítulo en UNA línea, abajo a la izquierda (debajo del logo) → no choca con el N°.
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(7);
-  doc.text('Mamparas Sanitarias Finas · Garantía 25 años sólido fenólico · Herrajes acero inoxidable', m, 37);
+  doc.text('Mamparas Sanitarias · Garantía 25 años laminado compacto · Herrajes acero inoxidable con garantía de por vida', m, 37);
 
   // ===== DATOS DEL DISTRIBUIDOR / PROYECTO =====
   let y = 48;   // empieza debajo del header navy de 40mm
@@ -7508,7 +7596,8 @@ function generarPdfCotizacion(cot) {
     ['Producto:',      cot.productoNombre],
     ['Moneda:',        monedaTxt],
     ['Color:',         cot.color || '—'],
-    ['Remate inferior:', cot.remateInferior]
+    ['Remate inferior:', cot.remateInferior],
+    ['Ubicación:',     cot.ubicacion || '—']
   ];
   leftLines.forEach((row, i) => {
     doc.setFont('helvetica', 'bold');   doc.text(row[0], m, y + i * 5);
@@ -7595,8 +7684,7 @@ function generarPdfCotizacion(cot) {
   if (cot.descuentoMonto > 0) filaTotal(`Descuento (${cot.descuentoPorcentaje}%):`, '−' + fmt(cot.descuentoMonto));
   if (cot.extrasSubtotal > 0) filaTotal('Extras (grabados/herrajes):', fmt(cot.extrasSubtotal));
   if (cot.ivaMonto > 0)       filaTotal(`IVA (${cot.ivaPorcentaje}%):`,             fmt(cot.ivaMonto));
-  y += 1;
-  doc.setLineWidth(0.4); doc.line(labelX - 4, y - 1, valueX + 1, y - 1);
+  y += 2;
   filaTotal('GRAN TOTAL:', fmt(cot.granTotal), true);
 
   // ===== CONDICIONES (footer) =====
@@ -7610,13 +7698,77 @@ function generarPdfCotizacion(cot) {
   doc.setFont('helvetica', 'normal'); doc.setTextColor(60, 60, 60); doc.setFontSize(7.5);
   const cond = [
     'Vigencia: 30 días naturales a partir de la fecha de emisión.',
-    'Precio incluye material y herrajes de acero inoxidable.',
+    'Precio incluye material y herrajes de acero inoxidable con garantía de por vida.',
     'Tiempo de entrega aplica desde aprobación de orden y planos de taller.',
-    'Garantía 25 años contra delaminación del sólido fenólico.'
+    'Garantía 25 años del laminado compacto.'
   ];
   cond.forEach(c => { doc.text('• ' + c, m, y); y += 3.5; });
 
   doc.save(`COTIZACION_${cot.proyectoCodigo}_${cot.numero}.pdf`);
+}
+
+/* Exporta la cotización a EXCEL con el mismo formato que el PDF (encabezado, datos, tabla de
+   piezas + extras y totales). Usa una tabla HTML con estilos → Excel la abre con formato. */
+function exportarCotizacionExcel(cot) {
+  const sim = (cot.moneda === 'CRC') ? '₡' : '$';
+  const money = n => sim + (Number(n) || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const NAVY = '#0a1f3d', GOLD = '#f5c542';
+  const th = `style="background:${NAVY};color:#fff;font-weight:bold;border:1px solid #999;padding:6px 8px;text-align:center;"`;
+  const td = `style="border:1px solid #ccc;padding:5px 8px;"`;
+  const tdR = `style="border:1px solid #ccc;padding:5px 8px;text-align:right;"`;
+  const tdC = `style="border:1px solid #ccc;padding:5px 8px;text-align:center;"`;
+  const tierLabel = cot.tier === 'linea' ? 'C. de Línea' : (cot.tier === 'especiales' ? 'Especiales' : cot.tier);
+
+  const filasPiezas = (cot.lineas || []).map(l => `<tr>
+      <td ${td}>${esc(l.codigo)}</td><td ${td}>${esc(l.descripcion)}</td>
+      <td ${tdC}>${l.cantidad}</td><td ${tdC}>${esc(l.ancho)}×${esc(l.alto)}</td>
+      <td ${tdR}>${(l.m2Total || 0).toFixed(2)}</td><td ${tdR}>${money(l.precioUnit)}</td><td ${tdR}>${money(l.subtotal)}</td></tr>`).join('');
+  const filasExtras = (cot.extras || []).map(e => `<tr>
+      <td ${td}>${esc(e.codigo)}</td><td ${td}>${(e.tipo === 'grabado' ? 'Grabado: ' : (e.linea ? esc(e.linea) + ': ' : 'Herraje: ')) + esc(e.descripcion)}</td>
+      <td ${tdC}>${e.cantidad}</td><td ${tdC}>—</td><td ${tdR}>—</td><td ${tdR}>${money(e.precioUnit)}</td><td ${tdR}>${money(e.subtotal)}</td></tr>`).join('');
+
+  const info = (lbl, val) => `<tr><td style="border:0;padding:2px 8px;font-weight:bold;color:${NAVY};">${lbl}</td><td style="border:0;padding:2px 8px;">${esc(val)}</td></tr>`;
+  const totalRow = (lbl, val, big) => `<tr>
+      <td colspan="5" style="border:0;"></td>
+      <td style="border:1px solid #ccc;padding:6px 8px;text-align:right;font-weight:bold;${big ? `background:${GOLD};color:${NAVY};` : ''}">${lbl}</td>
+      <td style="border:1px solid #ccc;padding:6px 8px;text-align:right;${big ? `background:${GOLD};color:${NAVY};font-weight:bold;` : ''}">${val}</td></tr>`;
+
+  const html = `<html><head><meta charset="utf-8"></head><body>
+    <table border="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11px;">
+      <tr><td colspan="7" style="background:${NAVY};color:${GOLD};font-size:20px;font-weight:bold;padding:10px 8px;">COTIZACIÓN — N° ${esc(cot.numero)}</td></tr>
+      <tr><td colspan="7" style="padding:2px 8px;color:#555;">Mamparas Sanitarias · Garantía 25 años laminado compacto · Herrajes acero inoxidable con garantía de por vida</td></tr>
+      <tr><td colspan="7" style="height:6px;"></td></tr>
+    </table>
+    <table border="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11px;margin-bottom:6px;">
+      ${info('Distribuidor:', (cot.distribuidor && cot.distribuidor.nombre) || '—')}
+      ${info('Contacto:', (cot.distribuidor && cot.distribuidor.contacto) || '—')}
+      ${info('País:', cot.pais)}
+      ${info('Ubicación:', cot.ubicacion || '—')}
+      ${info('Expediente:', cot.proyectoCodigo)}
+      ${info('Proyecto:', cot.proyectoNombre)}
+      ${info('Producto:', cot.productoNombre)}
+      ${info('Color:', cot.color || '—')}
+      ${info('Tarifa:', tierLabel)}
+      ${info('Moneda:', cot.moneda)}
+      ${info('Entrega:', cot.tiempoEntrega)}
+    </table>
+    <table border="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11px;">
+      <tr><th ${th}>Código</th><th ${th}>Descripción</th><th ${th}>Cant</th><th ${th}>Ancho×Alto</th><th ${th}>m²</th><th ${th}>P. Unit</th><th ${th}>Subtotal</th></tr>
+      ${filasPiezas}
+      ${filasExtras ? `<tr><td colspan="7" style="background:#eef;padding:4px 8px;font-weight:bold;color:${NAVY};">EXTRAS</td></tr>${filasExtras}` : ''}
+      ${totalRow('Subtotal fabricación:', money(cot.subtotalFab))}
+      ${cot.descuentoMonto > 0 ? totalRow(`Descuento (${cot.descuentoPorcentaje}%):`, '−' + money(cot.descuentoMonto)) : ''}
+      ${cot.extrasSubtotal > 0 ? totalRow('Extras:', money(cot.extrasSubtotal)) : ''}
+      ${cot.ivaMonto > 0 ? totalRow(`IVA (${cot.ivaPorcentaje}%):`, money(cot.ivaMonto)) : ''}
+      ${totalRow('GRAN TOTAL:', money(cot.granTotal), true)}
+    </table></body></html>`;
+
+  const blob = new Blob(['﻿' + html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `COTIZACION_${cot.proyectoCodigo}_${cot.numero}.xls`;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
 /* ===========================================================================
@@ -7744,7 +7896,7 @@ async function guardarProyectoSupabase(p) {
     estado: p.estado || 'borrador',
     linea_codigo: p.linea || null, modelo_codigo: p.modelo || null,
     terminacion: p.terminacion || null, acabado: p.acabado || null, color: p.color || null,
-    cp: p.cp || null, repeticiones: p.repeticiones || 1,
+    cp: ubicacionProyecto(p), repeticiones: p.repeticiones || 1,
     kap: !!p.kap, mingitorios: !!p.mingitorios, regaderas: !!p.regaderas,
     actualizado_el: new Date().toISOString(),
     app_json: appObj
@@ -7775,7 +7927,8 @@ function cargarProyectoEnConfigurador(p) {
   cfg.codigo = p.codigo; cfg.nombre = p.nombre;
   cfg.linea = p.linea; cfg.modelo = p.modelo; cfg.terminacion = p.terminacion;
   cfg.acabado = p.acabado; cfg.color = p.color; cfg.distribuidor = p.distribuidor || '';
-  cfg.repeticiones = p.repeticiones || 1; cfg.cp = p.cp || '';
+  cfg.repeticiones = p.repeticiones || 1;
+  cfg.ubicPais = p.ubicPais || ''; cfg.ubicRegion = p.ubicRegion || ''; cfg.ubicDireccion = p.ubicDireccion || '';
   cfg.kap = p.kap || 0; cfg.mingitorios = p.mingitorios || 0; cfg.regaderas = p.regaderas || 0;
   cfg.areas = (p.areas || []).slice();
   cfg.configByArea = JSON.parse(JSON.stringify(p.configByArea || {}));
@@ -7799,7 +7952,8 @@ function cargarProyectoEnConfigurador(p) {
   set('cfg-acabado', cfg.acabado); set('cfg-color', cfg.color);
   if (typeof actualizarIndicadorTierColor === 'function') actualizarIndicadorTierColor();
   set('cfg-distribuidor', cfg.distribuidor); set('cfg-repeticiones', cfg.repeticiones);
-  set('cfg-cp', cfg.cp); set('cfg-kap', cfg.kap); set('cfg-mingitorios', cfg.mingitorios);
+  set('cfg-ubic-pais', cfg.ubicPais); set('cfg-ubic-region', cfg.ubicRegion); set('cfg-ubic-direccion', cfg.ubicDireccion);
+  set('cfg-kap', cfg.kap); set('cfg-mingitorios', cfg.mingitorios);
   set('cfg-regaderas', cfg.regaderas);
   document.querySelectorAll('#cfg-layouts .layout-option')
     .forEach(o => o.classList.toggle('selected', o.dataset.layout === cfg.layout));
