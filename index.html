@@ -977,6 +977,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
               La puerta del cuarto (90 cm) va en el panel divisor, perpendicular a las cabinas.
             </div>
           </div>
+          <div id="cfg-accesible-row" style="display:none; margin-top:10px; padding:10px 12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px;">
+            <label class="form-label" style="font-size:12px; font-weight:600;">Ancho de la cabina accesible (cm)</label>
+            <input class="form-input" id="cfg-ancho-accesible" type="number" value="150" min="90" max="300" step="1" style="width:120px;">
+            <div class="form-help" style="margin-top:4px; font-size:11px;">
+              Cabina para discapacitados (más ancha). El resto del claro se reparte entre las cabinas normales.
+            </div>
+          </div>
         </div>
 
       </div>
@@ -3792,6 +3799,14 @@ function initConfigurador() {
         renderPreview();
         recalcularSugerencia()
     };
+    const inpAcc = document.getElementById("cfg-ancho-accesible");
+    if (inpAcc) inpAcc.oninput = () => {
+        const a = activeAreaCfg();
+        const v = Math.max(90, parseInt(inpAcc.value, 10) || 150);
+        if (a) a.anchoAccesible = v;
+        renderPreview();
+        recalcularSugerencia()
+    };
     actualizarInputPmrCuarto();
     renderAreaList();
     renderPreview()
@@ -3807,6 +3822,20 @@ function actualizarInputPmrCuarto() {
     if (visible) {
         const a = activeAreaCfg();
         inp.value = a && a.anchoPmrCuarto || 162
+    }
+    if (typeof actualizarInputAccesible === "function") actualizarInputAccesible()
+}
+
+function actualizarInputAccesible() {
+    const row = document.getElementById("cfg-accesible-row");
+    const inp = document.getElementById("cfg-ancho-accesible");
+    if (!row || !inp) return;
+    const layoutObj = CATALOGO.layouts.find(l => l.codigo === cfg.layout);
+    const visible = !!(layoutObj && layoutObj.acc && !layoutObj.pmrCuarto);
+    row.style.display = visible ? "" : "none";
+    if (visible) {
+        const a = activeAreaCfg();
+        inp.value = a && a.anchoAccesible || 150
     }
 }
 
@@ -3968,7 +3997,7 @@ function sincronizarMurosConLayout() {
     };
     if (layout.pmrCuarto) return;
     const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layout.codigo);
-    const hasRight = ["U", "U+", "E+", "C", "I", "K", "P+"].includes(layout.codigo);
+    const hasRight = ["U", "U+", "C", "I", "K", "P+"].includes(layout.codigo);
     const leftWallEff = cfg.invertir ? hasRight : hasLeft;
     const rightWallEff = cfg.invertir ? hasLeft : hasRight;
     const N = (a.tiposCabina || []).length || cfg.cabinas || 0;
@@ -4216,6 +4245,7 @@ function makeDefaultAreaCfg() {
         panelesExtras: [],
         canaletas: [],
         anchoPmrCuarto: 162,
+        anchoAccesible: 150,
         centrosDescarga: [],
         curvaMingitorio: "No tiene"
     }
@@ -4362,7 +4392,7 @@ function layoutIconSvg(l) {
     }
     walls += `<line x1="${xL}" y1="${top}" x2="${xR}" y2="${top}" stroke="#0a1f3d" stroke-width="1.6"/>`;
     const hasLeft = ["L", "U", "L+", "U+", "C"].includes(l.codigo);
-    const hasRight = ["U", "U+", "E+", "C"].includes(l.codigo);
+    const hasRight = ["U", "U+", "C"].includes(l.codigo);
     if (hasLeft) walls += `<line x1="${xL}" y1="${top}" x2="${xL}" y2="${bot}" stroke="#0a1f3d" stroke-width="1.6"/>`;
     if (hasRight) walls += `<line x1="${xR}" y1="${top}" x2="${xR}" y2="${bot}" stroke="#0a1f3d" stroke-width="1.6"/>`;
     const accIcon = l.acc ? `<text x="14" y="${h-10}" font-size="11" fill="#5db0e0">♿</text>` : "";
@@ -4431,8 +4461,10 @@ function actualizarValidacionModulacion() {
         codigo: "L"
     };
     const esPmrCuartoVal = !!layout.pmrCuarto;
+    const esAccInlineVal = !!layout.acc && !esPmrCuartoVal;
+    const accCabinaIdxVal = cfg.invertir ? N - 1 : 0;
     const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layout.codigo);
-    const hasRight = ["U", "U+", "E+", "C", "I", "K", "P+"].includes(layout.codigo);
+    const hasRight = ["U", "U+", "C", "I", "K", "P+"].includes(layout.codigo);
     const leftWall = cfg.invertir ? hasRight : hasLeft;
     const rightWall = cfg.invertir ? hasLeft : hasRight;
     const primeraEsMingit = (a.tiposCabina || [])[0] === "Mingitorio";
@@ -4445,6 +4477,9 @@ function actualizarValidacionModulacion() {
         const esMingit = (a.tiposCabina || [])[i] === "Mingitorio";
         if (esPmrCuartoVal && i === 0) {
             suma += a.anchoPmrCuarto || 162
+        } else if (esAccInlineVal && i === accCabinaIdxVal) {
+            suma += a.anchoAccesible || 150;
+            nPuertas++
         } else if (esMingit) {
             const mg = (a.paneles || [])[i];
             const pieza = mg ? CATALOGO.piezas.find(p => p.codigo === mg) : null;
@@ -4493,8 +4528,8 @@ function actualizarValidacionModulacion() {
         el.textContent = `⚠ Falta(n) ${faltantes.length} pieza(s): ${faltantes.slice(0,3).join(", ")}${faltantes.length>3?"…":""}`;
         return
     }
-    const esLayoutE = layout.codigo === "E";
-    const esLayoutL = layout.codigo === "L";
+    const esLayoutE = layout.codigo === "E" || layout.codigo === "E+";
+    const esLayoutL = layout.codigo === "L" || layout.codigo === "L+";
     const claroAjustado = esLayoutE ? claro : claro - nPilMuro + 1.5 * nPuertas;
     const diff = claroAjustado - suma;
     const absDiff = Math.abs(diff);
@@ -4566,7 +4601,7 @@ function buildBathroomSvg() {
     const bisagrasOld = areaCfg.bisagras || [];
     const tiposCabina = areaCfg.tiposCabina || [];
     const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layout.codigo);
-    const hasRight = ["U", "U+", "E+", "C", "I", "K", "P+"].includes(layout.codigo);
+    const hasRight = ["U", "U+", "C", "I", "K", "P+"].includes(layout.codigo);
     const leftWall = cfg.invertir ? hasRight : hasLeft;
     const rightWall = cfg.invertir ? hasLeft : hasRight;
     const esLayoutK = layout.codigo === "K";
@@ -4626,10 +4661,11 @@ function buildBathroomSvg() {
             })
         } else {
             const ptPieza = puertaCode ? CATALOGO.piezas.find(p => p.codigo === puertaCode) : null;
+            const esAccInlineSvg = layout.acc && !layout.pmrCuarto && i === accCabinaIdx;
             seq.push({
                 tipo: "puerta",
                 codigo: puertaCode || "—",
-                ancho: ptPieza ? ptPieza.ancho : 60,
+                ancho: esAccInlineSvg ? areaCfg.anchoAccesible || 150 : ptPieza ? ptPieza.ancho : 60,
                 indiceCabina: i,
                 panelCode: panelCode
             })
@@ -5118,7 +5154,7 @@ function renderPreviewControls(tab) {
         codigo: "L"
     };
     const _hasLeftWallPC = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(_layoutPC.codigo);
-    const _hasRightWallPC = ["U", "U+", "E+", "C", "I", "K", "P+"].includes(_layoutPC.codigo);
+    const _hasRightWallPC = ["U", "U+", "C", "I", "K", "P+"].includes(_layoutPC.codigo);
     const leftWallEff = cfg.invertir ? _hasRightWallPC : _hasLeftWallPC;
     const rightWallEff = cfg.invertir ? _hasLeftWallPC : _hasRightWallPC;
     const piezasFamilia = tab === "paneles" ? "PN" : tab === "puertas" ? "PT" : "PI";
@@ -5340,7 +5376,7 @@ function renderMurosYExtrasSection() {
         codigo: "L"
     };
     const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layout.codigo);
-    const hasRightWall = ["U", "U+", "E+", "C", "I", "K", "P+"].includes(layout.codigo);
+    const hasRightWall = ["U", "U+", "C", "I", "K", "P+"].includes(layout.codigo);
     const leftWallEff = cfg.invertir ? hasRightWall : hasLeftWall;
     const rightWallEff = cfg.invertir ? hasLeftWall : hasRightWall;
     const a = typeof activeAreaCfg === "function" ? activeAreaCfg() || {} : {};
@@ -5505,7 +5541,7 @@ function sugerirModulacion({
 }) {
     const layout = CATALOGO.layouts.find(l => l.codigo === layoutCodigo) || CATALOGO.layouts[0];
     const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layoutCodigo);
-    const hasRightWall = ["U", "U+", "E+", "C", "I", "K", "P+"].includes(layoutCodigo);
+    const hasRightWall = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
     const accLayout = layout.acc;
     const leftWallEff = cfg.invertir ? hasRightWall : hasLeftWall;
     const rightWallEff = cfg.invertir ? hasLeftWall : hasRightWall;
@@ -5647,10 +5683,14 @@ function sugerirModulacion({
     }
     const PMR_PREF = 100;
     const PMR_PENALTY = .1;
-    const esLayoutE = layoutCodigo === "E";
+    const esLayoutE = layoutCodigo === "E" || layoutCodigo === "E+";
     const claroAjustado = esLayoutE ? claro : claro - nPilastrasAMuro + 1.5 * nPuertas;
     let best = null;
-    const accAnchos = nAcc > 0 ? opcionesPuertaAcc : [0];
+    const aCfgAcc = (typeof activeAreaCfg === "function" ? activeAreaCfg() : null) || {};
+    const anchoAccesible = Math.max(90, aCfgAcc.anchoAccesible || 150);
+    const esAccInline = accLayout && !esPmrCuarto;
+    const anchoPuertaAccPieza = opcionesPuertaAcc.length ? Math.max.apply(null, opcionesPuertaAcc) : 100;
+    const accAnchos = nAcc > 0 ? esAccInline ? [anchoAccesible] : opcionesPuertaAcc : [0];
     const inv = cfg.invertir;
     const mingitEnIzq = inv && (nMingit || 0) > 0;
     const mingitEnDer = !inv && (nMingit || 0) > 0;
@@ -5715,7 +5755,7 @@ function sugerirModulacion({
     const diffReal = claroAjustado - sumaPiezas;
     const absDiffReal = Math.abs(diffReal);
     const margenHerraje = .5 * nPilastrasAMuro;
-    const esLayoutL = layoutCodigo === "L";
+    const esLayoutL = layoutCodigo === "L" || layoutCodigo === "L+";
     const tolExacto = esLayoutE || esLayoutL ? 5 : margenHerraje;
     let ajuste;
     if (absDiffReal <= tolExacto) {
@@ -5749,7 +5789,7 @@ function sugerirModulacion({
     const lblDer = rightWallEff ? "a muro der" : "terminal der";
     const pilEsqTxt = best.anchoPilEsq === best.anchoPilEsq2 ? `1 × PI${best.anchoPilEsq} (${lblIzq}) + 1 × PI${best.anchoPilEsq2} (${lblDer})` : `1 × PI${best.anchoPilEsq} (${lblIzq}) + 1 × PI${best.anchoPilEsq2} (${lblDer})`;
     const sumPuertas = nEstandar * best.anchoPuerta + nAcc * best.anchoPuertaAcc;
-    const puertasTxt = [nEstandar > 0 ? `${nEstandar}×PT${best.anchoPuerta}` : "", nAcc > 0 ? `1×PT${best.anchoPuertaAcc} (PMR)` : ""].filter(Boolean).join(" + ");
+    const puertasTxt = [nEstandar > 0 ? `${nEstandar}×PT${best.anchoPuerta}` : "", nAcc > 0 ? `1×PT${esAccInline ? anchoPuertaAccPieza : best.anchoPuertaAcc} (PMR${esAccInline ? ", cabina " + anchoAccesible + " cm" : ""})` : ""].filter(Boolean).join(" + ");
     const pasos = [`Claro del vano: ${claro} cm`, nPilastrasAMuro > 0 ? `− 1 cm × ${nPilastrasAMuro} pilastra(s) a muro (herraje) = ${(claro-nPilastrasAMuro).toFixed(1)} cm` : null, nPuertas > 0 ? `+ 1.5 cm × ${nPuertas} puerta(s) (clearance bisagra) = ${claroAjustado.toFixed(1)} cm` : null, nPuertas > 0 ? `− ${puertasTxt} = ${(claroAjustado-sumPuertas).toFixed(1)} cm para pilastras` : null, `Pilastras de cierre: ${pilEsqTxt}${nInternas>0?" + "+nInternas+"×PI"+best.anchoPilInt+" (central)":""}`, esPmrCuarto ? `Cuarto PMR: PI${best.anchoPilRelleno} de relleno junto a la puerta + panel divisor profundo (no consume ancho)` : null, margenHerraje > 0 ? `Tolerancia herraje: ±${tolExacto.toFixed(1)} cm (0.5 cm por muro × ${nPilastrasAMuro}); fuera de eso, revisar canaleta` : null].filter(Boolean);
     return {
         nCabinas: N,
@@ -5764,14 +5804,15 @@ function sugerirModulacion({
         claroAjustado: claroAjustado,
         esPmrCuarto: esPmrCuarto,
         codPuerta: `PT${best.anchoPuerta}`,
-        codPuertaAcc: nAcc ? `PT${best.anchoPuertaAcc}` : null,
+        codPuertaAcc: nAcc ? `PT${esAccInline ? anchoPuertaAccPieza : best.anchoPuertaAcc}` : null,
+        anchoCabinaAcc: nAcc && esAccInline ? anchoAccesible : null,
         codPilInt: `PI${best.anchoPilInt}${sufR}`,
         codPilEsq: `PI${best.anchoPilEsq}${sufR}`,
         codPilEsq2: nEsquinas === 2 ? `PI${best.anchoPilEsq2}${sufR}` : null,
         codPilRelleno: esPmrCuarto ? `PI${best.anchoPilRelleno}${sufR}` : null,
         codMG: (nMingit || 0) > 0 ? "MG60" : null,
         anchoPuerta: best.anchoPuerta,
-        anchoPuertaAcc: nAcc ? best.anchoPuertaAcc : null,
+        anchoPuertaAcc: nAcc ? esAccInline ? anchoPuertaAccPieza : best.anchoPuertaAcc : null,
         anchoPilInt: best.anchoPilInt,
         anchoPilEsq: best.anchoPilEsq,
         anchoPilEsq2: nEsquinas === 2 ? best.anchoPilEsq2 : null,
@@ -5864,7 +5905,7 @@ function aplicarSugerencia(s) {
     const mingitDesde = mingitAlFinal ? N - s.nMingit : 0;
     const mingitHasta = mingitAlFinal ? N : s.nMingit;
     const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layout.codigo);
-    const hasRightWall = ["U", "U+", "E+", "C", "I", "K", "P+"].includes(layout.codigo);
+    const hasRightWall = ["U", "U+", "C", "I", "K", "P+"].includes(layout.codigo);
     const leftWallEff = cfg.invertir ? hasRightWall : hasLeftWall;
     const rightWallEff = cfg.invertir ? hasLeftWall : hasRightWall;
     const dimsLugar = typeof leerDimensionesLugar === "function" ? leerDimensionesLugar() : null;
@@ -6216,7 +6257,7 @@ function piezasAgregadas() {
             codigo: "L"
         };
         const hasLa = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layA.codigo);
-        const hasRa = ["U", "U+", "E+", "C", "I", "K", "P+"].includes(layA.codigo);
+        const hasRa = ["U", "U+", "C", "I", "K", "P+"].includes(layA.codigo);
         const invA = a.invertir !== undefined ? a.invertir : cfg.invertir;
         const lWa = invA ? hasRa : hasLa,
             rWa = invA ? hasLa : hasRa;
@@ -6378,7 +6419,7 @@ function determinarSubTipoModumex(pieza, ctx) {
     } = ctx;
     const familia = pieza.familia;
     const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layoutCodigo);
-    const hasRightWall = ["U", "U+", "E+", "C", "I", "K", "P+"].includes(layoutCodigo);
+    const hasRightWall = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
     const leftWallEff = invertir ? hasRightWall : hasLeftWall;
     const rightWallEff = invertir ? hasLeftWall : hasRightWall;
     const esEndMuro = indiceCabina === 0 && leftWallEff || indiceCabina === totalCabinas - 1 && rightWallEff;
@@ -6387,7 +6428,7 @@ function determinarSubTipoModumex(pieza, ctx) {
         const [bisagra, dirAp] = aperturaVal.split("_");
         const base = bisagra === "DER" ? "PTADER" : "PTAIZQ";
         const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layoutCodigo);
-        const hasRightWall = ["U", "U+", "E+", "C", "I", "K", "P+"].includes(layoutCodigo);
+        const hasRightWall = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
         const leftWallEff = invertir ? hasRightWall : hasLeftWall;
         const rightWallEff = invertir ? hasLeftWall : hasRightWall;
         const muroALaDerCabina = indiceCabina === totalCabinas - 1 && rightWallEff;
@@ -7076,7 +7117,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     }
     const layoutCodigo = areaLayout;
     const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layoutCodigo);
-    const hasRight = ["U", "U+", "E+", "C", "I", "K", "P+"].includes(layoutCodigo);
+    const hasRight = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
     const leftWallEff = areaInvertir ? hasRight : hasLeft;
     const rightWallEff = areaInvertir ? hasLeft : hasRight;
     const N = areaCabinas;
@@ -7188,7 +7229,11 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             mgCode: (areaCfg.paneles || [])[N - 1] || "MG60150"
         })
     }
+    const accLayoutW = ["L+", "U+", "E+", "C"].includes(layoutCodigo);
+    const accCabinaIdxW = areaInvertir ? N - 1 : 0;
+    let cabIdxW = -1;
     seq.forEach(s => {
+        if (s.tipo === "puerta" || s.tipo === "mingitorio") cabIdxW++;
         if (s.tipo === "muro") {
             s.ancho = 15;
             return
@@ -7199,6 +7244,10 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         }
         if (s.cuartoPmr) {
             s.ancho = areaCfg.anchoPmrCuarto || 162;
+            return
+        }
+        if (accLayoutW && s.tipo === "puerta" && cabIdxW === accCabinaIdxW) {
+            s.ancho = areaCfg.anchoAccesible || 150;
             return
         }
         if (!s.codigo && s.tipo === "panelMingit") {
