@@ -3428,8 +3428,20 @@ async function cargarPerfilSupabase(user) {
     } catch (e) {
         console.warn("No se pudieron cargar extras:", e)
     }
+    try {
+        await refreshConfig()
+    } catch (e) {
+        console.warn("No se pudo cargar la config:", e)
+    }
     showApp(sesionSupabase);
     return true
+}
+async function refreshConfig() {
+    if (!(SB && sesionSupabase)) return;
+    const {
+        data: data
+    } = await SB.from("app_config").select("clave,valor").eq("clave", "tc_herrajes").maybeSingle();
+    if (data && data.valor != null) db.tcHerrajes = parseFloat(data.valor) || 0
 }
 async function refreshExtras() {
     if (!(SB && sesionSupabase)) return;
@@ -3517,6 +3529,20 @@ async function renderListaPrecios() {
         tcInp.oninput = () => {
             db.tcHerrajes = parseFloat(tcInp.value) || 0;
             persist()
+        };
+        tcInp.onchange = async () => {
+            if (SB && sesionSupabase) {
+                const {
+                    error: error
+                } = await SB.from("app_config").upsert({
+                    clave: "tc_herrajes",
+                    valor: String(db.tcHerrajes)
+                }, {
+                    onConflict: "clave"
+                });
+                if (error) toast("No se pudo guardar el T.C. en la nube: " + (error.message || error), "danger");
+                else toast("Tipo de cambio para herrajes guardado", "ok")
+            }
         }
     }
     document.getElementById("btn-precios-reload").onclick = async () => {
@@ -8242,7 +8268,7 @@ function tierDeColor(nombreColor) {
 }
 async function guardarCotizacionSupabase(cot) {
     if (!(SB && sesionSupabase)) return;
-    if (cot.proyectoId == null) return;
+    if (cot.proyectoId == null) throw new Error("La cotización no tiene un proyecto guardado en la nube");
     const row = {
         proyecto_id: cot.proyectoId,
         numero: cot.numero,
@@ -8264,7 +8290,7 @@ async function guardarCotizacionSupabase(cot) {
     const {
         error: error
     } = await SB.from("cotizacion").insert(row);
-    if (error) console.warn("No se guardó la cotización en la nube:", error.message || error)
+    if (error) throw error
 }
 async function renderCotizaciones() {
     const tb = document.getElementById("cotz-tbody");
@@ -8446,7 +8472,7 @@ function openCotizarModal(proyecto) {
         title: `Generar cotización — ${proyecto.codigo}${proyecto.nombre?" · "+proyecto.nombre:""}`,
         body: body,
         acceptLabel: "Generar PDF",
-        onAccept: () => {
+        onAccept: async () => {
             const opts = {
                 numero: body.querySelector("#cot-numero").value.trim() || proyecto.codigo || `COT-${Date.now()}`,
                 producto: body.querySelector("#cot-producto").value,
@@ -8464,11 +8490,19 @@ function openCotizarModal(proyecto) {
                 creadoPor: (currentUser() || {}).nombre || ""
             };
             const cot = cotizar(proyecto, opts);
-            db.cotizaciones = db.cotizaciones || [];
-            db.cotizaciones.push(cot);
-            persist();
+            if (SB && sesionSupabase) {
+                try {
+                    await guardarCotizacionSupabase(cot)
+                } catch (e) {
+                    toast("No se pudo guardar la cotización en la nube: " + (e.message || e), "danger");
+                    return false
+                }
+            } else {
+                db.cotizaciones = db.cotizaciones || [];
+                db.cotizaciones.push(cot);
+                persist()
+            }
             generarPdfCotizacion(cot);
-            guardarCotizacionSupabase(cot);
             const herrajesExtra = extrasAgregados.filter(e => e.tipo === "herraje").map(e => ({
                 codigo: e.codigo,
                 descripcion: e.descripcion,
