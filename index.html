@@ -1096,6 +1096,16 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
                 <option value="1">Sí</option>
               </select>
             </div>
+            <div class="form-row" id="cfg-curva-row" style="display:none;">
+              <label class="form-label">Curva de mingitorio</label>
+              <select class="form-select" id="cfg-curva-mingit">
+                <option>No tiene</option>
+                <option>CL1</option>
+                <option>CL2</option>
+                <option>CL3</option>
+                <option>CL5</option>
+              </select>
+            </div>
             <div class="form-row">
               <label class="form-label">Incluye regaderas</label>
               <select class="form-select" id="cfg-regaderas">
@@ -4109,7 +4119,13 @@ function bindCfg() {
         cfg.kap = +e.target.value
     };
     $("cfg-mingitorios").onchange = e => {
-        cfg.mingitorios = +e.target.value
+        cfg.mingitorios = +e.target.value;
+        if (typeof actualizarCurvaMingit === "function") actualizarCurvaMingit()
+    };
+    const selCurvaMingit = document.getElementById("cfg-curva-mingit");
+    if (selCurvaMingit) selCurvaMingit.onchange = e => {
+        const a = activeAreaCfg();
+        if (a) a.curvaMingitorio = e.target.value
     };
     $("cfg-regaderas").onchange = e => {
         cfg.regaderas = +e.target.value
@@ -4149,6 +4165,16 @@ function bindCfg() {
 function updateAltura() {
     const h = CATALOGO.reglaAltura(cfg.modelo, cfg.terminacion);
     document.getElementById("cfg-altura").value = h ? h + " cm" : "—"
+}
+
+function actualizarCurvaMingit() {
+    const row = document.getElementById("cfg-curva-row");
+    const sel = document.getElementById("cfg-curva-mingit");
+    if (!row || !sel) return;
+    const on = +((document.getElementById("cfg-mingitorios") || {}).value || 0) === 1;
+    row.style.display = on ? "" : "none";
+    const a = (typeof activeAreaCfg === "function") ? activeAreaCfg() : null;
+    if (a) sel.value = a.curvaMingitorio || "No tiene"
 }
 
 function renderAreaList() {
@@ -4229,6 +4255,7 @@ function activarArea(idx) {
     renderAreaList();
     renderPreview();
     if (typeof renderPreviewControls === "function") renderPreviewControls(activeTab);
+    if (typeof actualizarCurvaMingit === "function") actualizarCurvaMingit();
     recalcularSugerencia()
 }
 
@@ -5124,14 +5151,6 @@ function renderPreviewControls(tab) {
             const optsPN = piezasFamilia2.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo)})</option>`).join("");
             const ctrlIzq = `\n        <label>\n          <span>Panel de cierre IZQUIERDO (isla)</span>\n          <select data-tab="panelCierreIzq">\n            <option value="">— Elegir —</option>\n            ${optsPN}\n          </select>\n        </label>`;
             html = ctrlIzq + html
-        }
-    } {
-        const tcA = (activeAreaCfg() || {}).tiposCabina || [];
-        const hayMingit = tcA.some(t => t === "Mingitorio");
-        if (tab === "paneles" && hayMingit) {
-            const opciones = ["No tiene", "CL1", "CL2", "CL3", "CL5"];
-            const curvaSel = `\n        <label>\n          <span>Curva de mingitorios</span>\n          <select data-tab="curvaMingitorio">\n            ${opciones.map(o=>`<option value="${o}">${o}</option>`).join("")}\n          </select>\n        </label>`;
-            html = curvaSel + html
         }
     }
     cont.innerHTML = html;
@@ -6648,13 +6667,13 @@ function exportarPDF(proyecto) {
     const rotLines = [
         ["EXPEDIENTE:", proyecto.codigo + " — " + proyecto.nombre],
         ["OBRA:", "MAMPARAS SANITARIAS"],
-        ["UBICACIÓN:", ubicacionProyecto(proyecto)],
+        ["UBICACIÓN OBRA:", ubicacionProyecto(proyecto)],
         ["FECHA:", new Date(proyecto.fecha).toLocaleDateString("es-ES")],
         ["REVISIÓN:", "00"],
         ["VERSIÓN:", "1.0"],
         ["CREADO POR:", proyecto.creadoPor || currentUser()?.nombre || "—"],
-        ["DISTRIBUIDOR:", "—"],
-        ["", ""],
+        ["DISTRIBUIDOR:", proyecto.distribuidor || "—"],
+        ["PAÍS (DISTRIB.):", (distribuidorDeProyecto(proyecto) || {}).pais || "—"],
         ["LÍNEA:", proyecto.linea],
         ["MODELO:", proyecto.modelo],
         ["REMATE INFERIOR:", proyecto.terminacion],
@@ -7663,9 +7682,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         align: "center"
     });
     {
-        const hayMingitPdf = (areaCfg.tiposCabina || []).some(t => t === "Mingitorio");
         const curva = areaCfg.curvaMingitorio || "No tiene";
-        if (hayMingitPdf && curva && curva !== "No tiene") {
+        if (curva && curva !== "No tiene") {
             doc.setFont("helvetica", "bold");
             doc.setFontSize(8);
             doc.setTextColor(10, 31, 61);
@@ -8252,7 +8270,7 @@ function openCotizarModal(proyecto) {
     const descDefault = distProy && distProy.descuento || 0;
     const ivaDist = distProy && distProy.iva != null ? distProy.iva : ivaDefaultPct;
     const puedeDesc = puedeEditarDescuento(currentUser());
-    body.innerHTML = `\n    <div class="form-grid" style="grid-template-columns:1fr 1fr;">\n      <div class="form-row">\n        <label class="form-label">N° Cotización <span class="muted">(= Expediente)</span></label>\n        <input class="form-input" id="cot-numero" value="${escapeHtml(proyecto.codigo||"")}" placeholder="ej. COT-0001">\n      </div>\n      <div class="form-row">\n        <label class="form-label">Producto a cotizar</label>\n        <select class="form-select" id="cot-producto" disabled>\n          ${CATALOGO.modelos.map(m=>`<option value="${m.codigo}" ${m.codigo===productoDefault?"selected":""}>LEEDER ${m.nombre.toUpperCase()}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Distribuidor</label>\n        <select class="form-select" id="cot-distribuidor" disabled>\n          <option value="">— Sin distribuidor —</option>\n          ${distribs.map(d=>`<option value="${d.id}" ${String(d.id)===String(distIdSel)?"selected":""}>${escapeHtml(d.nombre)}</option>`).join("")}\n        </select>\n        <div class="form-help" id="cot-dist-contacto" style="font-size:10px; margin-top:2px;"></div>\n      </div>\n      <div class="form-row">\n        <label class="form-label">País <span class="muted">(del distribuidor)</span></label>\n        <select class="form-select" id="cot-pais">\n          ${CATALOGO.paises.map(p=>`<option ${p===paisDefault?"selected":""}>${p}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Tiempo de entrega</label>\n        <select class="form-select" id="cot-tiempo">\n          ${CATALOGO.tiemposEntrega.map(t=>`<option>${t}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Moneda${monedaFija?` <span class="muted">(fija por región: ${escapeHtml(regionProy)})</span>`:""}</label>\n        <select class="form-select" id="cot-moneda" disabled>\n          ${CATALOGO.monedas.map(m=>`<option value="${m.codigo}" ${(monedaFija?m.codigo===monedaFija:m.codigo==="USD")?"selected":""}>${m.nombre}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Tarifa (tier) <span style="color: var(--text-mute); font-weight: 400;">${esSuperior?"— Superior 2.0":"— según color ("+escapeHtml(proyecto.color||"—")+")"}</span></label>\n        <select class="form-select" id="cot-tier" disabled>\n          ${tierOpts.map(([v,l])=>`<option value="${v}" ${tierColor===v?"selected":""}>${l}</option>`).join("")}\n        </select>\n      </div>\n      ${esSuperior?`\n      <div class="form-row">\n        <label class="form-label">T.C. a colones (₡/USD) <span class="muted">(Superior, solo si es CR)</span></label>\n        <input class="form-input" type="number" id="cot-tc-colones" min="0" step="0.01" placeholder="ej. 576" value="${monedaFija==="CRC"?576:""}">\n        <div class="form-help" style="font-size:10px; margin-top:2px;">Superior 2.0 está en USD; para Costa Rica se multiplica por este tipo de cambio.</div>\n      </div>`:""}\n      <div class="form-row">\n        <label class="form-label">Descuento (%) <span class="muted">${puedeDesc?"(del distribuidor)":"(fijado por Admin)"}</span></label>\n        <input class="form-input" type="number" id="cot-descuento" min="0" max="80" value="${descDefault}" step="0.1" disabled>\n      </div>\n      <div class="form-row">\n        <label class="form-label">IVA (%) ${ivaDefaultPct?'<span class="muted">(CR 13%)</span>':'<span class="muted">(LATAM 0%)</span>'}</label>\n        <input class="form-input" type="number" id="cot-iva" min="0" max="30" value="${ivaDist}" step="0.1" disabled>\n      </div>\n    </div>\n    <div class="form-help" style="margin-top:14px;">\n      Las piezas y cantidades se toman del proyecto guardado. Precios = tarifa $/m² de la <b>Lista de Precios</b>\n      según el <b>tier</b> (lo define el color) y la <b>moneda</b> de la región (USD o colones).\n    </div>`;
+    body.innerHTML = `\n    <div class="form-grid" style="grid-template-columns:1fr 1fr;">\n      <div class="form-row">\n        <label class="form-label">N° Cotización <span class="muted">(= Expediente)</span></label>\n        <input class="form-input" id="cot-numero" value="${escapeHtml(proyecto.codigo||"")}" placeholder="ej. COT-0001" disabled>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Producto a cotizar</label>\n        <select class="form-select" id="cot-producto" disabled>\n          ${CATALOGO.modelos.map(m=>`<option value="${m.codigo}" ${m.codigo===productoDefault?"selected":""}>LEEDER ${m.nombre.toUpperCase()}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Distribuidor</label>\n        <select class="form-select" id="cot-distribuidor" disabled>\n          <option value="">— Sin distribuidor —</option>\n          ${distribs.map(d=>`<option value="${d.id}" ${String(d.id)===String(distIdSel)?"selected":""}>${escapeHtml(d.nombre)}</option>`).join("")}\n        </select>\n        <div class="form-help" id="cot-dist-contacto" style="font-size:10px; margin-top:2px;"></div>\n      </div>\n      <div class="form-row">\n        <label class="form-label">País <span class="muted">(del distribuidor)</span></label>\n        <select class="form-select" id="cot-pais" disabled>\n          ${CATALOGO.paises.map(p=>`<option ${p===paisDefault?"selected":""}>${p}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Tiempo de entrega</label>\n        <select class="form-select" id="cot-tiempo">\n          ${CATALOGO.tiemposEntrega.map(t=>`<option>${t}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Moneda${monedaFija?` <span class="muted">(fija por región: ${escapeHtml(regionProy)})</span>`:""}</label>\n        <select class="form-select" id="cot-moneda" disabled>\n          ${CATALOGO.monedas.map(m=>`<option value="${m.codigo}" ${(monedaFija?m.codigo===monedaFija:m.codigo==="USD")?"selected":""}>${m.nombre}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Tarifa (tier) <span style="color: var(--text-mute); font-weight: 400;">${esSuperior?"— Superior 2.0":"— según color ("+escapeHtml(proyecto.color||"—")+")"}</span></label>\n        <select class="form-select" id="cot-tier" disabled>\n          ${tierOpts.map(([v,l])=>`<option value="${v}" ${tierColor===v?"selected":""}>${l}</option>`).join("")}\n        </select>\n      </div>\n      ${esSuperior?`\n      <div class="form-row">\n        <label class="form-label">T.C. a colones (₡/USD) <span class="muted">(Superior, solo si es CR)</span></label>\n        <input class="form-input" type="number" id="cot-tc-colones" min="0" step="0.01" placeholder="ej. 576" value="${monedaFija==="CRC"?576:""}">\n        <div class="form-help" style="font-size:10px; margin-top:2px;">Superior 2.0 está en USD; para Costa Rica se multiplica por este tipo de cambio.</div>\n      </div>`:""}\n      <div class="form-row">\n        <label class="form-label">Descuento (%) <span class="muted">${puedeDesc?"(del distribuidor)":"(fijado por Admin)"}</span></label>\n        <input class="form-input" type="number" id="cot-descuento" min="0" max="80" value="${descDefault}" step="0.1" disabled>\n      </div>\n      <div class="form-row">\n        <label class="form-label">IVA (%) ${ivaDefaultPct?'<span class="muted">(CR 13%)</span>':'<span class="muted">(LATAM 0%)</span>'}</label>\n        <input class="form-input" type="number" id="cot-iva" min="0" max="30" value="${ivaDist}" step="0.1" disabled>\n      </div>\n    </div>\n    <div class="form-help" style="margin-top:14px;">\n      Las piezas y cantidades se toman del proyecto guardado. Precios = tarifa $/m² de la <b>Lista de Precios</b>\n      según el <b>tier</b> (lo define el color) y la <b>moneda</b> de la región (USD o colones).\n    </div>`;
     const grabOpts = (CATALOGO.grabados || []).map(g => `<option value="${escapeHtml(g.codigo)}">${escapeHtml(g.codigo)} — ${escapeHtml(g.descripcion)} ($${g.usd})</option>`).join("");
     const lineasH = [...new Set((CATALOGO.herrajes || []).map(h => h.linea))];
     const herrOpts = lineasH.map(ln => `<optgroup label="${escapeHtml(ln)}">` + (CATALOGO.herrajes || []).filter(h => h.linea === ln).map(h => `<option value="${escapeHtml(h.linea)}|${escapeHtml(h.codigo)}">${escapeHtml(h.codigo)} — ${escapeHtml(h.descripcion)}</option>`).join("") + `</optgroup>`).join("");
@@ -8432,7 +8450,7 @@ function generarPdfCotizacion(cot) {
     const leftLines = [
         ["Distribuidor:", cot.distribuidor?.nombre || "—"],
         ["Contacto:", cot.distribuidor?.contacto || "—"],
-        ["País:", cot.pais],
+        ["País (distribuidor):", cot.pais],
         ["Tarifa:", tierLabel],
         ["Descuento:", cot.descuentoPorcentaje + " %"],
         ["Entrega:", cot.tiempoEntrega]
@@ -8445,7 +8463,7 @@ function generarPdfCotizacion(cot) {
         ["Moneda:", monedaTxt],
         ["Color:", cot.color || "—"],
         ["Remate inferior:", cot.remateInferior],
-        ["Ubicación:", cot.ubicacion || "—"]
+        ["Ubicación de la obra:", cot.ubicacion || "—"]
     ];
     leftLines.forEach((row, i) => {
         doc.setFont("helvetica", "bold");
