@@ -1057,8 +1057,9 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
             </div>
             <div class="form-row">
               <label class="form-label">Color <span class="muted" id="cfg-color-tier"></span></label>
-              <input class="form-input" id="cfg-color" list="cfg-color-list" autocomplete="off" placeholder="Elegí de la lista o escribí un color especial">
-              <datalist id="cfg-color-list"></datalist>
+              <select class="form-select" id="cfg-color-sel"></select>
+              <input class="form-input" id="cfg-color-especial" autocomplete="off" placeholder="Escribí el color especial" style="display:none; margin-top:6px;">
+              <input type="hidden" id="cfg-color">
               <div class="form-help" style="font-size:10px; margin-top:2px;">Los colores de <b>Línea</b> (en stock) están en la lista. Si escribís uno que no está, se cotiza como <b>Especial</b>.</div>
             </div>
             <div class="form-row">
@@ -3808,13 +3809,42 @@ function fillSelect(id, items) {
 }
 
 function poblarColoresDatalist() {
-    const dl = document.getElementById("cfg-color-list");
-    if (!dl) return;
-    dl.innerHTML = (CATALOGO.colores || []).map(c => {
+    const sel = document.getElementById("cfg-color-sel");
+    if (!sel) return;
+    const opts = (CATALOGO.colores || []).map(c => {
         const label = c.nombreViejo ? `${c.nombre} (${c.nombreViejo})` : c.nombre;
         const tier = c.tier === "linea" ? "Línea" : "Especial";
         return `<option value="${escapeHtml(c.nombre)}">${escapeHtml(label)} — ${tier}</option>`
-    }).join("")
+    }).join("");
+    sel.innerHTML = `<option value="">— Elegir color —</option>` + opts + `<option value="__ESPECIAL__">Especial (escribir…)</option>`;
+    sincronizarColorUI()
+}
+
+function esColorPredefinido(nombre) {
+    const n = String(nombre || "").trim().toLowerCase();
+    return (CATALOGO.colores || []).some(c => (c.nombre || "").toLowerCase() === n)
+}
+
+function sincronizarColorUI() {
+    const sel = document.getElementById("cfg-color-sel");
+    const esp = document.getElementById("cfg-color-especial");
+    const hid = document.getElementById("cfg-color");
+    if (!sel || !esp || !hid) return;
+    const val = hid.value || "";
+    if (val && esColorPredefinido(val)) {
+        sel.value = val;
+        esp.style.display = "none";
+        esp.value = ""
+    } else if (val) {
+        sel.value = "__ESPECIAL__";
+        esp.style.display = "";
+        esp.value = val
+    } else {
+        sel.value = "";
+        esp.style.display = "none";
+        esp.value = ""
+    }
+    if (typeof actualizarIndicadorTierColor === "function") actualizarIndicadorTierColor()
 }
 
 function actualizarIndicadorTierColor() {
@@ -3859,9 +3889,9 @@ function actualizarBotonSugerirSegunLinea() {
 let distribuidoresCache = [];
 async function refreshDistribuidoresCache() {
     if (!(SB && sesionSupabase)) return;
-    const {
-        data: data
-    } = await SB.from("distribuidor").select("distribuidor_id,nombre,contacto,telefono,ubicacion,activo,region,pais,descuento").order("nombre");
+    let r = await SB.from("distribuidor").select("distribuidor_id,nombre,contacto,telefono,ubicacion,activo,region,pais,descuento,iva").order("nombre");
+    if (r.error) r = await SB.from("distribuidor").select("distribuidor_id,nombre,contacto,telefono,ubicacion,activo,region,pais,descuento").order("nombre");
+    const data = r.data;
     distribuidoresCache = (data || []).map(d => ({
         id: d.distribuidor_id,
         nombre: d.nombre,
@@ -3871,7 +3901,7 @@ async function refreshDistribuidoresCache() {
         activo: d.activo !== false,
         region: d.region || null,
         pais: d.pais || "",
-        descuento: d.descuento != null ? Number(d.descuento) : 0
+        descuento: d.descuento != null ? Number(d.descuento) : 0, iva: d.iva != null ? Number(d.iva) : null
     }))
 }
 
@@ -3886,7 +3916,7 @@ function distribuidoresActivos() {
         activo: d.activo !== false,
         region: d.region || null,
         pais: d.pais || "",
-        descuento: d.descuento != null ? Number(d.descuento) : 0
+        descuento: d.descuento != null ? Number(d.descuento) : 0, iva: d.iva != null ? Number(d.iva) : null
     }))
 }
 const REGIONES_DISTRIBUIDOR = ["México", "LATAM", "Costa Rica"];
@@ -4033,10 +4063,29 @@ function bindCfg() {
     $("cfg-acabado").onchange = e => {
         cfg.acabado = e.target.value
     };
-    $("cfg-color").oninput = e => {
-        cfg.color = e.target.value;
+    const selColor = document.getElementById("cfg-color-sel");
+    const espColor = document.getElementById("cfg-color-especial");
+    const hidColor = document.getElementById("cfg-color");
+    if (selColor) selColor.onchange = e => {
+        if (e.target.value === "__ESPECIAL__") {
+            espColor.style.display = "";
+            cfg.color = espColor.value.trim();
+            hidColor.value = cfg.color;
+            espColor.focus()
+        } else {
+            espColor.style.display = "none";
+            espColor.value = "";
+            cfg.color = e.target.value;
+            hidColor.value = cfg.color
+        }
         actualizarIndicadorTierColor()
     };
+    if (espColor) espColor.oninput = e => {
+        cfg.color = e.target.value.trim();
+        hidColor.value = cfg.color;
+        actualizarIndicadorTierColor()
+    };
+    poblarColoresDatalist();
     $("cfg-distribuidor").onchange = e => {
         cfg.distribuidor = e.target.value
     };
@@ -4141,7 +4190,8 @@ function makeDefaultAreaCfg() {
         panelesExtras: [],
         canaletas: [],
         anchoPmrCuarto: 162,
-        centrosDescarga: []
+        centrosDescarga: [],
+        curvaMingitorio: "No tiene"
     }
 }
 
@@ -4872,7 +4922,11 @@ function buildBathroomSvg() {
     } {
         const profCm = typeof leerDimensionesLugar === "function" ? (leerDimensionesLugar() || {}).paredOpuesta || 0 : 0;
         if (profCm > 0) {
-            svg += `<text x="${padding+2}" y="16" font-size="9" fill="#0a1f3d" font-weight="700">Profundidad (fondo): ${profCm} cm</text>`
+            const py1 = 20, py2 = floor, pxx = 17, pmid = (py1 + py2) / 2;
+            svg += `<line x1="${pxx}" y1="${py1}" x2="${pxx}" y2="${py2}" stroke="#0a1f3d" stroke-width="1"/>`;
+            svg += `<line x1="${pxx-4}" y1="${py1}" x2="${pxx+4}" y2="${py1}" stroke="#0a1f3d" stroke-width="1"/>`;
+            svg += `<line x1="${pxx-4}" y1="${py2}" x2="${pxx+4}" y2="${py2}" stroke="#0a1f3d" stroke-width="1"/>`;
+            svg += `<text x="${pxx-6}" y="${pmid}" font-size="8.5" fill="#0a1f3d" font-weight="700" text-anchor="middle" transform="rotate(-90 ${pxx-6} ${pmid})">PROFUNDIDAD: ${profCm} cm</text>`
         }
     }
     const centrosCm = areaCfg.centrosDescarga || [];
@@ -5071,6 +5125,14 @@ function renderPreviewControls(tab) {
             const ctrlIzq = `\n        <label>\n          <span>Panel de cierre IZQUIERDO (isla)</span>\n          <select data-tab="panelCierreIzq">\n            <option value="">— Elegir —</option>\n            ${optsPN}\n          </select>\n        </label>`;
             html = ctrlIzq + html
         }
+    } {
+        const tcA = (activeAreaCfg() || {}).tiposCabina || [];
+        const hayMingit = tcA.some(t => t === "Mingitorio");
+        if (tab === "paneles" && hayMingit) {
+            const opciones = ["No tiene", "CL1", "CL2", "CL3", "CL5"];
+            const curvaSel = `\n        <label>\n          <span>Curva de mingitorios</span>\n          <select data-tab="curvaMingitorio">\n            ${opciones.map(o=>`<option value="${o}">${o}</option>`).join("")}\n          </select>\n        </label>`;
+            html = curvaSel + html
+        }
     }
     cont.innerHTML = html;
     if (tab === "pilastras") {
@@ -5102,6 +5164,7 @@ function renderPreviewControls(tab) {
         if (t === "muroIzq") s.value = a.muroIzq && a.muroIzq.codigo || "";
         if (t === "muroDer") s.value = a.muroDer && a.muroDer.codigo || "";
         if (t === "panelCierreIzq") s.value = a.panelCierreIzq || "";
+        if (t === "curvaMingitorio") s.value = a.curvaMingitorio || "No tiene";
         s.onchange = e => {
             const v = e.target.value;
             const i = e.target.dataset.idx !== undefined ? +e.target.dataset.idx : -1;
@@ -5120,6 +5183,7 @@ function renderPreviewControls(tab) {
                 esMuro: rightWallEff
             } : null;
             if (tt === "panelCierreIzq") a.panelCierreIzq = v;
+            if (tt === "curvaMingitorio") a.curvaMingitorio = v;
             if (tt === "tipo") {
                 renderPreviewControls(activeTab);
                 const infoT = typeof leerDimensionesLugar === "function" ? leerDimensionesLugar() : null;
@@ -6182,6 +6246,7 @@ async function guardarProyectoActual(descargar) {
         nombre: cfg.nombre,
         fecha: ahora.toISOString(),
         usuarioId: currentUser()?.id,
+        creadoPor: currentUser()?.nombre || "",
         areas: cfg.areas.slice(),
         layout: layoutsUsados.join(", ") || cfg.layout || "L",
         invertir: cfg.invertir,
@@ -6587,7 +6652,7 @@ function exportarPDF(proyecto) {
         ["FECHA:", new Date(proyecto.fecha).toLocaleDateString("es-ES")],
         ["REVISIÓN:", "00"],
         ["VERSIÓN:", "1.0"],
-        ["ENTREGÓ:", currentUser()?.nombre || "—"],
+        ["CREADO POR:", proyecto.creadoPor || currentUser()?.nombre || "—"],
         ["DISTRIBUIDOR:", "—"],
         ["", ""],
         ["LÍNEA:", proyecto.linea],
@@ -6883,7 +6948,8 @@ function drawCajetinEsen(doc, proyecto, opts) {
         ["Plano:", opts.plano],
         ["Ubicación:", ubic],
         ["# Presupuesto:", presup],
-        ["Fecha:", fecha]
+        ["Fecha:", fecha],
+        ["Creado por:", proyecto.creadoPor || currentUser()?.nombre || "—"]
     ], x0 + 26, cx1 - 2);
     drawPairs([
         ["Línea:", proyecto.linea || "—"],
@@ -7596,6 +7662,44 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     doc.text(`CLARO TOTAL: ${claroTotalCm} cm`, (xT1 + xT2) / 2, dimTotalY + 6, {
         align: "center"
     });
+    {
+        const hayMingitPdf = (areaCfg.tiposCabina || []).some(t => t === "Mingitorio");
+        const curva = areaCfg.curvaMingitorio || "No tiene";
+        if (hayMingitPdf && curva && curva !== "No tiene") {
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(8);
+            doc.setTextColor(10, 31, 61);
+            doc.text(`Curva mingitorio: ${curva}`, (xT1 + xT2) / 2, dimTotalY + 11, {
+                align: "center"
+            })
+        }
+    }
+    {
+        const lA = parseFloat(areaCfg.largo),
+            aA = parseFloat(areaCfg.ancho);
+        let profCmPdf = 0;
+        if (!isNaN(lA) && !isNaN(aA) && lA > 0 && aA > 0) {
+            const mA = Math.max(lA, aA),
+                nA = Math.min(lA, aA);
+            profCmPdf = areaCfg.preferCorta ? mA : nA
+        }
+        if (profCmPdf > 0) {
+            const pxx = drawX - 5,
+                pmid = (drawTop + floorY) / 2;
+            doc.setDrawColor(10, 31, 61);
+            doc.setLineWidth(.4);
+            doc.line(pxx, drawTop, pxx, floorY);
+            doc.line(pxx - 1.5, drawTop, pxx + 1.5, drawTop);
+            doc.line(pxx - 1.5, floorY, pxx + 1.5, floorY);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(7);
+            doc.setTextColor(10, 31, 61);
+            doc.text(`PROFUNDIDAD: ${profCmPdf} cm`, pxx - 2, pmid, {
+                angle: 90,
+                align: "center"
+            })
+        }
+    }
     const ajusteCm = areaCfg.ajusteInstalacionCm || 0;
     if (ajusteCm > 0) {
         doc.setFont("helvetica", "bold");
@@ -7991,6 +8095,7 @@ function cotizar(proyecto, opts) {
         proyectoId: proyecto.id,
         proyectoCodigo: proyecto.codigo,
         proyectoNombre: proyecto.nombre,
+        creadoPor: opts.creadoPor || proyecto.creadoPor || "",
         producto: opts.producto,
         productoNombre: "LEEDER " + ((CATALOGO.modelos.find(m => m.codigo === opts.producto) || {}).nombre || "").toUpperCase(),
         distribuidor: opts.distribuidor,
@@ -8081,7 +8186,7 @@ async function renderCotizaciones() {
         return
     }
     const sim = m => m === "CRC" ? "₡" : "$";
-    tb.innerHTML = lista.map((c, i) => `<tr>\n      <td>${c.fecha?new Date(c.fecha).toLocaleDateString("es-ES"):"—"}</td>\n      <td><strong>${escapeHtml(c.numero||"—")}</strong></td>\n      <td>${escapeHtml(c.proyectoNombre||c.proyectoCodigo||"—")}</td>\n      <td>${escapeHtml(c.distribuidor&&c.distribuidor.nombre||"—")}</td>\n      <td>${escapeHtml(c.productoNombre||"—")}</td>\n      <td>${sim(c.moneda)}${(c.granTotal||0).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>\n      <td class="col-actions">\n        <button class="icon-btn icon-pdf" data-cotpdf="${i}" title="Descargar PDF">📄</button>\n        <button class="icon-btn icon-xls" data-cotxls="${i}" title="Descargar Excel">📊</button>\n      </td>\n    </tr>`).join("");
+    tb.innerHTML = lista.map((c, i) => `<tr>\n      <td>${c.fecha?new Date(c.fecha).toLocaleDateString("es-ES"):"—"}</td>\n      <td><strong>${escapeHtml(c.numero||"—")}</strong></td>\n      <td>${escapeHtml(c.proyectoNombre||c.proyectoCodigo||"—")}${c.creadoPor?`<br><span class="muted" style="font-size:11px;">Creado por: ${escapeHtml(c.creadoPor)}</span>`:""}</td>\n      <td>${escapeHtml(c.distribuidor&&c.distribuidor.nombre||"—")}</td>\n      <td>${escapeHtml(c.productoNombre||"—")}</td>\n      <td>${sim(c.moneda)}${(c.granTotal||0).toLocaleString("es-MX",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>\n      <td class="col-actions">\n        <button class="icon-btn icon-pdf" data-cotpdf="${i}" title="Descargar PDF">📄</button>\n        <button class="icon-btn icon-xls" data-cotxls="${i}" title="Descargar Excel">📊</button>\n      </td>\n    </tr>`).join("");
     tb.querySelectorAll("[data-cotpdf]").forEach(b => b.onclick = () => {
         const c = lista[+b.dataset.cotpdf];
         if (c) generarPdfCotizacion(c)
@@ -8139,13 +8244,15 @@ function openCotizarModal(proyecto) {
         ["especiales", "Especiales"],
         ["linea", "C. de Línea"]
     ];
-    const distribs = distribuidoresActivos();
     const distProy = distribuidorDeProyecto(proyecto);
+    const esDistribuidorRol = (currentUser() || {}).rol === "Distribuidor";
+    const distribs = esDistribuidorRol ? distProy ? [distProy] : [] : distribuidoresActivos();
     const distIdSel = distProy ? distProy.id : "";
     const paisDefault = distProy && distProy.pais || (normRegion(regionProy) === normRegion("Costa Rica") ? "Costa Rica" : "");
     const descDefault = distProy && distProy.descuento || 0;
+    const ivaDist = distProy && distProy.iva != null ? distProy.iva : ivaDefaultPct;
     const puedeDesc = puedeEditarDescuento(currentUser());
-    body.innerHTML = `\n    <div class="form-grid" style="grid-template-columns:1fr 1fr;">\n      <div class="form-row">\n        <label class="form-label">N° Cotización <span class="muted">(= Expediente)</span></label>\n        <input class="form-input" id="cot-numero" value="${escapeHtml(proyecto.codigo||"")}" placeholder="ej. COT-0001">\n      </div>\n      <div class="form-row">\n        <label class="form-label">Producto a cotizar</label>\n        <select class="form-select" id="cot-producto">\n          ${CATALOGO.modelos.map(m=>`<option value="${m.codigo}" ${m.codigo===productoDefault?"selected":""}>LEEDER ${m.nombre.toUpperCase()}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Distribuidor</label>\n        <select class="form-select" id="cot-distribuidor">\n          <option value="">— Sin distribuidor —</option>\n          ${distribs.map(d=>`<option value="${d.id}" ${String(d.id)===String(distIdSel)?"selected":""}>${escapeHtml(d.nombre)}</option>`).join("")}\n        </select>\n        <div class="form-help" id="cot-dist-contacto" style="font-size:10px; margin-top:2px;"></div>\n      </div>\n      <div class="form-row">\n        <label class="form-label">País <span class="muted">(del distribuidor)</span></label>\n        <select class="form-select" id="cot-pais">\n          ${CATALOGO.paises.map(p=>`<option ${p===paisDefault?"selected":""}>${p}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Tiempo de entrega</label>\n        <select class="form-select" id="cot-tiempo">\n          ${CATALOGO.tiemposEntrega.map(t=>`<option>${t}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Moneda${monedaFija?` <span class="muted">(fija por región: ${escapeHtml(regionProy)})</span>`:""}</label>\n        <select class="form-select" id="cot-moneda"${monedaFija?" disabled":""}>\n          ${CATALOGO.monedas.map(m=>`<option value="${m.codigo}" ${(monedaFija?m.codigo===monedaFija:m.codigo==="USD")?"selected":""}>${m.nombre}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Tarifa (tier) <span style="color: var(--text-mute); font-weight: 400;">${esSuperior?"— Superior 2.0":"— según color ("+escapeHtml(proyecto.color||"—")+")"}</span></label>\n        <select class="form-select" id="cot-tier">\n          ${tierOpts.map(([v,l])=>`<option value="${v}" ${tierColor===v?"selected":""}>${l}</option>`).join("")}\n        </select>\n      </div>\n      ${esSuperior?`\n      <div class="form-row">\n        <label class="form-label">T.C. a colones (₡/USD) <span class="muted">(Superior, solo si es CR)</span></label>\n        <input class="form-input" type="number" id="cot-tc-colones" min="0" step="0.01" placeholder="ej. 576" value="${monedaFija==="CRC"?576:""}">\n        <div class="form-help" style="font-size:10px; margin-top:2px;">Superior 2.0 está en USD; para Costa Rica se multiplica por este tipo de cambio.</div>\n      </div>`:""}\n      <div class="form-row">\n        <label class="form-label">Descuento (%) <span class="muted">${puedeDesc?"(del distribuidor)":"(fijado por Admin)"}</span></label>\n        <input class="form-input" type="number" id="cot-descuento" min="0" max="80" value="${descDefault}" step="0.1" ${puedeDesc?"":"disabled"}>\n      </div>\n      <div class="form-row">\n        <label class="form-label">IVA (%) ${ivaDefaultPct?'<span class="muted">(CR 13%)</span>':'<span class="muted">(LATAM 0%)</span>'}</label>\n        <input class="form-input" type="number" id="cot-iva" min="0" max="30" value="${ivaDefaultPct}" step="0.1">\n      </div>\n    </div>\n    <div class="form-help" style="margin-top:14px;">\n      Las piezas y cantidades se toman del proyecto guardado. Precios = tarifa $/m² de la <b>Lista de Precios</b>\n      según el <b>tier</b> (lo define el color) y la <b>moneda</b> de la región (USD o colones).\n    </div>`;
+    body.innerHTML = `\n    <div class="form-grid" style="grid-template-columns:1fr 1fr;">\n      <div class="form-row">\n        <label class="form-label">N° Cotización <span class="muted">(= Expediente)</span></label>\n        <input class="form-input" id="cot-numero" value="${escapeHtml(proyecto.codigo||"")}" placeholder="ej. COT-0001">\n      </div>\n      <div class="form-row">\n        <label class="form-label">Producto a cotizar</label>\n        <select class="form-select" id="cot-producto" disabled>\n          ${CATALOGO.modelos.map(m=>`<option value="${m.codigo}" ${m.codigo===productoDefault?"selected":""}>LEEDER ${m.nombre.toUpperCase()}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Distribuidor</label>\n        <select class="form-select" id="cot-distribuidor" disabled>\n          <option value="">— Sin distribuidor —</option>\n          ${distribs.map(d=>`<option value="${d.id}" ${String(d.id)===String(distIdSel)?"selected":""}>${escapeHtml(d.nombre)}</option>`).join("")}\n        </select>\n        <div class="form-help" id="cot-dist-contacto" style="font-size:10px; margin-top:2px;"></div>\n      </div>\n      <div class="form-row">\n        <label class="form-label">País <span class="muted">(del distribuidor)</span></label>\n        <select class="form-select" id="cot-pais">\n          ${CATALOGO.paises.map(p=>`<option ${p===paisDefault?"selected":""}>${p}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Tiempo de entrega</label>\n        <select class="form-select" id="cot-tiempo">\n          ${CATALOGO.tiemposEntrega.map(t=>`<option>${t}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Moneda${monedaFija?` <span class="muted">(fija por región: ${escapeHtml(regionProy)})</span>`:""}</label>\n        <select class="form-select" id="cot-moneda" disabled>\n          ${CATALOGO.monedas.map(m=>`<option value="${m.codigo}" ${(monedaFija?m.codigo===monedaFija:m.codigo==="USD")?"selected":""}>${m.nombre}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Tarifa (tier) <span style="color: var(--text-mute); font-weight: 400;">${esSuperior?"— Superior 2.0":"— según color ("+escapeHtml(proyecto.color||"—")+")"}</span></label>\n        <select class="form-select" id="cot-tier" disabled>\n          ${tierOpts.map(([v,l])=>`<option value="${v}" ${tierColor===v?"selected":""}>${l}</option>`).join("")}\n        </select>\n      </div>\n      ${esSuperior?`\n      <div class="form-row">\n        <label class="form-label">T.C. a colones (₡/USD) <span class="muted">(Superior, solo si es CR)</span></label>\n        <input class="form-input" type="number" id="cot-tc-colones" min="0" step="0.01" placeholder="ej. 576" value="${monedaFija==="CRC"?576:""}">\n        <div class="form-help" style="font-size:10px; margin-top:2px;">Superior 2.0 está en USD; para Costa Rica se multiplica por este tipo de cambio.</div>\n      </div>`:""}\n      <div class="form-row">\n        <label class="form-label">Descuento (%) <span class="muted">${puedeDesc?"(del distribuidor)":"(fijado por Admin)"}</span></label>\n        <input class="form-input" type="number" id="cot-descuento" min="0" max="80" value="${descDefault}" step="0.1" disabled>\n      </div>\n      <div class="form-row">\n        <label class="form-label">IVA (%) ${ivaDefaultPct?'<span class="muted">(CR 13%)</span>':'<span class="muted">(LATAM 0%)</span>'}</label>\n        <input class="form-input" type="number" id="cot-iva" min="0" max="30" value="${ivaDist}" step="0.1" disabled>\n      </div>\n    </div>\n    <div class="form-help" style="margin-top:14px;">\n      Las piezas y cantidades se toman del proyecto guardado. Precios = tarifa $/m² de la <b>Lista de Precios</b>\n      según el <b>tier</b> (lo define el color) y la <b>moneda</b> de la región (USD o colones).\n    </div>`;
     const grabOpts = (CATALOGO.grabados || []).map(g => `<option value="${escapeHtml(g.codigo)}">${escapeHtml(g.codigo)} — ${escapeHtml(g.descripcion)} ($${g.usd})</option>`).join("");
     const lineasH = [...new Set((CATALOGO.herrajes || []).map(h => h.linea))];
     const herrOpts = lineasH.map(ln => `<optgroup label="${escapeHtml(ln)}">` + (CATALOGO.herrajes || []).filter(h => h.linea === ln).map(h => `<option value="${escapeHtml(h.linea)}|${escapeHtml(h.codigo)}">${escapeHtml(h.codigo)} — ${escapeHtml(h.descripcion)}</option>`).join("") + `</optgroup>`).join("");
@@ -8235,7 +8342,8 @@ function openCotizarModal(proyecto) {
                 iva: body.querySelector("#cot-iva").value,
                 extras: extrasAgregados,
                 tcGrabados: (body.querySelector("#cot-grabado-tc") || {}).value || 0,
-                tcColones: (body.querySelector("#cot-tc-colones") || {}).value || 0
+                tcColones: (body.querySelector("#cot-tc-colones") || {}).value || 0,
+                creadoPor: (currentUser() || {}).nombre || ""
             };
             const cot = cotizar(proyecto, opts);
             db.cotizaciones = db.cotizaciones || [];
@@ -8332,6 +8440,7 @@ function generarPdfCotizacion(cot) {
     const rightLines = [
         ["Expediente:", cot.proyectoCodigo],
         ["Proyecto:", cot.proyectoNombre],
+        ["Creado por:", cot.creadoPor || "—"],
         ["Producto:", cot.productoNombre],
         ["Moneda:", monedaTxt],
         ["Color:", cot.color || "—"],
@@ -8498,7 +8607,7 @@ function exportarCotizacionExcel(cot) {
     const filasExtras = (cot.extras || []).map(e => `<tr>\n      <td ${td}>${esc(e.codigo)}</td><td ${td}>${(e.tipo==="grabado"?"Grabado: ":e.linea?esc(e.linea)+": ":"Herraje: ")+esc(e.descripcion)}</td>\n      <td ${tdC}>${e.cantidad}</td><td ${tdC}>—</td><td ${tdR}>—</td><td ${tdR}>${money(e.precioUnit)}</td><td ${tdR}>${money(e.subtotal)}</td></tr>`).join("");
     const info = (lbl, val) => `<tr><td style="border:0;padding:2px 8px;font-weight:bold;color:${NAVY};">${lbl}</td><td style="border:0;padding:2px 8px;">${esc(val)}</td></tr>`;
     const totalRow = (lbl, val, big) => `<tr>\n      <td colspan="5" style="border:0;"></td>\n      <td style="border:1px solid #ccc;padding:6px 8px;text-align:right;font-weight:bold;${big?`background:${GOLD};color:${NAVY};`:""}">${lbl}</td>\n      <td style="border:1px solid #ccc;padding:6px 8px;text-align:right;${big?`background:${GOLD};color:${NAVY};font-weight:bold;`:""}">${val}</td></tr>`;
-    const html = `<html><head><meta charset="utf-8"></head><body>\n    <table border="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11px;">\n      <tr><td colspan="7" style="background:${NAVY};color:${GOLD};font-size:20px;font-weight:bold;padding:10px 8px;">COTIZACIÓN — N° ${esc(cot.numero)}</td></tr>\n      <tr><td colspan="7" style="padding:2px 8px;color:#555;">Mamparas Sanitarias · Garantía 25 años laminado compacto · Herrajes acero inoxidable con garantía de por vida</td></tr>\n      <tr><td colspan="7" style="height:6px;"></td></tr>\n    </table>\n    <table border="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11px;margin-bottom:6px;">\n      ${info("Distribuidor:",cot.distribuidor&&cot.distribuidor.nombre||"—")}\n      ${info("Contacto:",cot.distribuidor&&cot.distribuidor.contacto||"—")}\n      ${info("País:",cot.pais)}\n      ${info("Ubicación:",cot.ubicacion||"—")}\n      ${info("Expediente:",cot.proyectoCodigo)}\n      ${info("Proyecto:",cot.proyectoNombre)}\n      ${info("Producto:",cot.productoNombre)}\n      ${info("Color:",cot.color||"—")}\n      ${info("Tarifa:",tierLabel)}\n      ${info("Moneda:",cot.moneda)}\n      ${info("Entrega:",cot.tiempoEntrega)}\n    </table>\n    <table border="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11px;">\n      <tr><th ${th}>Código</th><th ${th}>Descripción</th><th ${th}>Cant</th><th ${th}>Ancho×Alto</th><th ${th}>m²</th><th ${th}>P. Unit</th><th ${th}>Subtotal</th></tr>\n      ${filasPiezas}\n      ${filasExtras?`<tr><td colspan="7" style="background:#eef;padding:4px 8px;font-weight:bold;color:${NAVY};">EXTRAS</td></tr>${filasExtras}`:""}\n      ${totalRow("Subtotal fabricación:",money(cot.subtotalFab))}\n      ${cot.descuentoMonto>0?totalRow(`Descuento (${cot.descuentoPorcentaje}%):`,"−"+money(cot.descuentoMonto)):""}\n      ${cot.extrasSubtotal>0?totalRow("Extras:",money(cot.extrasSubtotal)):""}\n      ${cot.ivaMonto>0?totalRow(`IVA (${cot.ivaPorcentaje}%):`,money(cot.ivaMonto)):""}\n      ${totalRow("GRAN TOTAL:",money(cot.granTotal),true)}\n    </table></body></html>`;
+    const html = `<html><head><meta charset="utf-8"></head><body>\n    <table border="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11px;">\n      <tr><td colspan="7" style="background:${NAVY};color:${GOLD};font-size:20px;font-weight:bold;padding:10px 8px;"><img src="${LOGO_COTIZACION_URL}" height="30" style="vertical-align:middle;margin-right:14px;">COTIZACIÓN — N° ${esc(cot.numero)}</td></tr>\n      <tr><td colspan="7" style="padding:2px 8px;color:#555;">Mamparas Sanitarias · Garantía 25 años laminado compacto · Herrajes acero inoxidable con garantía de por vida</td></tr>\n      <tr><td colspan="7" style="height:6px;"></td></tr>\n    </table>\n    <table border="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11px;margin-bottom:6px;">\n      ${info("Distribuidor:",cot.distribuidor&&cot.distribuidor.nombre||"—")}\n      ${info("Contacto:",cot.distribuidor&&cot.distribuidor.contacto||"—")}\n      ${info("País:",cot.pais)}\n      ${info("Ubicación:",cot.ubicacion||"—")}\n      ${info("Expediente:",cot.proyectoCodigo)}\n      ${info("Proyecto:",cot.proyectoNombre)}\n      ${info("Producto:",cot.productoNombre)}\n      ${info("Color:",cot.color||"—")}\n      ${info("Tarifa:",tierLabel)}\n      ${info("Moneda:",cot.moneda)}\n      ${info("Entrega:",cot.tiempoEntrega)}\n    </table>\n    <table border="0" style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:11px;">\n      <tr><th ${th}>Código</th><th ${th}>Descripción</th><th ${th}>Cant</th><th ${th}>Ancho×Alto</th><th ${th}>m²</th><th ${th}>P. Unit</th><th ${th}>Subtotal</th></tr>\n      ${filasPiezas}\n      ${filasExtras?`<tr><td colspan="7" style="background:#eef;padding:4px 8px;font-weight:bold;color:${NAVY};">EXTRAS</td></tr>${filasExtras}`:""}\n      ${totalRow("Subtotal fabricación:",money(cot.subtotalFab))}\n      ${cot.descuentoMonto>0?totalRow(`Descuento (${cot.descuentoPorcentaje}%):`,"−"+money(cot.descuentoMonto)):""}\n      ${cot.extrasSubtotal>0?totalRow("Extras:",money(cot.extrasSubtotal)):""}\n      ${cot.ivaMonto>0?totalRow(`IVA (${cot.ivaPorcentaje}%):`,money(cot.ivaMonto)):""}\n      ${totalRow("GRAN TOTAL:",money(cot.granTotal),true)}\n    </table></body></html>`;
     const blob = new Blob(["\ufeff" + html], {
         type: "application/vnd.ms-excel;charset=utf-8;"
     });
@@ -8565,7 +8674,7 @@ async function renderProyectos() {
         tb.innerHTML = `<tr><td colspan="7"><div class="empty-state"><strong>No hay proyectos</strong>${desde||hasta||q||fDist?"Probá con otros filtros.":"Generá un proyecto desde el Configurador."}</div></td></tr>`;
         return
     }
-    tb.innerHTML = lista.map(p => `\n    <tr data-row="${p.id}" style="cursor:pointer" title="Doble clic para editar en el configurador">\n      <td>${p.fecha?new Date(p.fecha).toLocaleDateString("es-ES"):"—"}</td>\n      <td><strong>${escapeHtml(p.codigo||"")}</strong></td>\n      <td>${escapeHtml(p.nombre||"")}${esAdmin&&p.distribuidor?`<br><span class="muted" style="font-size:12px;">${escapeHtml(p.distribuidor)}</span>`:""}</td>\n      <td>${escapeHtml((p.areas||[]).join(", "))||"—"}</td>\n      <td>${p.cabinas!=null?p.cabinas:"—"}</td>\n      <td>${p.layout||"—"}</td>\n      <td class="col-actions">\n        <button class="btn btn-edit" data-editp="${p.id}" title="Editar en el configurador">✎ Editar</button>\n        ${regionNoCotiza(regionDeProyecto(p))?"":`<button class="btn btn-edit" data-cot="${p.id}" title="Generar cotización">💰 Cotizar</button>`}\n        <button class="icon-btn icon-pdf" data-pdf="${p.id}" title="Descargar planos (PDF)">📄</button>\n        <button class="icon-btn icon-xls" data-csv="${p.id}" title="Descargar archivo CIP (CSV para Modumex.cr)">📋</button>\n        <button class="icon-btn icon-xls" data-siclick="${p.id}" title="Descargar CSV para SICLICK">📤</button>\n        <button class="icon-btn danger" data-del="${p.id}" title="Eliminar">🗑</button>\n      </td>\n    </tr>`).join("");
+    tb.innerHTML = lista.map(p => `\n    <tr data-row="${p.id}" style="cursor:pointer" title="Doble clic para editar en el configurador">\n      <td>${p.fecha?new Date(p.fecha).toLocaleDateString("es-ES"):"—"}</td>\n      <td><strong>${escapeHtml(p.codigo||"")}</strong></td>\n      <td>${escapeHtml(p.nombre||"")}${esAdmin&&p.distribuidor?`<br><span class="muted" style="font-size:12px;">${escapeHtml(p.distribuidor)}</span>`:""}${p.creadoPor?`<br><span class="muted" style="font-size:11px;">Creado por: ${escapeHtml(p.creadoPor)}</span>`:""}</td>\n      <td>${escapeHtml((p.areas||[]).join(", "))||"—"}</td>\n      <td>${p.cabinas!=null?p.cabinas:"—"}</td>\n      <td>${p.layout||"—"}</td>\n      <td class="col-actions">\n        <button class="btn btn-edit" data-editp="${p.id}" title="Editar en el configurador">✎ Editar</button>\n        ${regionNoCotiza(regionDeProyecto(p))?"":`<button class="btn btn-edit" data-cot="${p.id}" title="Generar cotización">💰 Cotizar</button>`}\n        <button class="icon-btn icon-pdf" data-pdf="${p.id}" title="Descargar planos (PDF)">📄</button>\n        <button class="icon-btn icon-xls" data-csv="${p.id}" title="Descargar archivo CIP (CSV para Modumex.cr)">📋</button>\n        <button class="icon-btn icon-xls" data-siclick="${p.id}" title="Descargar CSV para SICLICK">📤</button>\n        <button class="icon-btn danger" data-del="${p.id}" title="Eliminar">🗑</button>\n      </td>\n    </tr>`).join("");
     const find = id => lista.find(x => String(x.id) === String(id));
     tb.querySelectorAll("[data-editp]").forEach(b => b.onclick = () => {
         const p = find(b.dataset.editp);
@@ -8694,6 +8803,7 @@ function cargarProyectoEnConfigurador(p) {
     set("cfg-terminacion", cfg.terminacion);
     set("cfg-acabado", cfg.acabado);
     set("cfg-color", cfg.color);
+    if (typeof sincronizarColorUI === "function") sincronizarColorUI();
     if (typeof actualizarIndicadorTierColor === "function") actualizarIndicadorTierColor();
     set("cfg-distribuidor", cfg.distribuidor);
     set("cfg-repeticiones", cfg.repeticiones);
@@ -9544,10 +9654,10 @@ async function renderDistribuidores() {
     let lista = [];
     if (conectado) {
         tb.innerHTML = `<tr><td colspan="6"><div class="empty-state">Cargando distribuidores…</div></td></tr>`;
-        const {
-            data: data,
-            error: error
-        } = await SB.from("distribuidor").select("distribuidor_id,nombre,contacto,email,telefono,ubicacion,region,pais,descuento,activo").order("nombre");
+        let r = await SB.from("distribuidor").select("distribuidor_id,nombre,contacto,email,telefono,ubicacion,region,pais,descuento,activo,iva").order("nombre");
+        if (r.error) r = await SB.from("distribuidor").select("distribuidor_id,nombre,contacto,email,telefono,ubicacion,region,pais,descuento,activo").order("nombre");
+        const data = r.data,
+            error = r.error;
         if (error) {
             tb.innerHTML = `<tr><td colspan="6"><div class="empty-state"><strong>Error al leer distribuidores</strong><br>${escapeHtml(error.message)}</div></td></tr>`;
             return
@@ -9561,7 +9671,7 @@ async function renderDistribuidores() {
             ubicacion: d.ubicacion || "",
             region: d.region || "",
             pais: d.pais || "",
-            descuento: d.descuento != null ? Number(d.descuento) : 0,
+            descuento: d.descuento != null ? Number(d.descuento) : 0, iva: d.iva != null ? Number(d.iva) : null,
             activo: d.activo !== false
         }))
     } else {
@@ -9615,7 +9725,7 @@ async function editarDistribuidor(d) {
     const puedeDesc = puedeEditarDescuento(yo);
     const conectado = !!(SB && sesionSupabase);
     const body = document.createElement("div");
-    body.innerHTML = `\n    <div class="form-grid" style="grid-template-columns:1fr;">\n      <div class="form-row"><label class="form-label">Nombre</label><input class="form-input" id="m-nombre"></div>\n      <div class="form-row"><label class="form-label">Contacto</label><input class="form-input" id="m-contacto"></div>\n      <div class="form-row"><label class="form-label">Correo electrónico <span class="muted">(es el usuario de acceso)</span></label><input class="form-input" id="m-email" type="email"></div>\n      <div class="form-row"><label class="form-label">Contraseña ${d?"(dejar vacío para no cambiar)":""}</label><input class="form-input" id="m-pass" type="text" placeholder="${d?"••••••••":"Clave de acceso del distribuidor"}"></div>\n      <div class="form-row"><label class="form-label">Teléfono</label><input class="form-input" id="m-tel"></div>\n      <div class="form-row"><label class="form-label">Ciudad / dirección <span class="muted">(opcional)</span></label><input class="form-input" id="m-loc" placeholder="ej. San José, Escazú"></div>\n      <div class="form-row">\n        <label class="form-label">País <span class="muted">(sale en la cotización)</span></label>\n        <select class="form-select" id="m-pais">\n          <option value="">— Elegir país —</option>\n          ${CATALOGO.paises.map(p=>`<option value="${p}">${p}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Región <span class="muted">(define moneda y si cotiza)</span></label>\n        <select class="form-select" id="m-region">\n          <option value="">— Sin región (cotiza como hoy) —</option>\n          ${REGIONES_DISTRIBUIDOR.map(r=>`<option value="${r}">${r}</option>`).join("")}\n        </select>\n        <div class="form-help" style="font-size:10px; margin-top:2px;">México: no cotiza en la app · LATAM: precios en USD · Costa Rica: precios en colones.</div>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Descuento (%) <span class="muted">${puedeDesc?"(cae solo en la cotización)":"(solo Admin/Super Admin lo cambian)"}</span></label>\n        <input class="form-input" type="number" id="m-descuento" min="0" max="80" step="0.1" value="0" ${puedeDesc?"":"disabled"}>\n      </div>\n      <div class="form-row switch-row" style="margin-top:6px;">\n        <input type="checkbox" id="m-activo" checked>\n        <label for="m-activo">Activo</label>\n      </div>\n    </div>`;
+    body.innerHTML = `\n    <div class="form-grid" style="grid-template-columns:1fr;">\n      <div class="form-row"><label class="form-label">Nombre</label><input class="form-input" id="m-nombre"></div>\n      <div class="form-row"><label class="form-label">Contacto</label><input class="form-input" id="m-contacto"></div>\n      <div class="form-row"><label class="form-label">Correo electrónico <span class="muted">(es el usuario de acceso)</span></label><input class="form-input" id="m-email" type="email"></div>\n      <div class="form-row"><label class="form-label">Contraseña ${d?"(dejar vacío para no cambiar)":""}</label><input class="form-input" id="m-pass" type="text" placeholder="${d?"••••••••":"Clave de acceso del distribuidor"}"></div>\n      <div class="form-row"><label class="form-label">Teléfono</label><input class="form-input" id="m-tel"></div>\n      <div class="form-row"><label class="form-label">Ciudad / dirección <span class="muted">(opcional)</span></label><input class="form-input" id="m-loc" placeholder="ej. San José, Escazú"></div>\n      <div class="form-row">\n        <label class="form-label">País <span class="muted">(sale en la cotización)</span></label>\n        <select class="form-select" id="m-pais">\n          <option value="">— Elegir país —</option>\n          ${CATALOGO.paises.map(p=>`<option value="${p}">${p}</option>`).join("")}\n        </select>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Región <span class="muted">(define moneda y si cotiza)</span></label>\n        <select class="form-select" id="m-region">\n          <option value="">— Sin región (cotiza como hoy) —</option>\n          ${REGIONES_DISTRIBUIDOR.map(r=>`<option value="${r}">${r}</option>`).join("")}\n        </select>\n        <div class="form-help" style="font-size:10px; margin-top:2px;">México: no cotiza en la app · LATAM: precios en USD · Costa Rica: precios en colones.</div>\n      </div>\n      <div class="form-row">\n        <label class="form-label">Descuento (%) <span class="muted">${puedeDesc?"(cae solo en la cotización)":"(solo Admin/Super Admin lo cambian)"}</span></label>\n        <input class="form-input" type="number" id="m-descuento" min="0" max="80" step="0.1" value="0" ${puedeDesc?"":"disabled"}></div><div class="form-row"><label class="form-label">IVA (%) <span class="muted">${puedeDesc?"(cae en la cotización)":"(solo Admin/Super Admin lo cambian)"}</span></label><input class="form-input" type="number" id="m-iva" min="0" max="30" step="0.1" placeholder="auto por región (CR 13 / LATAM 0)" ${puedeDesc?"":"disabled"}>\n      </div>\n      <div class="form-row switch-row" style="margin-top:6px;">\n        <input type="checkbox" id="m-activo" checked>\n        <label for="m-activo">Activo</label>\n      </div>\n    </div>`;
     if (d) {
         body.querySelector("#m-nombre").value = d.nombre;
         body.querySelector("#m-contacto").value = d.contacto || "";
@@ -9625,6 +9735,7 @@ async function editarDistribuidor(d) {
         body.querySelector("#m-region").value = d.region || "";
         body.querySelector("#m-pais").value = d.pais || "";
         body.querySelector("#m-descuento").value = d.descuento != null ? d.descuento : 0;
+        body.querySelector("#m-iva").value = d.iva != null ? d.iva : "";
         body.querySelector("#m-activo").checked = d.activo
     }
     openModal({
@@ -9640,6 +9751,7 @@ async function editarDistribuidor(d) {
             const region = body.querySelector("#m-region").value;
             const pais = body.querySelector("#m-pais").value;
             const descuento = parseFloat(body.querySelector("#m-descuento").value) || 0;
+            const iva = body.querySelector("#m-iva").value.trim() === "" ? null : parseFloat(body.querySelector("#m-iva").value) || 0;
             const activo = body.querySelector("#m-activo").checked;
             if (!nombre) {
                 toast("Nombre obligatorio", "danger");
@@ -9670,6 +9782,7 @@ async function editarDistribuidor(d) {
                                 region: region || null,
                                 pais: pais || null,
                                 descuento: descuento,
+                iva: iva,
                                 activo: activo,
                                 password: pass
                             }
@@ -9686,6 +9799,7 @@ async function editarDistribuidor(d) {
                             region: region || null,
                             pais: pais || null,
                             descuento: descuento,
+                iva: iva,
                             activo: activo
                         }).eq("distribuidor_id", d.id);
                         if (e1) throw e1;
@@ -9723,6 +9837,7 @@ async function editarDistribuidor(d) {
                 region: region || null,
                 pais: pais || null,
                 descuento: descuento,
+                iva: iva,
                 activo: activo
             };
             let distId;
