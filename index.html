@@ -4189,6 +4189,23 @@ function renderPreviewControls(tab) {
         if (typeof sincronizarMurosConLayout === 'function') sincronizarMurosConLayout();
         recalcularSugerencia();
         redrawCanvasOnly();
+      } else if (tt === 'puertas') {
+        // Al cambiar la MEDIDA de una puerta, reajustar las PILASTRAS al claro con la
+        // fórmula de modulación (puerta fija = la elegida). Solo LEEDER, con medidas del
+        // lugar, y si la cabina es un baño estándar (no la PMR ni un mingitorio).
+        const infoP    = (typeof leerDimensionesLugar === 'function') ? leerDimensionesLugar() : null;
+        const esLeederP = (cfg.linea || '').toUpperCase() === 'LEEDER';
+        const layoutP  = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
+        const accCabIdxP = cfg.invertir ? cfg.cabinas - 1 : 0;
+        const esCabAcc = !!layoutP.acc && i === accCabIdxP;      // la puerta PMR se maneja aparte
+        const esMingitCab = (a.tiposCabina || [])[i] === 'Mingitorio';
+        const pzP = v ? CATALOGO.piezas.find(p => p.codigo === v) : null;
+        if (infoP && esLeederP && pzP && !layoutP.pmrCuarto && !esCabAcc && !esMingitCab && cfg.areaActivaIdx >= 0) {
+          const nMingitP = (a.tiposCabina || []).filter(t => t === 'Mingitorio').length;
+          const sugP = sugerirModulacion({ claro: infoP.paredCabinas, N: cfg.cabinas, layoutCodigo: cfg.layout, nMingit: nMingitP, puertaFija: pzP.ancho });
+          if (sugP && !sugP.error) { aplicarSugerencia(sugP); return; }   // aplicarSugerencia redibuja + revalida
+        }
+        redrawCanvasOnly();
       } else {
         redrawCanvasOnly();
       }
@@ -4512,7 +4529,7 @@ function alturaPiezaSegunModelo(familia, modeloCodigo /*, terminacionCodigo */) 
               · 1 PI a muro por cada extremo con muro (puede ser chica: 10-24)
    Tolerancia: ±5 cm se puede cubrir con canaletas. > 5 cm no calza.
 =========================================================================== */
-function sugerirModulacion({ claro, N, layoutCodigo, nMingit }) {
+function sugerirModulacion({ claro, N, layoutCodigo, nMingit, puertaFija }) {
   const layout       = CATALOGO.layouts.find(l => l.codigo === layoutCodigo) || CATALOGO.layouts[0];
   const hasLeftWall  = ['L','U','L+','U+','C','I','K','LP','P+','PP'].includes(layoutCodigo);
   const hasRightWall = ['U','U+','E+','C','I','K','P+'].includes(layoutCodigo);
@@ -4561,7 +4578,10 @@ function sugerirModulacion({ claro, N, layoutCodigo, nMingit }) {
 
   // Puertas estándar — TODOS los modelos tienen los mismos anchos según BOM oficial Modumex.
   // (Antes restringía Imperial sin PT70/PT75 por ficha, pero el BOM MRP los tiene fabricados.)
-  const opcionesPuerta    = anchosPuerta.slice();
+  // puertaFija (opcional): fija la puerta ESTÁNDAR a esa medida y re-resuelve solo las
+  // pilastras al claro (se usa al cambiar la medida de una puerta en el editor). Sin ella,
+  // busca la mejor puerta. La puerta PMR (accesible) se sigue optimizando aparte.
+  const opcionesPuerta    = puertaFija ? [puertaFija] : anchosPuerta.slice();
   // Puerta PMR (cabina movilidad limitada — más grande, >=85 cm)
   const opcionesPuertaAcc = anchosPuerta.filter(a => a >= 85);
   // Pilastras CENTRALES (entre cabinas, mín 24 por estabilidad / 2 patas).
