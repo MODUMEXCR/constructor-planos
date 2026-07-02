@@ -4493,11 +4493,13 @@ function actualizarValidacionModulacion() {
         el.textContent = `⚠ Falta(n) ${faltantes.length} pieza(s): ${faltantes.slice(0,3).join(", ")}${faltantes.length>3?"…":""}`;
         return
     }
-    const claroAjustado = claro - nPilMuro + 1.5 * nPuertas;
+    const esLayoutE = layout.codigo === "E";
+    const esLayoutL = layout.codigo === "L";
+    const claroAjustado = esLayoutE ? claro : claro - nPilMuro + 1.5 * nPuertas;
     const diff = claroAjustado - suma;
     const absDiff = Math.abs(diff);
-    const esLayoutL = layout.codigo === "L";
-    const tolHerraje = esLayoutL ? 5 : .5 * nPilMuro;
+    const rawGap = claro - suma;
+    const tolHerraje = esLayoutE || esLayoutL ? 5 : .5 * nPilMuro;
     el.style.display = "block";
     const verde = () => {
         el.style.background = "#dcfce7";
@@ -4524,19 +4526,33 @@ function actualizarValidacionModulacion() {
             const libre = Math.max(0, diff);
             el.textContent = libre > .5 ? `✓ Calza — los urinales ocupan el espacio restante (${libre.toFixed(0)} cm repartidos, quedan espaciados contra la pared). Claro: ${claro} cm.` : `✓ Modulación calza — claro ${claro} cm`
         }
+    } else if (esLayoutE) {
+        if (absDiff <= tolHerraje) {
+            verde();
+            el.textContent = `✓ Calza (isla E: tolerancia ±5 cm) — suma ${suma} cm vs claro ${claro} cm`
+        } else if (rawGap > 0) {
+            rojo();
+            el.textContent = `✕ Falta material: la suma (${suma} cm) es ${absDiff.toFixed(1)} cm menor que el claro (${claro} cm). Agrandá una pieza.`
+        } else {
+            rojo();
+            el.textContent = `✕ Se pasa ${absDiff.toFixed(1)} cm de la medida dada (suma ${suma} cm vs claro ${claro} cm). Reducí una pieza.`
+        }
     } else if (absDiff <= tolHerraje) {
         verde();
         const sufijo = esLayoutL ? absDiff > .5 ? ` (layout L: el extremo abierto absorbe ${absDiff.toFixed(1)} cm — tolerancia ±5 cm)` : "" : absDiff > .5 ? ` (herraje absorbe ${absDiff.toFixed(1)} cm)` : "";
         el.textContent = `✓ Modulación calza — suma ${suma} cm vs claro ${claro} cm${sufijo}`
-    } else if (diff > 0 && absDiff <= 5) {
+    } else if (rawGap > 0 && rawGap <= 5) {
         amarillo();
-        el.textContent = `⚠ Modulación calza con canaleta de ${absDiff.toFixed(1)} cm para rellenar el hueco (suma ${suma} cm vs claro ${claro} cm)`
-    } else if (diff > 0) {
+        el.textContent = `⚠ Calza con canaleta de ${rawGap.toFixed(1)} cm para rellenar el hueco a la pared (suma ${suma} cm vs claro ${claro} cm)`
+    } else if (rawGap > 5) {
         rojo();
-        el.textContent = `✕ NO CALZA — falta material: queda un hueco de ${absDiff.toFixed(1)} cm (excede el rango de canaletas de 5 cm). Suma piezas: ${suma} cm, claro del lugar: ${claro} cm. Agregá/agrandá una pieza o presioná 💡 Sugerir.`
+        el.textContent = `✕ NO CALZA — falta material: hueco de ${rawGap.toFixed(1)} cm a la pared (excede el rango de canaletas de 5 cm). Suma piezas: ${suma} cm, claro del lugar: ${claro} cm. Agregá/agrandá una pieza o presioná 💡 Sugerir.`
+    } else if (diff > 0) {
+        verde();
+        el.textContent = `✓ Modulación calza — suma ${suma} cm vs claro ${claro} cm (la holgura de bisagra absorbe ${absDiff.toFixed(1)} cm)`
     } else {
         rojo();
-        el.textContent = `✕ NO CALZA — las piezas se pasan ${absDiff.toFixed(1)} cm (no caben en el claro). Reducí una pieza — la canaleta solo rellena huecos, no recorta. Suma piezas: ${suma} cm, claro del lugar: ${claro} cm.`
+        el.textContent = `✕ NO CALZA — las piezas se pasan ${(suma-claro).toFixed(1)} cm del claro (suma ${suma} cm vs claro ${claro} cm). Reducí una pieza — la canaleta solo rellena huecos, no recorta.`
     }
 }
 
@@ -5631,7 +5647,8 @@ function sugerirModulacion({
     }
     const PMR_PREF = 100;
     const PMR_PENALTY = .1;
-    const claroAjustado = claro - nPilastrasAMuro + 1.5 * nPuertas;
+    const esLayoutE = layoutCodigo === "E";
+    const claroAjustado = esLayoutE ? claro : claro - nPilastrasAMuro + 1.5 * nPuertas;
     let best = null;
     const accAnchos = nAcc > 0 ? opcionesPuertaAcc : [0];
     const inv = cfg.invertir;
@@ -5699,7 +5716,7 @@ function sugerirModulacion({
     const absDiffReal = Math.abs(diffReal);
     const margenHerraje = .5 * nPilastrasAMuro;
     const esLayoutL = layoutCodigo === "L";
-    const tolExacto = esLayoutL ? 5 : margenHerraje;
+    const tolExacto = esLayoutE || esLayoutL ? 5 : margenHerraje;
     let ajuste;
     if (absDiffReal <= tolExacto) {
         const msgHerraje = esLayoutL ? absDiffReal > .5 ? ` (layout L: el extremo abierto absorbe ${absDiffReal.toFixed(1)} cm — tolerancia ±5 cm)` : "" : margenHerraje > 0 && absDiffReal > .5 ? ` (ajuste de ${absDiffReal.toFixed(1)} cm absorbido por el herraje de ${nPilastrasAMuro} pilastra(s) a muro)` : "";
