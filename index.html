@@ -4388,6 +4388,14 @@ function activeAreaCfg() {
     return cfg.configByArea[n]
 }
 
+function altoTouchlessActual() {
+    const a = activeAreaCfg();
+    if (a && a.altoTouchless) return a.altoTouchless;
+    const sel = document.getElementById("cfg-alto-touchless");
+    const v = sel ? parseInt(sel.value, 10) : 0;
+    return v || 180
+}
+
 function renderHojaOptions() {
     const inp = document.getElementById("cfg-hoja");
     const list = document.getElementById("cfg-hoja-list");
@@ -5286,7 +5294,7 @@ function renderPreviewControls(tab) {
     const leftWallEff = cfg.invertir ? _hasRightWallPC : _hasLeftWallPC;
     const rightWallEff = cfg.invertir ? _hasLeftWallPC : _hasRightWallPC;
     const piezasFamilia = tab === "paneles" ? "PN" : tab === "puertas" ? "PT" : "PI";
-    const piezasFamilia2 = CATALOGO.piezas.filter(p => p.familia === piezasFamilia && !p.sufijo).filter(p => piezaPermitidaPorModelo(p, cfg.modelo, (activeAreaCfg() || {}).altoTouchless));
+    const piezasFamilia2 = CATALOGO.piezas.filter(p => p.familia === piezasFamilia && !p.sufijo).filter(p => piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual()));
     const piezasMG = CATALOGO.piezas.filter(p => p.familia === "MG");
     const tiposCabActiva = (activeAreaCfg() || {}).tiposCabina || [];
     let html = "";
@@ -5295,12 +5303,12 @@ function renderPreviewControls(tab) {
         if ((tab === "puertas" || tab === "pilastras") && esMingitorio) continue;
         let dropdownHtml;
         if (tab === "paneles" && esMingitorio) {
-            const optsMG = piezasMG.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,(activeAreaCfg()||{}).altoTouchless)})</option>`).join("");
-            const optsPN = piezasFamilia2.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,(activeAreaCfg()||{}).altoTouchless)})</option>`).join("");
+            const optsMG = piezasMG.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("");
+            const optsPN = piezasFamilia2.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("");
             dropdownHtml = `\n        <label>\n          <span>Cabina ${i+1} · panel/mingitorio</span>\n          <select data-tab="${tab}" data-idx="${i}">\n            <option value="">— Elegir —</option>\n            <optgroup label="Panel mingitorio (entre 2 mingitorios)">${optsMG}</optgroup>\n            <optgroup label="Panel lateral (entre baño y mingitorio, o contra muro)">${optsPN}</optgroup>\n          </select>\n        </label>`
         } else {
             const piezasParaEste = piezasFamilia2;
-            const opt = p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,(activeAreaCfg()||{}).altoTouchless)})</option>`;
+            const opt = p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`;
             let optionsHtml;
             if (tab === "paneles" && cfg.modelo === "KIDS") {
                 const estandar = piezasParaEste.filter(p => p.ancho === 120 || p.ancho === 130);
@@ -5328,7 +5336,7 @@ function renderPreviewControls(tab) {
         const tcPrimera = (activeAreaCfg() || {}).tiposCabina || [];
         const primeraEsMingitPC = tcPrimera[0] === "Mingitorio";
         if (tab === "paneles" && !leftWallEff && !primeraEsMingitPC) {
-            const optsPN = piezasFamilia2.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,(activeAreaCfg()||{}).altoTouchless)})</option>`).join("");
+            const optsPN = piezasFamilia2.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("");
             const ctrlIzq = `\n        <label>\n          <span>Panel de cierre IZQUIERDO (isla)</span>\n          <select data-tab="panelCierreIzq">\n            <option value="">— Elegir —</option>\n            ${optsPN}\n          </select>\n        </label>`;
             html = ctrlIzq + html
         }
@@ -5511,7 +5519,7 @@ function renderMurosYExtrasSection() {
     const tieneCierreIzq = leftWallEff || !!(a.muroIzq && a.muroIzq.codigo);
     const tieneCierreDer = rightWallEff || !!(a.muroDer && a.muroDer.codigo);
     const pilastras = CATALOGO.piezas.filter(p => p.familia === "PI");
-    const opts = pilastras.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,(activeAreaCfg()||{}).altoTouchless)})</option>`).join("");
+    const opts = pilastras.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("");
     let html = `<div style="grid-column: 1 / -1; margin-top: 14px; padding: 14px 16px; background: var(--bg-soft); border: 1px dashed var(--line); border-radius: 8px;">\n    <div style="font-weight: 700; color: var(--brand); margin-bottom: 10px; font-size: 13px;">Pilastras de cierre y extras</div>`;
     if (tieneCierreIzq || tieneCierreDer) {
         html += `<div style="display: flex; gap: 14px; margin-bottom: 14px; flex-wrap: wrap;">`;
@@ -5530,7 +5538,7 @@ function bindExtrasSection(cont, a) {
         const extrasList = cont.querySelector("#extras-list");
         if (!extrasList) return;
         const pilastras = CATALOGO.piezas.filter(p => p.familia === "PI");
-        extrasList.innerHTML = (a.pilastrasExtras || []).map((ex, idx) => `\n      <div style="display: flex; gap: 6px; align-items: center;">\n        <select data-extra-idx="${idx}" data-extra-field="codigo" style="flex: 0 0 160px;">\n          <option value="">— Pieza —</option>\n          ${pilastras.map(p=>`<option value="${p.codigo}" ${ex.codigo===p.codigo?"selected":""}>${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,(activeAreaCfg()||{}).altoTouchless)})</option>`).join("")}\n        </select>\n        <input type="text" placeholder='Descripción (ej. "T entre damas y mingitorios" o "contra muro")' data-extra-idx="${idx}" data-extra-field="descripcion" value="${escapeHtml(ex.descripcion||"")}" style="flex: 1; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;">\n        <button class="icon-btn danger" data-remove-extra="${idx}" title="Eliminar">✕</button>\n      </div>`).join("");
+        extrasList.innerHTML = (a.pilastrasExtras || []).map((ex, idx) => `\n      <div style="display: flex; gap: 6px; align-items: center;">\n        <select data-extra-idx="${idx}" data-extra-field="codigo" style="flex: 0 0 160px;">\n          <option value="">— Pieza —</option>\n          ${pilastras.map(p=>`<option value="${p.codigo}" ${ex.codigo===p.codigo?"selected":""}>${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("")}\n        </select>\n        <input type="text" placeholder='Descripción (ej. "T entre damas y mingitorios" o "contra muro")' data-extra-idx="${idx}" data-extra-field="descripcion" value="${escapeHtml(ex.descripcion||"")}" style="flex: 1; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;">\n        <button class="icon-btn danger" data-remove-extra="${idx}" title="Eliminar">✕</button>\n      </div>`).join("");
         extrasList.querySelectorAll("[data-extra-idx]").forEach(el => {
             const fn = e => {
                 const i = +e.target.dataset.extraIdx;
@@ -5584,17 +5592,17 @@ function bindExtrasSection(cont, a) {
 }
 
 function renderPanelesExtrasSection() {
-    const panelesPN = CATALOGO.piezas.filter(p => p.familia === "PN" && piezaPermitidaPorModelo(p, cfg.modelo, (activeAreaCfg() || {}).altoTouchless));
-    const opts = panelesPN.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,(activeAreaCfg()||{}).altoTouchless)})</option>`).join("");
+    const panelesPN = CATALOGO.piezas.filter(p => p.familia === "PN" && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual()));
+    const opts = panelesPN.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("");
     return `<div style="grid-column: 1 / -1; margin-top: 14px; padding: 14px 16px; background: var(--bg-soft); border: 1px dashed var(--line); border-radius: 8px;">\n    <div style="font-weight: 700; color: var(--brand); margin-bottom: 10px; font-size: 13px;">Paneles adicionales (relleno de muro)</div>\n    <div class="form-help" style="margin-bottom: 8px;">\n      💡 Usá esta sección cuando tu pared sea más larga que las cabinas y haya que\n      <b>rellenar el espacio</b> entre la última pilastra y el muro con un panel suelto.\n    </div>\n    <div id="paneles-extras-list" style="display: flex; flex-direction: column; gap: 6px;"></div>\n    <div style="display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap;">\n      <button class="btn btn-secondary" type="button" data-action="add-panel-extra" style="padding: 6px 14px; font-size: 12px;">+ Agregar panel extra</button>\n      <button class="btn btn-ghost"     type="button" data-action="add-panel-relleno" style="padding: 6px 14px; font-size: 12px;">+ Panel relleno fin de pared</button>\n    </div>\n    </div>`
 }
 
 function bindPanelesExtrasSection(cont, a) {
-    const panelesPN = CATALOGO.piezas.filter(p => p.familia === "PN" && piezaPermitidaPorModelo(p, cfg.modelo, (activeAreaCfg() || {}).altoTouchless));
+    const panelesPN = CATALOGO.piezas.filter(p => p.familia === "PN" && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual()));
     const renderList = () => {
         const list = cont.querySelector("#paneles-extras-list");
         if (!list) return;
-        list.innerHTML = (a.panelesExtras || []).map((ex, idx) => `\n      <div style="display: flex; gap: 6px; align-items: center;">\n        <select data-pextra-idx="${idx}" data-pextra-field="codigo" style="flex: 0 0 160px;">\n          <option value="">— Pieza —</option>\n          ${panelesPN.map(p=>`<option value="${p.codigo}" ${ex.codigo===p.codigo?"selected":""}>${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,(activeAreaCfg()||{}).altoTouchless)})</option>`).join("")}\n        </select>\n        <input type="text" placeholder='Descripción (ej. "relleno fin de pared izquierda")' data-pextra-idx="${idx}" data-pextra-field="descripcion" value="${escapeHtml(ex.descripcion||"")}" style="flex: 1; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;">\n        <button class="icon-btn danger" data-remove-pextra="${idx}" title="Eliminar">✕</button>\n      </div>`).join("");
+        list.innerHTML = (a.panelesExtras || []).map((ex, idx) => `\n      <div style="display: flex; gap: 6px; align-items: center;">\n        <select data-pextra-idx="${idx}" data-pextra-field="codigo" style="flex: 0 0 160px;">\n          <option value="">— Pieza —</option>\n          ${panelesPN.map(p=>`<option value="${p.codigo}" ${ex.codigo===p.codigo?"selected":""}>${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("")}\n        </select>\n        <input type="text" placeholder='Descripción (ej. "relleno fin de pared izquierda")' data-pextra-idx="${idx}" data-pextra-field="descripcion" value="${escapeHtml(ex.descripcion||"")}" style="flex: 1; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;">\n        <button class="icon-btn danger" data-remove-pextra="${idx}" title="Eliminar">✕</button>\n      </div>`).join("");
         list.querySelectorAll("[data-pextra-idx]").forEach(el => {
             const fn = e => {
                 const i = +e.target.dataset.pextraIdx;
@@ -5692,8 +5700,8 @@ function sugerirModulacion({
             error: `Tenés ${nMingit} mingitorios + ${nAcc} accesible y solo ${N} cabinas — subí el número de cabinas`
         }
     }
-    const anchosPuerta = Array.from(new Set(CATALOGO.piezas.filter(p => p.familia === "PT" && !p.sufijo && piezaPermitidaPorModelo(p, cfg.modelo, (activeAreaCfg() || {}).altoTouchless)).map(p => p.ancho))).sort((a, b) => a - b);
-    const anchosPilastra = Array.from(new Set(CATALOGO.piezas.filter(p => p.familia === "PI" && !p.sufijo && piezaPermitidaPorModelo(p, cfg.modelo, (activeAreaCfg() || {}).altoTouchless)).map(p => p.ancho))).sort((a, b) => a - b);
+    const anchosPuerta = Array.from(new Set(CATALOGO.piezas.filter(p => p.familia === "PT" && !p.sufijo && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual())).map(p => p.ancho))).sort((a, b) => a - b);
+    const anchosPilastra = Array.from(new Set(CATALOGO.piezas.filter(p => p.familia === "PI" && !p.sufijo && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual())).map(p => p.ancho))).sort((a, b) => a - b);
     const opcionesPuerta = puertaFija ? [puertaFija] : anchosPuerta.slice();
     const opcionesPuertaAcc = anchosPuerta.filter(a => a >= 85);
     const opcionesPilInt = anchosPilastra.filter(a => a >= 24);
@@ -6041,7 +6049,7 @@ function aplicarSugerencia(s) {
     const rightWallEff = cfg.invertir ? hasLeftWall : hasRightWall;
     const dimsLugar = typeof leerDimensionesLugar === "function" ? leerDimensionesLugar() : null;
     const profDisp = dimsLugar ? dimsLugar.paredOpuesta : null;
-    const panelCodeDefault = panelSugeridoSegunProfundidad(cfg.modelo, profDisp, (activeAreaCfg() || {}).altoTouchless);
+    const panelCodeDefault = panelSugeridoSegunProfundidad(cfg.modelo, profDisp, altoTouchlessActual());
     for (let i = 0; i < N; i++) {
         const esAcc = layout.acc && i === accCabinaIdx;
         const esMingit = i >= mingitDesde && i < mingitHasta && !esAcc;
@@ -6455,7 +6463,7 @@ async function guardarProyectoActual(descargar) {
         fecha: ahora.toISOString(),
         usuarioId: currentUser()?.id,
         creadoPor: currentUser()?.nombre || "",
-        altoTouchless: (activeAreaCfg() || {}).altoTouchless || 180,
+        altoTouchless: altoTouchlessActual() || 180,
         areas: cfg.areas.slice(),
         layout: layoutsUsados.join(", ") || cfg.layout || "L",
         invertir: cfg.invertir,
