@@ -1682,6 +1682,20 @@ const CATALOGO = {
         tier: "linea",
         hex: "#C2A878",
         alias: ["1266"]
+    }, {
+        nombre: "ESMALTADA ANTIGRAFITI",
+        nombreViejo: "",
+        tier: "antigrafiti",
+        hex: "#3B3B3D",
+        lineas: ["Superior"],
+        alias: ["ANTIGRAFITI", "ESMALTADA ANTIGRAFITI"]
+    }, {
+        nombre: "ACERO INOXIDABLE",
+        nombreViejo: "",
+        tier: "aceroInox",
+        hex: "#C7CACE",
+        lineas: ["Superior"],
+        alias: ["ACERO INOX", "INOXIDABLE"]
     }],
     reglaAltura(modeloCodigo) {
         const a = this.alturasPorModelo[(modeloCodigo || "").toUpperCase()];
@@ -3229,6 +3243,17 @@ if (Array.isArray(db.catalogos.colores) && !db.catalogos.colores.every(c => c &&
     Store.save(db);
     console.log("[migración colores] reemplazados por el set de Línea con tier.")
 }
+if (Array.isArray(db.catalogos.colores)) {
+    let agregados = 0;
+    COLORES_SEED.filter(c => c && c.lineas).forEach(seed => {
+        const existe = db.catalogos.colores.some(c => (c.nombre || "").toUpperCase() === (seed.nombre || "").toUpperCase());
+        if (!existe) {
+            db.catalogos.colores.push(JSON.parse(JSON.stringify(seed)));
+            agregados++
+        }
+    });
+    if (agregados) Store.save(db)
+}
 Object.values(db.catalogos.alturasPorModelo || {}).forEach(a => {
     if (a && a.pilastra == null && a.pilastraZoclo != null) {
         a.pilastra = a.pilastraZoclo
@@ -3917,13 +3942,23 @@ function fillSelect(id, items) {
     }).join("")
 }
 
+function etiquetaTier(tier) {
+    return {
+        linea: "Línea",
+        especiales: "Especial",
+        aceroInox: "Acero Inox",
+        antigrafiti: "Antigrafiti"
+    }[tier] || "Especial"
+}
+
 function poblarColoresDatalist() {
     const sel = document.getElementById("cfg-color-sel");
     if (!sel) return;
-    const opts = (CATALOGO.colores || []).map(c => {
+    const lineaAct = (cfg.linea || "").toUpperCase();
+    const cols = (CATALOGO.colores || []).filter(c => !c.lineas || c.lineas.some(l => String(l).toUpperCase() === lineaAct));
+    const opts = cols.map(c => {
         const label = c.nombreViejo ? `${c.nombre} (${c.nombreViejo})` : c.nombre;
-        const tier = c.tier === "linea" ? "Línea" : "Especial";
-        return `<option value="${escapeHtml(c.nombre)}">${escapeHtml(label)} — ${tier}</option>`
+        return `<option value="${escapeHtml(c.nombre)}">${escapeHtml(label)} — ${etiquetaTier(c.tier)}</option>`
     }).join("");
     sel.innerHTML = `<option value="">— Elegir color —</option>` + opts + `<option value="__ESPECIAL__">Especial (escribir…)</option>`;
     sincronizarColorUI()
@@ -3964,7 +3999,13 @@ function actualizarIndicadorTierColor() {
         span.textContent = "";
         return
     }
-    span.textContent = tierDeColor(val) === "linea" ? "· Línea (en stock)" : "· Especial (bajo pedido)"
+    const t = tierDeColor(val);
+    span.textContent = {
+        linea: "· Línea (en stock)",
+        especiales: "· Especial (bajo pedido)",
+        aceroInox: "· Acero Inoxidable",
+        antigrafiti: "· Esmaltada Antigrafiti"
+    }[t] || "· Especial (bajo pedido)"
 }
 
 function fillModelosPorLinea(linea) {
@@ -4151,6 +4192,7 @@ function bindCfg() {
         fillModelosPorLinea(cfg.linea);
         actualizarBotonSugerirSegunLinea();
         if (typeof actualizarInputTouchless === "function") actualizarInputTouchless();
+        poblarColoresDatalist();
         if (typeof recalcularSugerencia === "function") recalcularSugerencia()
     };
     $("cfg-modelo").onchange = e => {
