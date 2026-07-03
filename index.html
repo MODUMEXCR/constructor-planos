@@ -1084,17 +1084,22 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
               <label class="form-label">Distribuidor <span style="color: var(--text-mute); font-weight: 400;">(opcional)</span></label>
               <select class="form-select" id="cfg-distribuidor"></select>
             </div>
-            <div class="form-row">
-              <label class="form-label">Ubicación · País</label>
-              <select class="form-select" id="cfg-ubic-pais"></select>
-            </div>
-            <div class="form-row">
-              <label class="form-label">Ubicación · Región / Zona</label>
-              <input type="text" class="form-input" id="cfg-ubic-region" placeholder="ej. San José, CDMX, Guanacaste">
-            </div>
-            <div class="form-row">
-              <label class="form-label">Ubicación · Dirección</label>
-              <input type="text" class="form-input" id="cfg-ubic-direccion" placeholder="Calle, número, referencia">
+            <div class="form-row full">
+              <label class="form-label">Ubicación del proyecto</label>
+              <div style="display:flex; gap:12px; align-items:flex-start;">
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:6px;">
+                  <label class="form-label" style="font-size:12px;">País</label>
+                  <select class="form-select" id="cfg-ubic-pais"></select>
+                </div>
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:6px;">
+                  <label class="form-label" style="font-size:12px;">Región / Zona</label>
+                  <input type="text" class="form-input" id="cfg-ubic-region" placeholder="ej. San José, CDMX, Guanacaste">
+                </div>
+                <div style="flex:1; min-width:0; display:flex; flex-direction:column; gap:6px;">
+                  <label class="form-label" style="font-size:12px;">Dirección</label>
+                  <input type="text" class="form-input" id="cfg-ubic-direccion" placeholder="Calle, número, referencia">
+                </div>
+              </div>
             </div>
             <div class="form-row">
               <label class="form-label">KAP (abre puerta de pie)</label>
