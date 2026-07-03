@@ -5042,7 +5042,10 @@ function buildBathroomSvg() {
                 if (panelExtraPx > .5) {
                     svg += `<rect x="${divX-3}" y="${floor}" width="6" height="${panelExtraPx}" fill="#0a1f3d"/>`
                 }
+                const frenteExtraIdx = (areaCfg.pilastrasExtras || []).findIndex(ex => (ex.descripcion || "").toLowerCase().includes("frente del cuarto pmr"));
+                if (frenteExtraIdx >= 0) svg += `<g data-piece="extra-${frenteExtraIdx}">`;
                 svg += `<rect x="${divX-2}" y="${yDoorBot}" width="4" height="${frentePx}" fill="#0a1f3d"/>`;
+                if (frenteExtraIdx >= 0) svg += `</g>`;
                 const apertV = aperturas[i] || "DER_EXT";
                 const [ladoP, sentP] = apertV.split("_");
                 const hingeTop = ladoP !== "IZQ";
@@ -5217,7 +5220,7 @@ function buildBathroomSvg() {
             if (!pieza) return;
             const panelALaDer = accCabinaIdx === 0;
             const panelLineX = panelALaDer ? divCxDes !== null ? divCxDes - divHalfDes : accCabX0 + accCabW : divCxAnt !== null ? divCxAnt + divHalfAnt : accCabX0;
-            const cosW = pieza.ancho * scale;
+            const cosW = pieza.ancho * scale / 2;
             const barH = 4;
             const gapPx = Math.max(1.5, 1 * scale);
             const yBar = floor - 5 - (k + 1) * (gapPx + barH);
@@ -8044,7 +8047,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 if (!pieza) return;
                 const panelALaDer = !areaInvertir;
                 const panelLineX = panelALaDer ? divPxDes !== null ? divPxDes - divHalfDes : xpos + cabW : divPxAnt !== null ? divPxAnt + divHalfAnt : xpos;
-                const cosW = pieza.ancho * scale;
+                const cosW = pieza.ancho * scale / 2;
                 const barH = 2;
                 const gapMm = Math.max(.8, 1 * scale);
                 const yBar = floorY - 2 - gapMm - barH - k * (barH + gapMm);
