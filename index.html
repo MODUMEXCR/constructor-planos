@@ -4489,9 +4489,6 @@ function layoutIconSvg(l) {
         if (l.codigo === "P+") {
             walls += `<line x1="${xL}" y1="${top}" x2="${xL}" y2="${bot}" stroke="#0a1f3d" stroke-width="1.6"/>`;
             walls += `<line x1="${xR}" y1="${top}" x2="${xR}" y2="${bot}" stroke="#0a1f3d" stroke-width="1.6"/>`
-        } else {
-            walls += `<rect x="${xL}" y="${top+2}" width="3.5" height="${bot-top-2}" fill="#0a1f3d"/>`;
-            walls += `<rect x="${xR-4}" y="${top+2}" width="3.5" height="${bot-top-2}" fill="#0a1f3d"/>`
         }
         const xDiv = xL + (xR - xL) * .45;
         walls += `<rect x="${xDiv-1.5}" y="${top}" width="3" height="${bot-top}" fill="#0a1f3d"/>`;
