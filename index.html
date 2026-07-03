@@ -1115,6 +1115,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
                 <option value="1">Sí</option>
               </select>
             </div>
+            <div class="form-row" id="cfg-nmingit-row" style="display:none;">
+              <label class="form-label">¿Cuántos mingitorios?</label>
+              <input type="number" class="form-input" id="cfg-n-mingitorios" min="0" value="0">
+              <div class="form-help" style="margin-top:4px; font-size:11px;">La app los acomoda solos, juntos a un extremo. Podés afinar cabina por cabina abajo en el previsualizador.</div>
+            </div>
             <div class="form-row" id="cfg-curva-row" style="display:none;">
               <label class="form-label">Curva de mingitorio</label>
               <select class="form-select" id="cfg-curva-mingit">
@@ -4256,7 +4261,13 @@ function bindCfg() {
     };
     $("cfg-mingitorios").onchange = e => {
         cfg.mingitorios = +e.target.value;
+        if (cfg.mingitorios !== 1 && typeof aplicarNMingitorios === "function") aplicarNMingitorios(0);
         if (typeof actualizarCurvaMingit === "function") actualizarCurvaMingit()
+    };
+    const inpNMingit = document.getElementById("cfg-n-mingitorios");
+    if (inpNMingit) inpNMingit.onchange = () => {
+        const n = aplicarNMingitorios(inpNMingit.value);
+        inpNMingit.value = n != null ? n : 0
     };
     const selCurvaMingit = document.getElementById("cfg-curva-mingit");
     if (selCurvaMingit) selCurvaMingit.onchange = e => {
@@ -4306,11 +4317,66 @@ function updateAltura() {
 function actualizarCurvaMingit() {
     const row = document.getElementById("cfg-curva-row");
     const sel = document.getElementById("cfg-curva-mingit");
-    if (!row || !sel) return;
     const on = +((document.getElementById("cfg-mingitorios") || {}).value || 0) === 1;
-    row.style.display = on ? "" : "none";
     const a = (typeof activeAreaCfg === "function") ? activeAreaCfg() : null;
+    const nmRow = document.getElementById("cfg-nmingit-row");
+    const nmInp = document.getElementById("cfg-n-mingitorios");
+    if (nmRow) nmRow.style.display = on ? "" : "none";
+    if (nmInp && a) {
+        const cont = (a.tiposCabina || []).filter(t => t === "Mingitorio").length;
+        nmInp.value = on ? cont : 0
+    }
+    if (!row || !sel) return;
+    row.style.display = on ? "" : "none";
     if (a) sel.value = a.curvaMingitorio || "No tiene"
+}
+
+function colocarMingitorios(a, n) {
+    if (!a) return;
+    const N = cfg.cabinas;
+    const layout = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
+    const accIdx = cfg.invertir ? N - 1 : 0;
+    a.tiposCabina = a.tiposCabina || [];
+    for (let i = 0; i < N; i++) a.tiposCabina[i] = "Baño";
+    const mingitAlFinal = !cfg.invertir;
+    let puestos = 0;
+    for (let k = 0; k < N && puestos < n; k++) {
+        const i = mingitAlFinal ? N - 1 - k : k;
+        if (layout.acc && i === accIdx) continue;
+        a.tiposCabina[i] = "Mingitorio";
+        if (a.puertas) a.puertas[i] = "";
+        if (a.aperturas) a.aperturas[i] = "";
+        puestos++
+    }
+}
+
+function aplicarNMingitorios(n) {
+    const a = typeof activeAreaCfg === "function" ? activeAreaCfg() : null;
+    if (!a) return;
+    const N = cfg.cabinas;
+    const layout = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
+    const maxM = Math.max(0, N - (layout.acc ? 1 : 0));
+    n = Math.max(0, Math.min(parseInt(n, 10) || 0, maxM));
+    a.nMingitorios = n;
+    const info = typeof leerDimensionesLugar === "function" ? leerDimensionesLugar() : null;
+    const esLeeder = ["LEEDER", "SUPERIOR", "TOUCHLESS"].includes((cfg.linea || "").toUpperCase());
+    if (info && esLeeder && cfg.areaActivaIdx >= 0 && !layout.pmrCuarto) {
+        const sug = sugerirModulacion({
+            claro: info.paredCabinas,
+            N: N,
+            layoutCodigo: cfg.layout,
+            nMingit: n
+        });
+        if (sug && !sug.error) {
+            aplicarSugerencia(sug);
+            return n
+        }
+    }
+    colocarMingitorios(a, n);
+    if (typeof renderPreviewControls === "function") renderPreviewControls(activeTab);
+    if (typeof recalcularSugerencia === "function") recalcularSugerencia();
+    if (typeof redrawCanvasOnly === "function") redrawCanvasOnly();
+    return n
 }
 
 function renderAreaList() {
@@ -4355,7 +4421,8 @@ function makeDefaultAreaCfg() {
         anchoAccesible: 150,
         altoTouchless: 180,
         centrosDescarga: [],
-        curvaMingitorio: "No tiene"
+        curvaMingitorio: "No tiene",
+        nMingitorios: 0
     }
 }
 
@@ -5366,7 +5433,7 @@ function renderPreviewControls(tab) {
             const sufijo = bloqInt ? " (panel <135: no permitido)" : "";
             html += `\n        <label>\n          <span>Apertura C${i+1}</span>\n          <select data-tab="apertura" data-idx="${i}">\n            <option value="">— Elegir —</option>\n            <option value="IZQ_EXT">Izquierda · abre exterior</option>\n            <option value="IZQ_INT"${dis}>Izquierda · abre interior${sufijo}</option>\n            <option value="DER_EXT">Derecha · abre exterior</option>\n            <option value="DER_INT"${dis}>Derecha · abre interior${sufijo}</option>\n          </select>\n          ${bloqInt?'<div class="form-help" style="font-size:10px; color:#b45309; margin-top:2px;">Panel &lt;135 cm: la puerta solo abre hacia afuera.</div>':""}\n        </label>`
         }
-        if (tab === "paneles") {
+        if (tab === "paneles" && +cfg.mingitorios === 1) {
             html += `\n        <label>\n          <span>Tipo C${i+1}</span>\n          <select data-tab="tipo" data-idx="${i}">\n            <option value="Baño">Baño</option>\n            <option value="Mingitorio">Mingitorio</option>\n          </select>\n        </label>`
         }
     } {
@@ -5429,6 +5496,8 @@ function renderPreviewControls(tab) {
             if (tt === "panelCierreIzq") a.panelCierreIzq = v;
             if (tt === "curvaMingitorio") a.curvaMingitorio = v;
             if (tt === "tipo") {
+                a.nMingitorios = (a.tiposCabina || []).filter(t => t === "Mingitorio").length;
+                if (typeof actualizarCurvaMingit === "function") actualizarCurvaMingit();
                 renderPreviewControls(activeTab);
                 const infoT = typeof leerDimensionesLugar === "function" ? leerDimensionesLugar() : null;
                 const esLeederT = ["LEEDER", "SUPERIOR", "TOUCHLESS"].includes((cfg.linea || "").toUpperCase());
