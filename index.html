@@ -5480,9 +5480,6 @@ function renderPreviewControls(tab) {
             const sufijo = bloqInt ? " (panel <135: no permitido)" : "";
             html += `\n        <label>\n          <span>Apertura C${i+1}</span>\n          <select data-tab="apertura" data-idx="${i}">\n            <option value="">— Elegir —</option>\n            <option value="IZQ_EXT">Izquierda · abre exterior</option>\n            <option value="IZQ_INT"${dis}>Izquierda · abre interior${sufijo}</option>\n            <option value="DER_EXT">Derecha · abre exterior</option>\n            <option value="DER_INT"${dis}>Derecha · abre interior${sufijo}</option>\n          </select>\n          ${bloqInt?'<div class="form-help" style="font-size:10px; color:#b45309; margin-top:2px;">Panel &lt;135 cm: la puerta solo abre hacia afuera.</div>':""}\n        </label>`
         }
-        if (tab === "paneles" && +cfg.mingitorios === 1) {
-            html += `\n        <label>\n          <span>Tipo C${i+1}</span>\n          <select data-tab="tipo" data-idx="${i}">\n            <option value="Baño">Baño</option>\n            <option value="Mingitorio">Mingitorio</option>\n          </select>\n        </label>`
-        }
     } {
         const tcPrimera = (activeAreaCfg() || {}).tiposCabina || [];
         const primeraEsMingitPC = tcPrimera[0] === "Mingitorio";
@@ -5845,6 +5842,7 @@ function sugerirModulacion({
     const nEstandar = Math.max(0, N - nAcc - (nMingit || 0));
     const nPuertas = nEstandar + nAcc;
     const anchoMG = 60;
+    const grosorDivisoresMG = Math.max(0, (nMingit || 0) - 1) * 1.27;
     const isReforzado = cfg.modelo === "REFORZADO";
     const isImperial = cfg.modelo === "IMPERIAL";
     const sufR = isReforzado ? "R" : "";
@@ -5883,7 +5881,7 @@ function sugerirModulacion({
             for (const apI of nDiv > 0 ? opcionesPilInt : [0]) {
                 for (const apJ of opcionesPilEsq) {
                     for (const apE2 of opcionesPilEsq) {
-                        const total = nEst * ap + (nMingit || 0) * anchoMG + nDiv * apI + apJ + apE2;
+                        const total = nEst * ap + (nMingit || 0) * anchoMG + grosorDivisoresMG + nDiv * apI + apJ + apE2;
                         const diff = claroAjustadoH - total;
                         const score = Math.abs(diff) + (nEst > 0 ? Math.abs(ap - 60) * .05 : 0);
                         if (!bestP || score < bestP.score) bestP = {
@@ -6007,7 +6005,7 @@ function sugerirModulacion({
             for (const apRelleno of opcionesRelleno) {
                 for (const apI of opcionesPilInt) {
                     for (const [apE1, apE2] of combos) {
-                        const total = nEstandar * ap + nAcc * accAncho + (nMingit || 0) * anchoMG + nInternas * apI + apRelleno + apE1 + apE2;
+                        const total = nEstandar * ap + nAcc * accAncho + (nMingit || 0) * anchoMG + grosorDivisoresMG + nInternas * apI + apRelleno + apE1 + apE2;
                         const diff = claroAjustado - total;
                         const PT_PREF = 60;
                         const PT_PENALTY = .05;
