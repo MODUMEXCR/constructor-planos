@@ -1011,7 +1011,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           </div>
 
           <div class="form-row" style="margin-bottom:14px;">
-            <label class="form-label">Número de Cabinas (1 - 15)</label>
+            <label class="form-label">Número de cabinas · baños cerrados (1 - 15)</label>
             <div class="slider-row">
               <input type="range" id="cfg-cabinas" min="1" max="15" value="3">
               <span class="val" id="cfg-cabinas-val">3</span>
@@ -1116,9 +1116,18 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
               </select>
             </div>
             <div class="form-row" id="cfg-nmingit-row" style="display:none;">
-              <label class="form-label">¿Cuántos mingitorios?</label>
+              <label class="form-label">¿Cuántos mingitorios (orinales)?</label>
               <input type="number" class="form-input" id="cfg-n-mingitorios" min="0" value="0">
-              <div class="form-help" style="margin-top:4px; font-size:11px;">La app los acomoda solos, juntos a un extremo. Podés afinar cabina por cabina abajo en el previsualizador.</div>
+              <div class="form-help" style="margin-top:4px; font-size:11px;">Se suman aparte de las cabinas (baños). La app los acomoda solos a un extremo, 60 cm mínimo cada uno.</div>
+            </div>
+            <div class="form-row" id="cfg-mg-tipo-row" style="display:none;">
+              <label class="form-label">Tipo de mampara divisora (MG)</label>
+              <select class="form-select" id="cfg-mg-tipo">
+                <option value="MG60120">MG 60×120</option>
+                <option value="MG60150">MG 60×150</option>
+                <option value="MG45120">MG 45×120</option>
+              </select>
+              <div class="form-help" style="margin-top:4px; font-size:11px;">Va entre orinales (1 menos que la cantidad de orinales). Este tipo y su cantidad salen en la OC y el Excel.</div>
             </div>
             <div class="form-row" id="cfg-curva-row" style="display:none;">
               <label class="form-label">Curva de mingitorio</label>
@@ -4165,18 +4174,9 @@ function bindCfg() {
     $("cfg-nombre").oninput = e => cfg.nombre = e.target.value.trim();
     $("cfg-cabinas").oninput = e => {
         const a = activeAreaCfg();
-        const prevCabinas = a ? a.cabinas || 3 : cfg.cabinas;
-        const nuevasCabinas = parseInt(e.target.value, 10);
-        if (a) a.cabinas = nuevasCabinas;
-        cfg.cabinas = nuevasCabinas;
-        $("cfg-cabinas-val").textContent = nuevasCabinas;
-        if (nuevasCabinas > prevCabinas && cfg.areaActivaIdx >= 0) {
-            propagarCabinaUltima(prevCabinas, nuevasCabinas)
-        }
-        rebuildCfgForActiveArea();
-        renderPreview();
-        if (typeof renderPreviewControls === "function") renderPreviewControls(activeTab);
-        recalcularSugerencia()
+        const orinales = a ? a.nMingitorios || 0 : 0;
+        $("cfg-cabinas-val").textContent = parseInt(e.target.value, 10);
+        recomputarCabinas(parseInt(e.target.value, 10), orinales)
     };
     $("cfg-largo").oninput = e => {
         const a = activeAreaCfg();
@@ -4269,6 +4269,18 @@ function bindCfg() {
         const n = aplicarNMingitorios(inpNMingit.value);
         inpNMingit.value = n != null ? n : 0
     };
+    const selMgTipo = document.getElementById("cfg-mg-tipo");
+    if (selMgTipo) selMgTipo.onchange = () => {
+        const a = activeAreaCfg();
+        if (!a) return;
+        a.mgTipo = selMgTipo.value;
+        (a.paneles || []).forEach((c, i) => {
+            if (c && String(c).indexOf("MG") === 0) a.paneles[i] = a.mgTipo
+        });
+        if (typeof renderPreview === "function") renderPreview();
+        if (typeof renderPreviewControls === "function") renderPreviewControls(activeTab);
+        if (typeof recalcularSugerencia === "function") recalcularSugerencia()
+    };
     const selCurvaMingit = document.getElementById("cfg-curva-mingit");
     if (selCurvaMingit) selCurvaMingit.onchange = e => {
         const a = activeAreaCfg();
@@ -4321,10 +4333,20 @@ function actualizarCurvaMingit() {
     const a = (typeof activeAreaCfg === "function") ? activeAreaCfg() : null;
     const nmRow = document.getElementById("cfg-nmingit-row");
     const nmInp = document.getElementById("cfg-n-mingitorios");
+    const mgRow = document.getElementById("cfg-mg-tipo-row");
+    const mgSel = document.getElementById("cfg-mg-tipo");
+    const contMing = a ? (a.tiposCabina || []).filter(t => t === "Mingitorio").length : 0;
+    if (a) a.nMingitorios = contMing;
     if (nmRow) nmRow.style.display = on ? "" : "none";
-    if (nmInp && a) {
-        const cont = (a.tiposCabina || []).filter(t => t === "Mingitorio").length;
-        nmInp.value = on ? cont : 0
+    if (nmInp) nmInp.value = on ? contMing : 0;
+    if (mgRow) mgRow.style.display = on ? "" : "none";
+    if (mgSel && a) mgSel.value = a.mgTipo || "MG60120";
+    if (a) {
+        const banos = Math.max(0, (a.cabinas || 0) - contMing);
+        const sl = document.getElementById("cfg-cabinas"),
+            slv = document.getElementById("cfg-cabinas-val");
+        if (sl) sl.value = banos;
+        if (slv) slv.textContent = banos
     }
     if (!row || !sel) return;
     row.style.display = on ? "" : "none";
@@ -4348,35 +4370,59 @@ function colocarMingitorios(a, n) {
         if (a.aperturas) a.aperturas[i] = "";
         puestos++
     }
+    a.paneles = a.paneles || [];
+    for (let i = 0; i < N; i++) {
+        if (a.tiposCabina[i] === "Mingitorio") {
+            const nextMing = a.tiposCabina[i + 1] === "Mingitorio";
+            a.paneles[i] = nextMing ? (a.mgTipo || "MG60120") : ""
+        }
+    }
 }
 
-function aplicarNMingitorios(n) {
+function recomputarCabinas(banos, orinales) {
     const a = typeof activeAreaCfg === "function" ? activeAreaCfg() : null;
     if (!a) return;
-    const N = cfg.cabinas;
+    banos = Math.max(1, parseInt(banos, 10) || 1);
+    orinales = Math.max(0, Math.min(parseInt(orinales, 10) || 0, 15));
+    const total = banos + orinales;
+    const prevTotal = cfg.cabinas;
+    a.cabinas = total;
+    cfg.cabinas = total;
+    a.nMingitorios = orinales;
+    const sl = document.getElementById("cfg-cabinas"),
+        slv = document.getElementById("cfg-cabinas-val");
+    if (sl) sl.value = banos;
+    if (slv) slv.textContent = banos;
     const layout = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
-    const maxM = Math.max(0, N - (layout.acc ? 1 : 0));
-    n = Math.max(0, Math.min(parseInt(n, 10) || 0, maxM));
-    a.nMingitorios = n;
     const info = typeof leerDimensionesLugar === "function" ? leerDimensionesLugar() : null;
     const esLeeder = ["LEEDER", "SUPERIOR", "TOUCHLESS"].includes((cfg.linea || "").toUpperCase());
     if (info && esLeeder && cfg.areaActivaIdx >= 0 && !layout.pmrCuarto) {
         const sug = sugerirModulacion({
             claro: info.paredCabinas,
-            N: N,
+            N: total,
             layoutCodigo: cfg.layout,
-            nMingit: n
+            nMingit: orinales
         });
         if (sug && !sug.error) {
             aplicarSugerencia(sug);
-            return n
+            if (typeof actualizarCurvaMingit === "function") actualizarCurvaMingit();
+            return
         }
     }
-    colocarMingitorios(a, n);
+    if (total > prevTotal && cfg.areaActivaIdx >= 0 && typeof propagarCabinaUltima === "function") propagarCabinaUltima(prevTotal, total);
+    colocarMingitorios(a, orinales);
+    if (typeof renderPreview === "function") renderPreview();
     if (typeof renderPreviewControls === "function") renderPreviewControls(activeTab);
     if (typeof recalcularSugerencia === "function") recalcularSugerencia();
-    if (typeof redrawCanvasOnly === "function") redrawCanvasOnly();
-    return n
+    if (typeof actualizarCurvaMingit === "function") actualizarCurvaMingit()
+}
+
+function aplicarNMingitorios(n) {
+    const a = typeof activeAreaCfg === "function" ? activeAreaCfg() : null;
+    if (!a) return 0;
+    const banos = Math.max(1, (a.cabinas || 1) - (a.nMingitorios || 0));
+    recomputarCabinas(banos, n);
+    return (typeof activeAreaCfg === "function" ? activeAreaCfg() : {} || {}).nMingitorios || 0
 }
 
 function renderAreaList() {
@@ -4422,7 +4468,8 @@ function makeDefaultAreaCfg() {
         altoTouchless: 180,
         centrosDescarga: [],
         curvaMingitorio: "No tiene",
-        nMingitorios: 0
+        nMingitorios: 0,
+        mgTipo: "MG60120"
     }
 }
 
@@ -4827,7 +4874,7 @@ function buildBathroomSvg() {
             ancho: 0,
             lado: "izq",
             idxCab: 0,
-            mgCode: (areaCfg.paneles || [])[0] || "MG60150"
+            mgCode: (areaCfg.paneles || [])[0] || areaCfg.mgTipo || "MG60150"
         })
     }
     for (let i = 0; i < N; i++) {
@@ -4837,7 +4884,7 @@ function buildBathroomSvg() {
         const panelCode = (areaCfg.paneles || [])[i];
         const pilCode = (areaCfg.pilastras || [])[i];
         if (tipoCab === "Mingitorio") {
-            const mgCode = panelCode || "MG60150";
+            const mgCode = panelCode || areaCfg.mgTipo || "MG60150";
             const mgPieza = CATALOGO.piezas.find(p => p.codigo === mgCode);
             const anchoSlot = areaCfg.mingitAncho && areaCfg.mingitAncho > 60 ? areaCfg.mingitAncho : mgPieza ? mgPieza.ancho : 60;
             seq.push({
@@ -4879,7 +4926,7 @@ function buildBathroomSvg() {
                 codigo: pilCode || "",
                 ancho: pilPieza ? pilPieza.ancho : 0,
                 idxSlot: i,
-                mgCode: ambosMingit ? (areaCfg.paneles || [])[i] || (areaCfg.paneles || [])[i + 1] || "MG60150" : null
+                mgCode: ambosMingit ? (areaCfg.paneles || [])[i] || (areaCfg.paneles || [])[i + 1] || areaCfg.mgTipo || "MG60150" : null
             })
         }
     }
@@ -4922,7 +4969,7 @@ function buildBathroomSvg() {
             ancho: 0,
             lado: "der",
             idxCab: N - 1,
-            mgCode: (areaCfg.paneles || [])[N - 1] || "MG60150"
+            mgCode: (areaCfg.paneles || [])[N - 1] || areaCfg.mgTipo || "MG60150"
         })
     } {
         const urinalEls = seq.filter(s => s.tipo === "mingitorio");
@@ -6165,7 +6212,7 @@ function aplicarSugerencia(s) {
         a.tiposCabina[i] = esMingit ? "Mingitorio" : "Baño";
         if (esMingit) {
             a.puertas[i] = "";
-            a.paneles[i] = nextEsMingit ? "MG60150" : "";
+            a.paneles[i] = nextEsMingit ? (a.mgTipo || "MG60120") : "";
             a.aperturas[i] = ""
         } else {
             a.puertas[i] = esAcc ? s.codPuertaAcc : s.codPuerta;
@@ -6498,17 +6545,6 @@ function piezasAgregadas() {
         (a.pilastrasExtras || []).forEach(ex => add(ex.codigo));
         (a.panelesExtras || []).forEach(ex => add(ex.codigo));
         (a.canaletas || []).forEach(c => add(c.codigo));
-        const layA = CATALOGO.layouts.find(l => l.codigo === (a.layout || cfg.layout)) || {
-            codigo: "L"
-        };
-        const hasLa = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layA.codigo);
-        const hasRa = ["U", "U+", "C", "I", "K", "P+"].includes(layA.codigo);
-        const invA = a.invertir !== undefined ? a.invertir : cfg.invertir;
-        const lWa = invA ? hasRa : hasLa,
-            rWa = invA ? hasLa : hasRa;
-        const tcA = a.tiposCabina || [];
-        if (tcA.length > 0 && !lWa && tcA[0] === "Mingitorio") add((a.paneles || [])[0] || "MG60150");
-        if (tcA.length > 0 && !rWa && tcA[tcA.length - 1] === "Mingitorio") add((a.paneles || [])[tcA.length - 1] || "MG60150")
     }
     return Object.values(acc).sort((x, y) => x.codigo.localeCompare(y.codigo))
 }
@@ -7390,7 +7426,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             tipo: "mamparaCierreMingit",
             lado: "izq",
             idxCab: 0,
-            mgCode: (areaCfg.paneles || [])[0] || "MG60150"
+            mgCode: (areaCfg.paneles || [])[0] || areaCfg.mgTipo || "MG60150"
         })
     }
     for (let i = 0; i < N; i++) {
@@ -7400,7 +7436,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         const panelCode = (areaCfg.paneles || [])[i];
         const pilCode = (areaCfg.pilastras || [])[i];
         if (tipoCab === "Mingitorio") {
-            const mgCode = panelCode || "MG60150";
+            const mgCode = panelCode || areaCfg.mgTipo || "MG60150";
             const anchoSlotPdf = areaCfg.mingitAncho && areaCfg.mingitAncho > 60 ? areaCfg.mingitAncho : null;
             seq.push({
                 tipo: "mingitorio",
@@ -7473,7 +7509,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             tipo: "mamparaCierreMingit",
             lado: "der",
             idxCab: N - 1,
-            mgCode: (areaCfg.paneles || [])[N - 1] || "MG60150"
+            mgCode: (areaCfg.paneles || [])[N - 1] || areaCfg.mgTipo || "MG60150"
         })
     }
     const accLayoutW = ["L+", "U+", "E+", "C"].includes(layoutCodigo);
