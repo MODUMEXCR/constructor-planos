@@ -1596,8 +1596,8 @@ const CATALOGO = {
         },
         SCUDO: {
             puerta: 200,
-            panel: 210,
-            pilastra: 210,
+            panel: 240,
+            pilastra: 240,
             mingitorio: 120
         },
         KIDS: {
@@ -3199,8 +3199,8 @@ CATALOGO.piezas = db.piezas;
         },
         SCUDO: {
             puerta: 200,
-            panel: 210,
-            pilastra: 210,
+            panel: 240,
+            pilastra: 240,
             mingitorio: 120
         }
     };
@@ -7113,8 +7113,8 @@ function exportarPDF(proyecto) {
     doc.setFontSize(8);
     doc.setTextColor(10, 31, 61);
     const rotLines = [
-        ["EXPEDIENTE:", proyecto.codigo + " — " + proyecto.nombre],
-        ["OBRA:", "MAMPARAS SANITARIAS"],
+        ["EXPEDIENTE:", proyecto.codigo || "—"],
+        ["OBRA:", proyecto.nombre || "—"],
         ["UBICACIÓN OBRA:", ubicacionProyecto(proyecto)],
         ["FECHA:", new Date(proyecto.fecha).toLocaleDateString("es-ES")],
         ["REVISIÓN:", "00"],
