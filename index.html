@@ -1146,6 +1146,14 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
                 <option value="1">Sí</option>
               </select>
             </div>
+            <div class="form-row" id="cfg-regadera-row" style="display:none;">
+              <label class="form-label">Altura de las regaderas (cm)</label>
+              <select class="form-select" id="cfg-alto-regadera" style="width:120px;">
+                <option value="170">170 cm</option>
+                <option value="180" selected>180 cm</option>
+              </select>
+              <div class="form-help" style="margin-top:4px; font-size:11px;">Puertas y paneles de las regaderas se fabrican a esta altura (las pilastras siempre 180). Elegí cada cabina como Baño o Regadera abajo en el previsualizador.</div>
+            </div>
             <div class="form-row">
               <label class="form-label">Altura pilastra (calculada)</label>
               <input type="text" class="form-input" id="cfg-altura" readonly>
@@ -4287,7 +4295,25 @@ function bindCfg() {
         if (a) a.curvaMingitorio = e.target.value
     };
     $("cfg-regaderas").onchange = e => {
-        cfg.regaderas = +e.target.value
+        cfg.regaderas = +e.target.value;
+        const a = activeAreaCfg();
+        if (cfg.regaderas !== 1 && a) {
+            (a.tiposCabina || []).forEach((t, i) => {
+                if (t === "Regadera") a.tiposCabina[i] = "Baño"
+            })
+        }
+        if (typeof actualizarInputRegadera === "function") actualizarInputRegadera();
+        if (typeof renderPreview === "function") renderPreview();
+        if (typeof renderPreviewControls === "function") renderPreviewControls(activeTab);
+        if (typeof recalcularSugerencia === "function") recalcularSugerencia()
+    };
+    const inpAltoReg = document.getElementById("cfg-alto-regadera");
+    if (inpAltoReg) inpAltoReg.onchange = () => {
+        const a = activeAreaCfg();
+        if (a) a.altoRegadera = parseInt(inpAltoReg.value, 10) || 180;
+        if (typeof renderPreview === "function") renderPreview();
+        if (typeof renderPreviewControls === "function") renderPreviewControls(activeTab);
+        if (typeof recalcularSugerencia === "function") recalcularSugerencia()
     };
     $("cfg-invertir").onchange = e => {
         const a = activeAreaCfg();
@@ -4351,6 +4377,15 @@ function actualizarCurvaMingit() {
     if (!row || !sel) return;
     row.style.display = on ? "" : "none";
     if (a) sel.value = a.curvaMingitorio || "No tiene"
+}
+
+function actualizarInputRegadera() {
+    const on = +((document.getElementById("cfg-regaderas") || {}).value || 0) === 1;
+    const row = document.getElementById("cfg-regadera-row");
+    const sel = document.getElementById("cfg-alto-regadera");
+    const a = (typeof activeAreaCfg === "function") ? activeAreaCfg() : null;
+    if (row) row.style.display = on ? "" : "none";
+    if (sel && a) sel.value = String(a.altoRegadera || 180)
 }
 
 function colocarMingitorios(a, n) {
@@ -4469,7 +4504,8 @@ function makeDefaultAreaCfg() {
         centrosDescarga: [],
         curvaMingitorio: "No tiene",
         nMingitorios: 0,
-        mgTipo: "MG60120"
+        mgTipo: "MG60120",
+        altoRegadera: 180
     }
 }
 
@@ -4508,6 +4544,7 @@ function activarArea(idx) {
     renderPreview();
     if (typeof renderPreviewControls === "function") renderPreviewControls(activeTab);
     if (typeof actualizarCurvaMingit === "function") actualizarCurvaMingit();
+    if (typeof actualizarInputRegadera === "function") actualizarInputRegadera();
     recalcularSugerencia()
 }
 
@@ -5451,6 +5488,8 @@ function renderPreviewControls(tab) {
     let html = "";
     for (let i = 0; i < N; i++) {
         const esMingitorio = tiposCabActiva[i] === "Mingitorio";
+        const esRegaderaCab = tiposCabActiva[i] === "Regadera";
+        const _areaPC = activeAreaCfg() || {};
         if ((tab === "puertas" || tab === "pilastras") && esMingitorio) continue;
         let dropdownHtml;
         if (tab === "paneles" && esMingitorio) {
@@ -5458,10 +5497,18 @@ function renderPreviewControls(tab) {
             const optsPN = piezasFamilia2.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("");
             dropdownHtml = `\n        <label>\n          <span>Cabina ${i+1} · panel/mingitorio</span>\n          <select data-tab="${tab}" data-idx="${i}">\n            <option value="">— Elegir —</option>\n            <optgroup label="Panel mingitorio (entre 2 mingitorios)">${optsMG}</optgroup>\n            <optgroup label="Panel lateral (entre baño y mingitorio, o contra muro)">${optsPN}</optgroup>\n          </select>\n        </label>`
         } else {
-            const piezasParaEste = piezasFamilia2;
-            const opt = p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`;
+            const altoPieza = fam => { const r = altoDeCabina(fam, _areaPC, i); return r != null ? r : alturaPiezaSegunModelo(fam, cfg.modelo, cfg.terminacion, altoTouchlessActual()); };
+            let piezasParaEste;
+            if (esRegaderaCab && tab === "puertas") {
+                piezasParaEste = CATALOGO.piezas.filter(p => p.familia === "PT" && p.sufijo === "A");
+            } else if (esRegaderaCab && tab === "paneles") {
+                piezasParaEste = piezasFamilia2.filter(p => p.ancho !== 165 && p.ancho !== 180);
+            } else {
+                piezasParaEste = piezasFamilia2;
+            }
+            const opt = p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${altoPieza(p.familia)})</option>`;
             let optionsHtml;
-            if (tab === "paneles" && cfg.modelo === "KIDS") {
+            if (tab === "paneles" && cfg.modelo === "KIDS" && !esRegaderaCab) {
                 const estandar = piezasParaEste.filter(p => p.ancho === 120 || p.ancho === 130);
                 const otras = piezasParaEste.filter(p => p.ancho !== 120 && p.ancho !== 130);
                 optionsHtml = `\n            <optgroup label="Estándar Kids">${estandar.map(opt).join("")}</optgroup>\n            ${otras.length?`<optgroup label="Otras medidas">${otras.map(opt).join("")}</optgroup>`:""}`
@@ -5479,6 +5526,9 @@ function renderPreviewControls(tab) {
             const dis = bloqInt ? " disabled" : "";
             const sufijo = bloqInt ? " (panel <135: no permitido)" : "";
             html += `\n        <label>\n          <span>Apertura C${i+1}</span>\n          <select data-tab="apertura" data-idx="${i}">\n            <option value="">— Elegir —</option>\n            <option value="IZQ_EXT">Izquierda · abre exterior</option>\n            <option value="IZQ_INT"${dis}>Izquierda · abre interior${sufijo}</option>\n            <option value="DER_EXT">Derecha · abre exterior</option>\n            <option value="DER_INT"${dis}>Derecha · abre interior${sufijo}</option>\n          </select>\n          ${bloqInt?'<div class="form-help" style="font-size:10px; color:#b45309; margin-top:2px;">Panel &lt;135 cm: la puerta solo abre hacia afuera.</div>':""}\n        </label>`
+        }
+        if (tab === "paneles" && +cfg.regaderas === 1 && !esMingitorio) {
+            html += `\n        <label>\n          <span>Tipo C${i+1}</span>\n          <select data-tab="tipo" data-idx="${i}">\n            <option value="Baño">Baño</option>\n            <option value="Regadera">Regadera</option>\n          </select>\n        </label>`
         }
     } {
         const tcPrimera = (activeAreaCfg() || {}).tiposCabina || [];
@@ -5515,7 +5565,7 @@ function renderPreviewControls(tab) {
             const apertura = a.aperturas[idx] || ((a.bisagras || [])[idx] ? a.bisagras[idx] + "_EXT" : "");
             s.value = apertura
         }
-        if (t === "tipo") s.value = (a.tiposCabina[idx] || "") === "Mingitorio" ? "Mingitorio" : "Baño";
+        if (t === "tipo") { const tc = a.tiposCabina[idx] || ""; s.value = tc === "Mingitorio" ? "Mingitorio" : tc === "Regadera" ? "Regadera" : "Baño"; }
         if (t === "muroIzq") s.value = a.muroIzq && a.muroIzq.codigo || "";
         if (t === "muroDer") s.value = a.muroDer && a.muroDer.codigo || "";
         if (t === "panelCierreIzq") s.value = a.panelCierreIzq || "";
@@ -5818,6 +5868,26 @@ function alturaPiezaSegunModelo(familia, modeloCodigo, terminacionCodigo, altoTo
         default:
             return 150
     }
+}
+
+function altoDeCabina(familia, area, i) {
+    if (!area) return null;
+    const tc = area.tiposCabina || [];
+    const f = (familia || "").toUpperCase();
+    const regaderaAqui = tc[i] === "Regadera";
+    const vecinoRegadera = f === "PN" && tc[i + 1] === "Regadera";
+    if (regaderaAqui || vecinoRegadera) {
+        return (f === "PI" || f === "CN") ? 180 : (area.altoRegadera || 180)
+    }
+    return null
+}
+
+function puertaRegaderaDe(cod) {
+    const pz = CATALOGO.piezas.find(p => p.codigo === cod);
+    const w = pz ? pz.ancho : 60;
+    const regs = CATALOGO.piezas.filter(p => p.familia === "PT" && p.sufijo === "A").map(p => p.ancho).sort((a, b) => a - b);
+    const fit = regs.filter(x => x <= w).pop() || regs[0] || 60;
+    return "PT" + fit + "A"
 }
 
 function sugerirModulacion({
@@ -6185,6 +6255,7 @@ function aplicarSugerencia(s) {
     const layout = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || CATALOGO.layouts[0];
     const N = cfg.cabinas;
     const accCabinaIdx = cfg.invertir ? N - 1 : 0;
+    const regaderasPrev = new Set((a.tiposCabina || []).map((t, i) => t === "Regadera" ? i : -1).filter(i => i >= 0));
     a.puertas = [];
     a.paneles = [];
     a.pilastras = [];
@@ -6204,16 +6275,17 @@ function aplicarSugerencia(s) {
     for (let i = 0; i < N; i++) {
         const esAcc = layout.acc && i === accCabinaIdx;
         const esMingit = i >= mingitDesde && i < mingitHasta && !esAcc;
+        const esRegadera = regaderasPrev.has(i) && !esMingit && !esAcc;
         const nextEsMingit = i + 1 < N && (i + 1 >= mingitDesde && i + 1 < mingitHasta) && !(layout.acc && i + 1 === accCabinaIdx);
         const esExtremoMuroIzq = i === 0 && leftWallEff;
         const esExtremoMuroDer = i === N - 1 && rightWallEff;
-        a.tiposCabina[i] = esMingit ? "Mingitorio" : "Baño";
+        a.tiposCabina[i] = esMingit ? "Mingitorio" : esRegadera ? "Regadera" : "Baño";
         if (esMingit) {
             a.puertas[i] = "";
             a.paneles[i] = nextEsMingit ? (a.mgTipo || "MG60120") : "";
             a.aperturas[i] = ""
         } else {
-            a.puertas[i] = esAcc ? s.codPuertaAcc : s.codPuerta;
+            a.puertas[i] = esRegadera ? puertaRegaderaDe(esAcc ? s.codPuertaAcc : s.codPuerta) : (esAcc ? s.codPuertaAcc : s.codPuerta);
             a.paneles[i] = esExtremoMuroDer ? "" : panelCodeDefault;
             const lado = cfg.invertir ? "DER" : "IZQ";
             const debeBarrerInterior = esAcc && (lado === "IZQ" && esExtremoMuroDer || lado === "DER" && esExtremoMuroIzq);
@@ -6522,21 +6594,28 @@ function recalcularSugerencia() {
 
 function piezasAgregadas() {
     const acc = {};
-    const add = codigo => {
+    const add = (codigo, alto) => {
         if (!codigo) return;
         const p = CATALOGO.piezas.find(x => x.codigo === codigo);
         if (!p) return;
-        acc[codigo] = acc[codigo] || {
+        const alt = alto != null ? alto : p.alto;
+        const k = codigo + "|" + alt;
+        acc[k] = acc[k] || {
             ...p,
+            alto: alt,
             cantidad: 0
         };
-        acc[codigo].cantidad += 1
+        acc[k].cantidad += 1
     };
     for (const areaName of cfg.areas) {
         const a = cfg.configByArea[areaName] || {};
-        (a.paneles || []).forEach(add);
-        (a.puertas || []).forEach(add);
-        (a.pilastras || []).forEach(add);
+        const altoDe = (fam, i) => {
+            const r = altoDeCabina(fam, a, i);
+            return r != null ? r : alturaPiezaSegunModelo(fam, cfg.modelo, cfg.terminacion, a.altoTouchless != null ? a.altoTouchless : altoTouchlessActual())
+        };
+        (a.paneles || []).forEach((c, i) => add(c, altoDe("PN", i)));
+        (a.puertas || []).forEach((c, i) => add(c, altoDe("PT", i)));
+        (a.pilastras || []).forEach((c, i) => add(c, altoDe("PI", i)));
         if (a.muroIzq && a.muroIzq.codigo) add(a.muroIzq.codigo);
         if (a.muroDer && a.muroDer.codigo) add(a.muroDer.codigo);
         if (a.panelCierreIzq) add(a.panelCierreIzq);
@@ -6681,9 +6760,9 @@ function familiaSkuModumex(familia) {
     return familia === "PI" ? "PL" : familia
 }
 
-function generarSkuLargo(pieza, proyecto) {
+function generarSkuLargo(pieza, proyecto, altoOverride) {
     const familiaSku = familiaSkuModumex(pieza.familia);
-    const altoEfectivo = alturaPiezaSegunModelo(pieza.familia, proyecto.modelo, proyecto.terminacion, proyecto.altoTouchless);
+    const altoEfectivo = altoOverride != null ? altoOverride : alturaPiezaSegunModelo(pieza.familia, proyecto.modelo, proyecto.terminacion, proyecto.altoTouchless);
     const colorShort = colorAbreviadoModumex(proyecto.color);
     const sistemaCode = proyecto.terminacion === "PATAS" ? "P" : "Z";
     return `LM1LCRF${familiaSku}${pieza.ancho}${altoEfectivo}${colorShort}${sistemaCode}`
@@ -6767,8 +6846,8 @@ function exportarCSV(proyecto) {
     const kap = proyecto.kap ? "SI" : "NO";
     const color = proyecto.color || "Fashion White";
     const grupos = {};
-    const agregar = (pieza, subTipo, areaName) => {
-        const sku = generarSkuLargo(pieza, proyecto);
+    const agregar = (pieza, subTipo, areaName, altoOverride) => {
+        const sku = generarSkuLargo(pieza, proyecto, altoOverride);
         const key = `${sku}|${subTipo}|${areaName}`;
         grupos[key] = grupos[key] || {
             sku: sku,
@@ -6800,19 +6879,19 @@ function exportarCSV(proyecto) {
                 const c = (areaCfg.puertas || [])[i];
                 if (c) {
                     const p = CATALOGO.piezas.find(x => x.codigo === c);
-                    if (p) agregar(p, determinarSubTipoModumex(p, ctx), areaName)
+                    if (p) agregar(p, determinarSubTipoModumex(p, ctx), areaName, altoDeCabina(p.familia, areaCfg, i))
                 }
             }
             const cp = (areaCfg.paneles || [])[i];
             if (cp) {
                 const p = CATALOGO.piezas.find(x => x.codigo === cp);
-                if (p) agregar(p, determinarSubTipoModumex(p, ctx), areaName)
+                if (p) agregar(p, determinarSubTipoModumex(p, ctx), areaName, altoDeCabina(p.familia, areaCfg, i))
             }
             if (tipoCab !== "Mingitorio") {
                 const cpi = (areaCfg.pilastras || [])[i];
                 if (cpi) {
                     const p = CATALOGO.piezas.find(x => x.codigo === cpi);
-                    if (p) agregar(p, determinarSubTipoModumex(p, ctx), areaName)
+                    if (p) agregar(p, determinarSubTipoModumex(p, ctx), areaName, altoDeCabina(p.familia, areaCfg, i))
                 }
             }
         }
@@ -7084,16 +7163,18 @@ function drawCuadroCantidades(doc, proyecto) {
         const a = (proyecto.configByArea || {})[areaName] || {};
         const N = a.cabinas !== undefined ? a.cabinas : proyecto.cabinas || 0;
         const buf = {};
-        const acc = codigo => {
+        const acc = (codigo, i) => {
             if (!codigo) return;
             const p = CATALOGO.piezas.find(x => x.codigo === codigo);
             if (!p) return;
-            const k = p.codigo;
+            const altoR = altoDeCabina(p.familia, a, i);
+            const alto = altoR != null ? altoR : alturaPiezaSegunModelo(p.familia, proyecto.modelo, proyecto.terminacion, a.altoTouchless || proyecto.altoTouchless);
+            const k = p.codigo + "|" + alto;
             buf[k] = buf[k] || {
                 familia: p.familia,
                 codigo: p.codigo,
                 ancho: p.ancho,
-                alto: alturaPiezaSegunModelo(p.familia, proyecto.modelo, proyecto.terminacion, a.altoTouchless || proyecto.altoTouchless),
+                alto: alto,
                 cantidad: 0
             };
             buf[k].cantidad++
@@ -7101,10 +7182,10 @@ function drawCuadroCantidades(doc, proyecto) {
         for (let i = 0; i < N; i++) {
             const tipoCab = (a.tiposCabina || [])[i] || "Baño";
             if (tipoCab !== "Mingitorio") {
-                acc((a.puertas || [])[i]);
-                acc((a.pilastras || [])[i])
+                acc((a.puertas || [])[i], i);
+                acc((a.pilastras || [])[i], i)
             }
-            acc((a.paneles || [])[i])
+            acc((a.paneles || [])[i], i)
         }
         if (a.muroIzq && a.muroIzq.codigo) acc(a.muroIzq.codigo);
         if (a.muroDer && a.muroDer.codigo) acc(a.muroDer.codigo);
@@ -8353,7 +8434,7 @@ function anchoCobradoPuerta(ancho) {
 
 function calcularPrecioPieza(pieza, productoCodigo, terminacionCodigo, tier, moneda, tipoCambioColones, altoTouchless) {
     const modelo = CATALOGO.preciosPorM2[productoCodigo] || CATALOGO.preciosPorM2.ESTANDAR;
-    const altoDerivado = alturaPiezaSegunModelo(pieza.familia, productoCodigo, terminacionCodigo, altoTouchless);
+    const altoDerivado = pieza.alto != null ? pieza.alto : alturaPiezaSegunModelo(pieza.familia, productoCodigo, terminacionCodigo, altoTouchless);
     const anchoCobrado = pieza.familia === "PT" ? anchoCobradoPuerta(pieza.ancho) : pieza.ancho;
     const m2 = anchoCobrado * altoDerivado / 1e4;
     const fam = familiaTarifa(pieza.familia);
@@ -8410,7 +8491,7 @@ function cotizar(proyecto, opts) {
     const moneda = opts.moneda || "USD";
     const fx = moneda === "USD" || moneda === "CRC" ? 1 : parseFloat(opts.tipoCambio) || 1;
     const lineas = (proyecto.piezas || []).map(p => {
-        const altoEfectivo = alturaPiezaSegunModelo(p.familia, opts.producto, terminacion, proyecto.altoTouchless);
+        const altoEfectivo = p.alto != null ? p.alto : alturaPiezaSegunModelo(p.familia, opts.producto, terminacion, proyecto.altoTouchless);
         const m2Unit = p.ancho * altoEfectivo / 1e4;
         const precioU = calcularPrecioPieza(p, opts.producto, terminacion, tier, moneda, opts.tcColones, proyecto.altoTouchless) * fx;
         return {
