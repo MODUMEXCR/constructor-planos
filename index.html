@@ -5935,10 +5935,11 @@ function sugerirModulacion({
     }
     const anchosPuerta = Array.from(new Set(CATALOGO.piezas.filter(p => p.familia === "PT" && !p.sufijo && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual())).map(p => p.ancho))).sort((a, b) => a - b);
     const anchosPilastra = Array.from(new Set(CATALOGO.piezas.filter(p => p.familia === "PI" && !p.sufijo && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual())).map(p => p.ancho))).sort((a, b) => a - b);
+    const anchosPilastraModelo = isReforzado ? anchosPilastra.filter(a => CATALOGO.piezas.some(p => p.codigo === "PI" + a + "R")) : anchosPilastra;
     const opcionesPuerta = puertaFija ? [puertaFija] : anchosPuerta.slice();
     const opcionesPuertaAcc = anchosPuerta.filter(a => a >= 85);
-    const opcionesPilInt = anchosPilastra.filter(a => a >= 24);
-    const opcionesPilEsq = anchosPilastra.filter(a => a <= 24);
+    const opcionesPilInt = anchosPilastraModelo.filter(a => a >= 24);
+    const opcionesPilEsq = anchosPilastraModelo.filter(a => a <= 24);
     if (!opcionesPuerta.length) opcionesPuerta.push(60);
     if (!opcionesPilInt.length) opcionesPilInt.push(24);
     if (!opcionesPilEsq.length) opcionesPilEsq.push(15);
@@ -6974,6 +6975,16 @@ function exportarCSV(proyecto) {
     (proyecto.herrajesExtra || []).forEach(h => {
         lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell(h.codigo), h.cantidad || 1, csvCell("HERRAJE" + (h.linea ? "-" + h.linea : "")), "", csvCell("Herrajes extra"), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
     });
+    const refz = typeof refuerzosDeProyecto === "function" ? refuerzosDeProyecto(proyecto) : null;
+    if (refz) {
+        refz.porArea.forEach(r => {
+            Object.keys(r.cortes).sort((x, y) => +y - +x).forEach(t => {
+                lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("RF" + t), r.cortes[t], csvCell("REFUERZO"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
+            });
+            if (r.k62 > 0) lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("KE62"), r.k62, csvCell("REFUERZO-KIT"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","));
+            if (r.k65 > 0) lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("KE65"), r.k65, csvCell("REFUERZO-KIT"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
+        })
+    }
     const csv = lines.join("\n");
     const blob = new Blob([csv], {
         type: "text/csv;charset=utf-8;"
@@ -7146,6 +7157,132 @@ function exportarPDF(proyecto) {
     });
     drawCuadroCantidades(doc, proyecto);
     doc.save(`PLANOS_${proyecto.codigo}.pdf`)
+}
+
+function esModeloReforzado(proyecto) {
+    return ["REFORZADO", "REFORZADO170"].includes(proyecto.modelo)
+}
+
+function refuerzosDeArea(proyecto, areaName) {
+    const a = (proyecto.configByArea || {})[areaName] || {};
+    const N = a.cabinas !== undefined ? a.cabinas : proyecto.cabinas || 0;
+    if (!N) return null;
+    const layoutCodigo = a.layout || proyecto.layout || "L";
+    const invertir = a.invertir !== undefined ? !!a.invertir : !!proyecto.invertir;
+    const anchoDe = c => {
+        const p = c ? CATALOGO.piezas.find(x => x.codigo === c) : null;
+        return p ? p.ancho : 0
+    };
+    const anchoPanelPN = c => {
+        const p = c ? CATALOGO.piezas.find(x => x.codigo === c) : null;
+        return p && p.familia === "PN" ? p.ancho : 0
+    };
+    let prof = 0;
+    {
+        const lA = parseFloat(a.largo),
+            aA = parseFloat(a.ancho);
+        if (!isNaN(lA) && !isNaN(aA) && lA > 0 && aA > 0) {
+            prof = a.preferCorta ? Math.max(lA, aA) : Math.min(lA, aA)
+        }
+    }
+    let claro = a.claroCliente && a.claroCliente > 0 ? +a.claroCliente : 0;
+    if (!claro) {
+        let sum = 0;
+        const esPmrClaro = layoutCodigo === "P+" || layoutCodigo === "PP";
+        const accLayoutClaro = ["L+", "U+", "E+", "C"].includes(layoutCodigo);
+        const accIdxClaro = invertir ? N - 1 : 0;
+        for (let i = 0; i < N; i++) {
+            const tipoCab = (a.tiposCabina || [])[i] || "Baño";
+            if (tipoCab === "Mingitorio") {
+                sum += a.mingitAncho && a.mingitAncho > 60 ? a.mingitAncho : 60
+            } else if (esPmrClaro && i === 0) {
+                sum += a.anchoPmrCuarto || 162
+            } else if (accLayoutClaro && i === accIdxClaro) {
+                sum += a.anchoAccesible || 150
+            } else {
+                sum += anchoDe((a.puertas || [])[i])
+            }
+            if (i < N - 1) sum += anchoDe((a.pilastras || [])[i])
+        }
+        if (a.muroIzq && a.muroIzq.codigo) sum += anchoDe(a.muroIzq.codigo);
+        if (a.muroDer && a.muroDer.codigo) sum += anchoDe(a.muroDer.codigo);
+        claro = Math.round(sum)
+    }
+    if (!claro) return null;
+    const tramos = [];
+    let k62 = 0,
+        k65 = 0;
+    if (layoutCodigo === "P+" || layoutCodigo === "PP") {
+        let panelCierrePmr = 0;
+        for (let k = 1; k < (a.paneles || []).length; k++) {
+            const w = anchoPanelPN((a.paneles || [])[k]);
+            if (w) {
+                panelCierrePmr = w;
+                break
+            }
+        }
+        if (!panelCierrePmr) panelCierrePmr = 150;
+        if (prof > 0) tramos.push(prof + 10);
+        tramos.push(claro + 10);
+        tramos.push(panelCierrePmr + 10);
+        k62 = 2;
+        k65 = 2
+    } else {
+        const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP"].includes(layoutCodigo);
+        const hasRight = ["U", "U+", "C", "I", "K"].includes(layoutCodigo);
+        const leftWallEff = invertir ? hasRight : hasLeft;
+        const rightWallEff = invertir ? hasLeft : hasRight;
+        tramos.push(claro + 10);
+        k62 += (leftWallEff ? 1 : 0) + (rightWallEff ? 1 : 0);
+        if (!leftWallEff) {
+            const w = anchoPanelPN(a.panelCierreIzq || (a.paneles || [])[0]);
+            if (w) {
+                tramos.push(w + 10);
+                k62++;
+                k65++
+            }
+        }
+        if (!rightWallEff) {
+            const w = anchoPanelPN((a.paneles || [])[N - 1]);
+            if (w) {
+                tramos.push(w + 10);
+                k62++;
+                k65++
+            }
+        }
+    }
+    if (!tramos.length) return null;
+    const cortes = {};
+    tramos.forEach(t => {
+        cortes[t] = (cortes[t] || 0) + 1
+    });
+    const totalCm = tramos.reduce((s, t) => s + t, 0);
+    return {
+        tramos: tramos,
+        cortes: cortes,
+        k62: k62,
+        k65: k65,
+        totalCm: totalCm,
+        totalMl: Math.round(totalCm) / 100
+    }
+}
+
+function refuerzosDeProyecto(proyecto) {
+    if (!esModeloReforzado(proyecto)) return null;
+    const porArea = [];
+    (proyecto.areas || []).forEach(areaName => {
+        const r = refuerzosDeArea(proyecto, areaName);
+        if (r) porArea.push(Object.assign({
+            area: areaName
+        }, r))
+    });
+    if (!porArea.length) return null;
+    return {
+        porArea: porArea,
+        k62: porArea.reduce((s, r) => s + r.k62, 0),
+        k65: porArea.reduce((s, r) => s + r.k65, 0),
+        totalMl: Math.round(porArea.reduce((s, r) => s + r.totalCm, 0)) / 100
+    }
 }
 
 function drawCuadroCantidades(doc, proyecto) {
@@ -7335,6 +7472,85 @@ function drawCuadroCantidades(doc, proyecto) {
     doc.text(String(totalPiezas), tx + tw - 4, ty + 6, {
         align: "right"
     });
+    ty += 9;
+    const refz = refuerzosDeProyecto(proyecto);
+    if (refz) {
+        const filasRf = [];
+        refz.porArea.forEach(r => {
+            Object.keys(r.cortes).sort((x, y) => +y - +x).forEach(t => {
+                filasRf.push({
+                    area: r.area,
+                    cant: r.cortes[t],
+                    cm: +t
+                })
+            })
+        });
+        const altoBloque = 10 + 8 + filasRf.length * 7 + 26;
+        if (ty + altoBloque > H - m - 28) {
+            doc.addPage();
+            doc.setLineWidth(.6);
+            doc.setDrawColor(10, 31, 61);
+            doc.rect(m, m, W - 2 * m, H - 2 * m);
+            ty = m + 12
+        }
+        ty += 6;
+        doc.setFillColor(10, 31, 61);
+        doc.rect(tx, ty, tw, 9, "F");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(11);
+        doc.setTextColor(255, 255, 255);
+        doc.text("CORTES REFUERZO DE ALUMINIO (1918-610)", tx + 4, ty + 6);
+        ty += 9;
+        doc.setFillColor(245, 247, 250);
+        doc.rect(tx, ty, tw, 8, "F");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9);
+        doc.setTextColor(10, 31, 61);
+        doc.text("Área", tx + 2, ty + 5.5);
+        doc.text("Cant.", tx + tw * .5, ty + 5.5, {
+            align: "right"
+        });
+        doc.text("Medida (cm)", tx + tw * .72, ty + 5.5, {
+            align: "right"
+        });
+        doc.text("Medida (ml)", tx + tw - 2, ty + 5.5, {
+            align: "right"
+        });
+        ty += 8;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(40, 40, 40);
+        filasRf.forEach((f, i) => {
+            if (i % 2 === 1) {
+                doc.setFillColor(245, 247, 250);
+                doc.rect(tx, ty, tw, 7, "F")
+            }
+            doc.text(String(f.area), tx + 2, ty + 5);
+            doc.text(String(f.cant), tx + tw * .5, ty + 5, {
+                align: "right"
+            });
+            doc.text(String(f.cm), tx + tw * .72, ty + 5, {
+                align: "right"
+            });
+            doc.text((f.cm / 100).toFixed(2), tx + tw - 2, ty + 5, {
+                align: "right"
+            });
+            ty += 7
+        });
+        ty += 2;
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.5);
+        doc.setTextColor(10, 31, 61);
+        doc.text(`TOTAL REFUERZO: ${refz.totalMl.toFixed(2)} ml`, tx + tw - 2, ty + 5, {
+            align: "right"
+        });
+        ty += 8;
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(9);
+        doc.setTextColor(40, 40, 40);
+        doc.text(`Herrajes del refuerzo:  KE62 (escuadra refuerzo-muro) × ${refz.k62}   ·   KE65 (escuadra ángulo 90°) × ${refz.k65}`, tx + 2, ty + 5);
+        ty += 8
+    }
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.setTextColor(120, 120, 120);
