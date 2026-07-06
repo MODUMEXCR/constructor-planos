@@ -6993,6 +6993,14 @@ function exportarCSV(proyecto) {
             })
         })
     }
+    const perfU = typeof perfilUDeProyecto === "function" ? perfilUDeProyecto(proyecto) : null;
+    if (perfU) {
+        perfU.porArea.forEach(r => {
+            Object.keys(r.cortes).sort((x, y) => +y - +x).forEach(t => {
+                lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("PU" + t), r.cortes[t], csvCell("PERFILU"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
+            })
+        })
+    }
     const csv = lines.join("\n");
     const blob = new Blob([csv], {
         type: "text/csv;charset=utf-8;"
@@ -7397,6 +7405,72 @@ function antepechosDeProyecto(proyecto) {
     return {
         porArea: porArea,
         total: porArea.reduce((s, r) => s + r.total, 0)
+    }
+}
+
+function perfilUDeArea(proyecto, areaName) {
+    if (!esModeloScudo(proyecto)) return null;
+    const a = (proyecto.configByArea || {})[areaName] || {};
+    const N = a.cabinas !== undefined ? a.cabinas : proyecto.cabinas || 0;
+    if (!N) return null;
+    const layoutCodigo = a.layout || proyecto.layout || "L";
+    const invertir = a.invertir !== undefined ? !!a.invertir : !!proyecto.invertir;
+    const anchoDe = c => {
+        const p = c ? CATALOGO.piezas.find(x => x.codigo === c) : null;
+        return p ? p.ancho : 0
+    };
+    let prof = 0;
+    {
+        const lA = parseFloat(a.largo),
+            aA = parseFloat(a.ancho);
+        if (!isNaN(lA) && !isNaN(aA) && lA > 0 && aA > 0) {
+            prof = a.preferCorta ? Math.max(lA, aA) : Math.min(lA, aA)
+        }
+    }
+    let claro = a.claroCliente && a.claroCliente > 0 ? +a.claroCliente : 0;
+    if (!claro) {
+        let sum = 0;
+        for (let i = 0; i < N; i++) {
+            sum += anchoDe((a.puertas || [])[i]);
+            if (i < N - 1) sum += anchoDe((a.pilastras || [])[i])
+        }
+        if (a.muroIzq && a.muroIzq.codigo) sum += anchoDe(a.muroIzq.codigo);
+        if (a.muroDer && a.muroDer.codigo) sum += anchoDe(a.muroDer.codigo);
+        claro = Math.round(sum)
+    }
+    if (!claro) return null;
+    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layoutCodigo);
+    const hasRight = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
+    const leftWallEff = invertir ? hasRight : hasLeft;
+    const rightWallEff = invertir ? hasLeft : hasRight;
+    const cortesArr = [Math.round(claro)];
+    if (leftWallEff && prof > 0) cortesArr.push(Math.round(prof));
+    if (rightWallEff && prof > 0) cortesArr.push(Math.round(prof));
+    const cortes = {};
+    cortesArr.forEach(t => {
+        cortes[t] = (cortes[t] || 0) + 1
+    });
+    const totalCm = cortesArr.reduce((s, t) => s + t, 0);
+    return {
+        cortes: cortes,
+        totalCm: totalCm,
+        totalMl: Math.round(totalCm) / 100
+    }
+}
+
+function perfilUDeProyecto(proyecto) {
+    if (!esModeloScudo(proyecto)) return null;
+    const porArea = [];
+    (proyecto.areas || []).forEach(areaName => {
+        const r = perfilUDeArea(proyecto, areaName);
+        if (r) porArea.push(Object.assign({
+            area: areaName
+        }, r))
+    });
+    if (!porArea.length) return null;
+    return {
+        porArea: porArea,
+        totalMl: Math.round(porArea.reduce((s, r) => s + r.totalCm, 0)) / 100
     }
 }
 
