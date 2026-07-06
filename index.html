@@ -7687,6 +7687,23 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             if (best === null || counts[d] > counts[best]) best = d;
         if (best !== null) panelBaseCmPdf = +best
     }
+    let profLugarCmPdf = 0;
+    {
+        const lProf = parseFloat(areaCfg.largo),
+            aProf = parseFloat(areaCfg.ancho);
+        if (!isNaN(lProf) && !isNaN(aProf) && lProf > 0 && aProf > 0) {
+            const mProf = Math.max(lProf, aProf),
+                nProf = Math.min(lProf, aProf);
+            profLugarCmPdf = areaCfg.preferCorta ? mProf : nProf
+        }
+    }
+    const sobraProfCmPdf = !esPmrLayPdf && profLugarCmPdf > panelBaseCmPdf ? profLugarCmPdf - panelBaseCmPdf : 0;
+    let sobraProfMm = 0;
+    if (sobraProfCmPdf > 0) {
+        const figDepth = cabDepth;
+        cabDepth = figDepth * panelBaseCmPdf / profLugarCmPdf;
+        sobraProfMm = figDepth - cabDepth
+    }
     const panelLenMm = code => {
         const pz = code ? CATALOGO.piezas.find(p => p.codigo === code) : null;
         const depth = pz && pz.familia === "PN" ? pz.ancho : panelBaseCmPdf;
@@ -7694,6 +7711,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     };
     const swingExtra = 14;
     const floorY = drawTop + cabDepth;
+    const floorLugar = floorY + sobraProfMm;
     (() => {
         const wallTop = drawTop - 6;
         const wallHeight = 6;
@@ -7722,6 +7740,39 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     const floorEndX = drawX + drawW - (rightWallEff ? 15 * scale : 0);
     doc.setFillColor(232, 235, 240);
     doc.rect(floorStartX, drawTop, floorEndX - floorStartX, cabDepth, "F");
+    if (sobraProfMm > 0) {
+        doc.setFillColor(247, 250, 252);
+        doc.rect(floorStartX, floorY, floorEndX - floorStartX, sobraProfMm, "F");
+        doc.setDrawColor(148, 163, 184);
+        doc.setLineWidth(.3);
+        doc.setLineDashPattern([1.2, 1], 0);
+        doc.line(floorStartX, floorY, floorEndX, floorY);
+        doc.setLineDashPattern([], 0);
+        const owH = 3;
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(10, 31, 61);
+        doc.setLineWidth(.6);
+        doc.rect(floorStartX, floorLugar, floorEndX - floorStartX, owH, "FD");
+        doc.setLineWidth(.25);
+        const anchoOw = floorEndX - floorStartX;
+        for (let d = -owH; d < anchoOw; d += 1.6) {
+            const x1 = floorStartX + d,
+                y1 = floorLugar;
+            const x2 = floorStartX + d + owH,
+                y2 = floorLugar + owH;
+            const cx1 = Math.max(x1, floorStartX),
+                cy1 = y1 + (cx1 - x1);
+            const cx2 = Math.min(x2, floorEndX),
+                cy2 = y2 - (x2 - cx2);
+            if (cx1 < cx2) doc.line(cx1, Math.max(cy1, floorLugar), cx2, Math.min(cy2, floorLugar + owH))
+        }
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.5);
+        doc.setTextColor(90, 100, 114);
+        doc.text(`Espacio libre: ${Math.round(sobraProfCmPdf)} cm`, (floorStartX + floorEndX) / 2, floorY + sobraProfMm / 2 + 2, {
+            align: "center"
+        })
+    }
     let x = drawX;
     seq.forEach(s => {
         const w = s.ancho * scale;
@@ -8083,7 +8134,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             })
         }
         if (s.tipo !== "muro" && s.tipo !== "mamparaCierreMingit") {
-            const dimY = Math.min(floorY + (esPmrLayPdf ? extraPmrPdf : swingExtra), cotaClampY) + 8;
+            const dimY = Math.min(floorLugar + (esPmrLayPdf ? extraPmrPdf : swingExtra), cotaClampY) + 8;
             doc.setDrawColor(10, 31, 61);
             doc.setLineWidth(.3);
             doc.line(x, dimY, x + w, dimY);
@@ -8106,7 +8157,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         }
         x += w
     });
-    const dimTotalY = Math.min(floorY + (esPmrLayPdf ? extraPmrPdf : swingExtra), cotaClampY) + 22;
+    const dimTotalY = Math.min(floorLugar + (esPmrLayPdf ? extraPmrPdf : swingExtra), cotaClampY) + 22;
     const murosTotCm = seq.filter(s => s.tipo === "muro").reduce((t, s) => t + s.ancho, 0);
     const claroTotalCm = areaCfg.claroCliente && areaCfg.claroCliente > 0 ? areaCfg.claroCliente : totalCm - murosTotCm;
     const xT1 = drawX + (seq[0] && seq[0].tipo === "muro" ? 15 * scale : 0);
@@ -8144,12 +8195,13 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         }
         if (profCmPdf > 0) {
             const pxx = drawX - 5,
-                pmid = (drawTop + floorY) / 2;
+                pmid = (drawTop + floorLugar) / 2;
             doc.setDrawColor(10, 31, 61);
             doc.setLineWidth(.4);
-            doc.line(pxx, drawTop, pxx, floorY);
+            doc.line(pxx, drawTop, pxx, floorLugar);
             doc.line(pxx - 1.5, drawTop, pxx + 1.5, drawTop);
-            doc.line(pxx - 1.5, floorY, pxx + 1.5, floorY);
+            doc.line(pxx - 1.5, floorLugar, pxx + 1.5, floorLugar);
+            if (sobraProfMm > 0) doc.line(pxx - 1.2, floorY, pxx + 1.2, floorY);
             doc.setFont("helvetica", "bold");
             doc.setFontSize(7);
             doc.setTextColor(10, 31, 61);
