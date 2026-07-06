@@ -5402,7 +5402,7 @@ function buildBathroomSvg() {
 const RESTRICCIONES_ANCHO_POR_MODELO = {
     IMPERIAL: {
         PN: {
-            excluidos: [95, 165, 180]
+            excluidos: [180]
         }
     },
     ESTANDAR170: {
@@ -5420,9 +5420,9 @@ const RESTRICCIONES_ANCHO_POR_MODELO = {
             excluidos: [165, 180]
         }
     },
-    KIDS: {
+    SCUDO: {
         PN: {
-            excluidos: [95, 165]
+            excluidos: [165, 180]
         }
     },
     SUP_ESTANDAR: {
@@ -6985,6 +6985,14 @@ function exportarCSV(proyecto) {
             if (r.k65 > 0) lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("KE65"), r.k65, csvCell("REFUERZO-KIT"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
         })
     }
+    const antep = typeof antepechosDeProyecto === "function" ? antepechosDeProyecto(proyecto) : null;
+    if (antep) {
+        antep.porArea.forEach(r => {
+            r.items.forEach(it => {
+                lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("AP" + it.ancho + "X" + it.alto), it.cantidad, csvCell("ANTEPECHO"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
+            })
+        })
+    }
     const csv = lines.join("\n");
     const blob = new Blob([csv], {
         type: "text/csv;charset=utf-8;"
@@ -7328,6 +7336,70 @@ function refuerzosDeProyecto(proyecto) {
     }
 }
 
+function esModeloScudo(proyecto) {
+    return proyecto.modelo === "SCUDO"
+}
+
+function antepechosDeArea(proyecto, areaName) {
+    if (!esModeloScudo(proyecto)) return null;
+    const a = (proyecto.configByArea || {})[areaName] || {};
+    const N = a.cabinas !== undefined ? a.cabinas : proyecto.cabinas || 0;
+    if (!N) return null;
+    const layoutCodigo = a.layout || proyecto.layout || "L";
+    const invertir = a.invertir !== undefined ? !!a.invertir : !!proyecto.invertir;
+    const anchoDe = c => {
+        const p = c ? CATALOGO.piezas.find(x => x.codigo === c) : null;
+        return p ? p.ancho : 0
+    };
+    const altPuerta = alturaPiezaSegunModelo("PT", proyecto.modelo, proyecto.terminacion);
+    const altPilastra = alturaPiezaSegunModelo("PI", proyecto.modelo, proyecto.terminacion);
+    const altoAP = Math.round((altPilastra - altPuerta - 0.5) * 10) / 10;
+    if (altoAP <= 0) return null;
+    const accLayout = ["L+", "U+", "E+", "C"].includes(layoutCodigo);
+    const accIdx = invertir ? N - 1 : 0;
+    const esPmr = layoutCodigo === "P+" || layoutCodigo === "PP";
+    const porAncho = {};
+    let total = 0;
+    for (let i = 0; i < N; i++) {
+        const tipoCab = (a.tiposCabina || [])[i] || "Baño";
+        if (tipoCab === "Mingitorio") continue;
+        let ancho;
+        if (esPmr && i === 0) ancho = a.anchoPmrCuarto || 162;
+        else if (accLayout && i === accIdx) ancho = a.anchoAccesible || 150;
+        else ancho = anchoDe((a.puertas || [])[i]);
+        if (!ancho) continue;
+        porAncho[ancho] = (porAncho[ancho] || 0) + 1;
+        total++
+    }
+    const items = Object.keys(porAncho).sort((x, y) => +x - +y).map(w => ({
+        ancho: +w,
+        alto: altoAP,
+        cantidad: porAncho[w]
+    }));
+    if (!items.length) return null;
+    return {
+        alto: altoAP,
+        items: items,
+        total: total
+    }
+}
+
+function antepechosDeProyecto(proyecto) {
+    if (!esModeloScudo(proyecto)) return null;
+    const porArea = [];
+    (proyecto.areas || []).forEach(areaName => {
+        const r = antepechosDeArea(proyecto, areaName);
+        if (r) porArea.push(Object.assign({
+            area: areaName
+        }, r))
+    });
+    if (!porArea.length) return null;
+    return {
+        porArea: porArea,
+        total: porArea.reduce((s, r) => s + r.total, 0)
+    }
+}
+
 function drawCuadroCantidades(doc, proyecto) {
     const W = doc.internal.pageSize.getWidth();
     const H = doc.internal.pageSize.getHeight();
@@ -7391,12 +7463,26 @@ function drawCuadroCantidades(doc, proyecto) {
             area: areaName
         }))
     });
+    const antepechos = antepechosDeProyecto(proyecto);
+    if (antepechos) {
+        antepechos.porArea.forEach(r => {
+            r.items.forEach(it => filas.push({
+                familia: "AP",
+                codigo: "AP" + it.ancho,
+                ancho: it.ancho,
+                alto: it.alto,
+                cantidad: it.cantidad,
+                area: r.area
+            }))
+        })
+    }
     const ordenFamilia = {
         PT: 1,
         PN: 2,
         PI: 3,
         MG: 4,
-        CN: 5
+        CN: 5,
+        AP: 6
     };
     filas.sort((a, b) => (ordenFamilia[a.familia] || 9) - (ordenFamilia[b.familia] || 9) || a.codigo.localeCompare(b.codigo) || a.area.localeCompare(b.area));
     const tx = m + 6;
