@@ -7169,6 +7169,7 @@ function refuerzosDeArea(proyecto, areaName) {
     if (!N) return null;
     const layoutCodigo = a.layout || proyecto.layout || "L";
     const invertir = a.invertir !== undefined ? !!a.invertir : !!proyecto.invertir;
+    const corteRf = v => Math.ceil((v + 10) / 5) * 5;
     const anchoDe = c => {
         const p = c ? CATALOGO.piezas.find(x => x.codigo === c) : null;
         return p ? p.ancho : 0
@@ -7177,6 +7178,22 @@ function refuerzosDeArea(proyecto, areaName) {
         const p = c ? CATALOGO.piezas.find(x => x.codigo === c) : null;
         return p && p.familia === "PN" ? p.ancho : 0
     };
+    const esMingit = i => ((a.tiposCabina || [])[i] || "Baño") === "Mingitorio";
+    const anchoSlotMingit = () => a.mingitAncho && a.mingitAncho > 60 ? a.mingitAncho : 60;
+    let panelBasePN = 0;
+    {
+        const counts = {};
+        (a.paneles || []).forEach(pc => {
+            const w = anchoPanelPN(pc);
+            if (w) counts[w] = (counts[w] || 0) + 1
+        });
+        const wIzq = anchoPanelPN(a.panelCierreIzq);
+        if (wIzq) counts[wIzq] = (counts[wIzq] || 0) + 1;
+        let best = null;
+        for (const w in counts)
+            if (best === null || counts[w] > counts[best]) best = w;
+        panelBasePN = best !== null ? +best : 150
+    }
     let prof = 0;
     {
         const lA = parseFloat(a.largo),
@@ -7192,9 +7209,8 @@ function refuerzosDeArea(proyecto, areaName) {
         const accLayoutClaro = ["L+", "U+", "E+", "C"].includes(layoutCodigo);
         const accIdxClaro = invertir ? N - 1 : 0;
         for (let i = 0; i < N; i++) {
-            const tipoCab = (a.tiposCabina || [])[i] || "Baño";
-            if (tipoCab === "Mingitorio") {
-                sum += a.mingitAncho && a.mingitAncho > 60 ? a.mingitAncho : 60
+            if (esMingit(i)) {
+                sum += anchoSlotMingit()
             } else if (esPmrClaro && i === 0) {
                 sum += a.anchoPmrCuarto || 162
             } else if (accLayoutClaro && i === accIdxClaro) {
@@ -7209,6 +7225,13 @@ function refuerzosDeArea(proyecto, areaName) {
         claro = Math.round(sum)
     }
     if (!claro) return null;
+    let mingIzq = 0,
+        mingDer = 0;
+    for (let i = 0; i < N && esMingit(i); i++) mingIzq++;
+    if (mingIzq < N)
+        for (let i = N - 1; i >= 0 && esMingit(i); i--) mingDer++;
+    const nMingTot = (a.tiposCabina || []).filter((t, i) => i < N && t === "Mingitorio").length;
+    const anchoMingTot = nMingTot * anchoSlotMingit() + Math.max(0, nMingTot - 1) * 1.27;
     const tramos = [];
     let k62 = 0,
         k65 = 0;
@@ -7221,31 +7244,51 @@ function refuerzosDeArea(proyecto, areaName) {
                 break
             }
         }
-        if (!panelCierrePmr) panelCierrePmr = 150;
-        if (prof > 0) tramos.push(prof + 10);
-        tramos.push(claro + 10);
-        tramos.push(panelCierrePmr + 10);
-        k62 = 2;
-        k65 = 2
+        if (!panelCierrePmr) panelCierrePmr = panelBasePN;
+        const claroCabinas = Math.max(0, claro - (a.anchoPmrCuarto || 162) - anchoMingTot);
+        if (prof > 0) {
+            tramos.push(corteRf(prof));
+            k62 += 2
+        }
+        if (claroCabinas > 0) {
+            tramos.push(corteRf(claroCabinas));
+            if (prof > 0) k65++
+        }
+        tramos.push(corteRf(panelCierrePmr));
+        k65++;
+        k62++
     } else {
         const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP"].includes(layoutCodigo);
         const hasRight = ["U", "U+", "C", "I", "K"].includes(layoutCodigo);
         const leftWallEff = invertir ? hasRight : hasLeft;
         const rightWallEff = invertir ? hasLeft : hasRight;
-        tramos.push(claro + 10);
-        k62 += (leftWallEff ? 1 : 0) + (rightWallEff ? 1 : 0);
-        if (!leftWallEff) {
+        const claroCabinas = Math.max(0, claro - anchoMingTot);
+        if (claroCabinas <= 0) return null;
+        tramos.push(corteRf(claroCabinas));
+        if (mingIzq > 0) {
+            tramos.push(corteRf(panelBasePN));
+            k65++;
+            k62++
+        } else if (leftWallEff) {
+            k62++
+        } else {
             const w = anchoPanelPN(a.panelCierreIzq || (a.paneles || [])[0]);
             if (w) {
-                tramos.push(w + 10);
+                tramos.push(corteRf(w));
                 k62++;
                 k65++
             }
         }
-        if (!rightWallEff) {
+        if (mingDer > 0) {
+            tramos.push(corteRf(panelBasePN));
+            k65++;
+            k62++
+        } else if (rightWallEff) {
+            k62++
+        } else {
             const w = anchoPanelPN((a.paneles || [])[N - 1]);
             if (w) {
-                tramos.push(w + 10);
+                tramos.push(corteRf(w));
                 k62++;
                 k65++
             }
@@ -7472,85 +7515,6 @@ function drawCuadroCantidades(doc, proyecto) {
     doc.text(String(totalPiezas), tx + tw - 4, ty + 6, {
         align: "right"
     });
-    ty += 9;
-    const refz = refuerzosDeProyecto(proyecto);
-    if (refz) {
-        const filasRf = [];
-        refz.porArea.forEach(r => {
-            Object.keys(r.cortes).sort((x, y) => +y - +x).forEach(t => {
-                filasRf.push({
-                    area: r.area,
-                    cant: r.cortes[t],
-                    cm: +t
-                })
-            })
-        });
-        const altoBloque = 10 + 8 + filasRf.length * 7 + 26;
-        if (ty + altoBloque > H - m - 28) {
-            doc.addPage();
-            doc.setLineWidth(.6);
-            doc.setDrawColor(10, 31, 61);
-            doc.rect(m, m, W - 2 * m, H - 2 * m);
-            ty = m + 12
-        }
-        ty += 6;
-        doc.setFillColor(10, 31, 61);
-        doc.rect(tx, ty, tw, 9, "F");
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(11);
-        doc.setTextColor(255, 255, 255);
-        doc.text("CORTES REFUERZO DE ALUMINIO (1918-610)", tx + 4, ty + 6);
-        ty += 9;
-        doc.setFillColor(245, 247, 250);
-        doc.rect(tx, ty, tw, 8, "F");
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(9);
-        doc.setTextColor(10, 31, 61);
-        doc.text("Área", tx + 2, ty + 5.5);
-        doc.text("Cant.", tx + tw * .5, ty + 5.5, {
-            align: "right"
-        });
-        doc.text("Medida (cm)", tx + tw * .72, ty + 5.5, {
-            align: "right"
-        });
-        doc.text("Medida (ml)", tx + tw - 2, ty + 5.5, {
-            align: "right"
-        });
-        ty += 8;
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.setTextColor(40, 40, 40);
-        filasRf.forEach((f, i) => {
-            if (i % 2 === 1) {
-                doc.setFillColor(245, 247, 250);
-                doc.rect(tx, ty, tw, 7, "F")
-            }
-            doc.text(String(f.area), tx + 2, ty + 5);
-            doc.text(String(f.cant), tx + tw * .5, ty + 5, {
-                align: "right"
-            });
-            doc.text(String(f.cm), tx + tw * .72, ty + 5, {
-                align: "right"
-            });
-            doc.text((f.cm / 100).toFixed(2), tx + tw - 2, ty + 5, {
-                align: "right"
-            });
-            ty += 7
-        });
-        ty += 2;
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(9.5);
-        doc.setTextColor(10, 31, 61);
-        doc.text(`TOTAL REFUERZO: ${refz.totalMl.toFixed(2)} ml`, tx + tw - 2, ty + 5, {
-            align: "right"
-        });
-        ty += 8;
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.setTextColor(40, 40, 40);
-        doc.text(`Herrajes del refuerzo:  KE62 (escuadra refuerzo-muro) × ${refz.k62}   ·   KE65 (escuadra ángulo 90°) × ${refz.k65}`, tx + 2, ty + 5);
-        ty += 8
-    }
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.setTextColor(120, 120, 120);
