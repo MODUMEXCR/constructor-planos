@@ -5046,10 +5046,6 @@ function buildBathroomSvg() {
     const pmrPanelExtraCm = Math.max(0, pmrDivPanelCm - pmrCabPanelCm);
     const extraPmr = esPmrLay ? Math.round(cabHeight * (pmrPanelExtraCm + 90 + 45) / pmrCabPanelCm) : 0;
     const hayCentros = (areaCfg.centrosDescarga || []).some(c => c !== "" && c != null && !isNaN(c));
-    const totalH = cabHeight + 100 + extraPmr + (hayCentros ? 30 : 0);
-    const floor = 20 + cabHeight;
-    const dimY = floor + extraPmr + 38;
-    const dimTotalY = floor + extraPmr + 64;
     let panelBaseCm = 150;
     {
         const counts = {};
@@ -5063,6 +5059,14 @@ function buildBathroomSvg() {
             if (best === null || counts[d] > counts[best]) best = d;
         if (best !== null) panelBaseCm = +best
     }
+    const profLugarCm = typeof leerDimensionesLugar === "function" ? (leerDimensionesLugar() || {}).paredOpuesta || 0 : 0;
+    const sobraProfCm = !esPmrLay && profLugarCm > panelBaseCm ? profLugarCm - panelBaseCm : 0;
+    const sobraProfPx = sobraProfCm > 0 ? cabHeight * sobraProfCm / panelBaseCm : 0;
+    const floor = 20 + cabHeight;
+    const floorLugar = floor + sobraProfPx;
+    const totalH = cabHeight + 100 + extraPmr + sobraProfPx + (hayCentros ? 30 : 0);
+    const dimY = floorLugar + extraPmr + 38;
+    const dimTotalY = floorLugar + extraPmr + 64;
     const panelLenPx = idxSlot => {
         const pc = (areaCfg.paneles || [])[idxSlot];
         const pz = pc ? CATALOGO.piezas.find(p => p.codigo === pc) : null;
@@ -5282,12 +5286,20 @@ function buildBathroomSvg() {
         svg += `<line x1="${ax+2}" y1="${ay+2}" x2="${padding+drawW-2}" y2="${20+cabHeight-4}" stroke="#b91c1c" stroke-width="0.6" stroke-dasharray="3,2"/>`;
         svg += `</g>`
     } {
-        const profCm = typeof leerDimensionesLugar === "function" ? (leerDimensionesLugar() || {}).paredOpuesta || 0 : 0;
+        const profCm = profLugarCm;
         if (profCm > 0) {
-            const py1 = 20, py2 = floor, pxx = 17, pmid = (py1 + py2) / 2;
+            if (sobraProfPx > 0) {
+                svg += `<rect x="${floorStartX}" y="${floor}" width="${floorEndX-floorStartX}" height="${sobraProfPx}" fill="#f7fafc"/>`;
+                svg += `<line x1="${floorStartX}" y1="${floor}" x2="${floorEndX}" y2="${floor}" stroke="#94a3b8" stroke-width="0.7" stroke-dasharray="4,3"/>`;
+                svg += `<rect x="${padding}" y="${floorLugar}" width="${drawW}" height="8" fill="white" stroke="#0a1f3d" stroke-width="1"/>`;
+                svg += `<rect x="${padding}" y="${floorLugar}" width="${drawW}" height="8" fill="url(#wallHatch)" stroke="none"/>`;
+                svg += `<text x="${(floorStartX+floorEndX)/2}" y="${floor + sobraProfPx/2 + 3}" font-size="8" fill="#5a6472" font-weight="600" text-anchor="middle">Espacio libre: ${sobraProfCm} cm</text>`
+            }
+            const py1 = 20, py2 = floorLugar, pxx = 17, pmid = (py1 + py2) / 2;
             svg += `<line x1="${pxx}" y1="${py1}" x2="${pxx}" y2="${py2}" stroke="#0a1f3d" stroke-width="1"/>`;
             svg += `<line x1="${pxx-4}" y1="${py1}" x2="${pxx+4}" y2="${py1}" stroke="#0a1f3d" stroke-width="1"/>`;
             svg += `<line x1="${pxx-4}" y1="${py2}" x2="${pxx+4}" y2="${py2}" stroke="#0a1f3d" stroke-width="1"/>`;
+            if (sobraProfPx > 0) svg += `<line x1="${pxx-3}" y1="${floor}" x2="${pxx+3}" y2="${floor}" stroke="#94a3b8" stroke-width="1"/>`;
             svg += `<text x="${pxx-6}" y="${pmid}" font-size="8.5" fill="#0a1f3d" font-weight="700" text-anchor="middle" transform="rotate(-90 ${pxx-6} ${pmid})">PROFUNDIDAD: ${profCm} cm</text>`
         }
     }
@@ -7095,7 +7107,8 @@ function exportarPDF(proyecto) {
         ["MODELO:", proyecto.modelo],
         ["REMATE INFERIOR:", proyecto.terminacion],
         ["COLOR:", proyecto.color],
-        ["ALTURA PILASTRA:", altura + " cm"]
+        ["ALTURA PILASTRA:", altura + " cm"],
+        ["KAP:", proyecto.kap ? "SÍ (abre puerta de pie)" : "NO"]
     ];
     rotLines.forEach(([k, v]) => {
         doc.setFont("helvetica", "bold");
