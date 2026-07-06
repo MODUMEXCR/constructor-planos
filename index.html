@@ -1596,8 +1596,8 @@ const CATALOGO = {
         },
         SCUDO: {
             puerta: 200,
-            panel: 239,
-            pilastra: 239,
+            panel: 240,
+            pilastra: 240,
             mingitorio: 120
         },
         KIDS: {
@@ -3199,8 +3199,8 @@ CATALOGO.piezas = db.piezas;
         },
         SCUDO: {
             puerta: 200,
-            panel: 239,
-            pilastra: 239,
+            panel: 240,
+            pilastra: 240,
             mingitorio: 120
         }
     };
@@ -6989,7 +6989,7 @@ function exportarCSV(proyecto) {
     if (antep) {
         antep.porArea.forEach(r => {
             r.items.forEach(it => {
-                lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("AP" + it.ancho + "X" + it.alto), it.cantidad, csvCell("ANTEPECHO"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
+                lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("AN" + it.ancho + "X" + it.alto), it.cantidad, csvCell("ANTEPECHO"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
             })
         })
     }
@@ -7467,8 +7467,8 @@ function drawCuadroCantidades(doc, proyecto) {
     if (antepechos) {
         antepechos.porArea.forEach(r => {
             r.items.forEach(it => filas.push({
-                familia: "AP",
-                codigo: "AP" + it.ancho,
+                familia: "AN",
+                codigo: "AN" + Math.round(it.alto),
                 ancho: it.ancho,
                 alto: it.alto,
                 cantidad: it.cantidad,
@@ -7482,7 +7482,7 @@ function drawCuadroCantidades(doc, proyecto) {
         PI: 3,
         MG: 4,
         CN: 5,
-        AP: 6
+        AN: 6
     };
     filas.sort((a, b) => (ordenFamilia[a.familia] || 9) - (ordenFamilia[b.familia] || 9) || a.codigo.localeCompare(b.codigo) || a.area.localeCompare(b.area));
     const tx = m + 6;
