@@ -6636,6 +6636,27 @@ function piezasAgregadas() {
         (a.panelesExtras || []).forEach(ex => add(ex.codigo));
         (a.canaletas || []).forEach(c => add(c.codigo));
     }
+    if (typeof esModeloScudo === "function" && esModeloScudo(cfg)) {
+        const proyLike = {
+            modelo: cfg.modelo,
+            terminacion: cfg.terminacion,
+            areas: cfg.areas,
+            configByArea: cfg.configByArea,
+            invertir: cfg.invertir
+        };
+        const ant = antepechosDeProyecto(proyLike);
+        if (ant) ant.porArea.forEach(r => r.items.forEach(it => {
+            const k = "AN" + it.ancho + "|" + it.alto;
+            acc[k] = acc[k] || {
+                familia: "AN",
+                codigo: "AN" + Math.round(it.alto),
+                ancho: it.ancho,
+                alto: it.alto,
+                cantidad: 0
+            };
+            acc[k].cantidad += it.cantidad
+        }))
+    }
     return Object.values(acc).sort((x, y) => x.codigo.localeCompare(y.codigo))
 }
 async function generarPlanos() {
@@ -8822,6 +8843,8 @@ function familiaTarifa(familiaPieza) {
             return "pilastra";
         case "MG":
             return "mingitorio";
+        case "AN":
+            return "puerta";
         default:
             return "panel"
     }
@@ -8865,7 +8888,8 @@ function describirPiezaCotizacion(pieza, modeloCodigo, altoEfectivo) {
         PT: "Puerta",
         PN: "Panel lateral",
         PI: "Pilastra",
-        MG: "Mingitorio"
+        MG: "Mingitorio",
+        AN: "Antepecho"
     };
     const fam = familias[pieza.familia] || "Pieza";
     const femenino = pieza.familia === "PT" || pieza.familia === "PI";
