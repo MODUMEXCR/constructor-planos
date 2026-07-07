@@ -8151,7 +8151,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             align: "center"
         })
     }
-    const grosorPz = 2;
+    const grosorPz = 1.2;
     const leafLenDe = wMm => Math.min(wMm - 3, cabDepth * .78);
     let swingEff = swingExtra;
     seq.forEach(s => {
@@ -8246,7 +8246,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             doc.setFillColor(10, 31, 61);
             doc.rect(px - grosorPz / 2, drawTop, grosorPz, panelHpc, "F");
             doc.rect(px - 2.5, drawTop - 2, 5, 4, "F");
-            doc.rect(x, floorY - 2, w, 2, "F");
+            doc.rect(x, floorY - grosorPz, w, grosorPz, "F");
             doc.setFont("helvetica", "normal");
             doc.setFontSize(6);
             doc.setTextColor(120, 120, 120);
@@ -8258,7 +8258,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             doc.setFillColor(10, 31, 61);
             doc.rect(px - grosorPz / 2, drawTop, grosorPz, panelLenMm(s.panelDivCode), "F");
             doc.rect(px - 1.5, drawTop - 2, 3, 4, "F");
-            doc.rect(x, floorY - 2, w, 2, "F");
+            doc.rect(x, floorY - grosorPz, w, grosorPz, "F");
             doc.setFont("helvetica", "normal");
             doc.setFontSize(6);
             doc.setTextColor(120, 120, 120);
@@ -8269,7 +8269,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             const px = x + w / 2;
             doc.setFillColor(10, 31, 61);
             doc.rect(px - 1.5, drawTop - 2, 3, 4, "F");
-            doc.rect(x, floorY - 2, w, 2, "F");
+            doc.rect(x, floorY - grosorPz, w, grosorPz, "F");
             doc.setFillColor(245, 197, 66);
             const dirSign = s.lado === "izq" ? 1 : -1;
             doc.lines([
@@ -8290,7 +8290,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             doc.setFillColor(10, 31, 61);
             doc.rect(panelX, drawTop, grosorPz, panelLenTermMm, "F");
             doc.rect(capX, drawTop - 2, 3, 4, "F");
-            doc.rect(x, floorY - 2, w, 2, "F");
+            doc.rect(x, floorY - grosorPz, w, grosorPz, "F");
             doc.setFont("helvetica", "normal");
             doc.setFontSize(6);
             doc.setTextColor(120, 120, 120);
