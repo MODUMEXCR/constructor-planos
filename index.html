@@ -5122,7 +5122,7 @@ function buildBathroomSvg() {
             const muroSel = s.lado === "izq" ? "muroIzq" : "muroDer";
             svg += `<g data-piece="${muroSel}">`;
             svg += `<rect x="${cx-4}" y="17" width="8" height="6" fill="#0a1f3d"/>`;
-            svg += `<rect x="${x}" y="${floor-5}" width="${w}" height="5" fill="#0a1f3d"/>`;
+            svg += `<rect x="${x}" y="${floor-3}" width="${w}" height="3" fill="#0a1f3d"/>`;
             const sgn = s.lado === "izq" ? 1 : -1;
             svg += `<polygon points="${cx+sgn*2},19 ${cx+sgn*7},23 ${cx+sgn*2},27" fill="#f5c542" stroke="#0a1f3d" stroke-width="0.6"/>`;
             svg += `</g>`
@@ -5131,15 +5131,15 @@ function buildBathroomSvg() {
             const esIzq = s.lado === "izq";
             const panelSel = esIzq ? "panelCierreIzq" : `panel-${N-1}`;
             const panelLenTerm = esIzq ? panelLenPxCode(areaCfg.panelCierreIzq || (areaCfg.paneles || [])[0]) : panelLenPx(N - 1);
-            const panelX = esIzq ? x : x + w - 6;
+            const panelX = esIzq ? x : x + w - 3;
             const capX = esIzq ? x + 4 : x + w - 12;
             svg += `<g data-piece="${panelSel}">`;
-            svg += `<rect x="${panelX}" y="20" width="6" height="${panelLenTerm}" fill="#0a1f3d"/>`;
+            svg += `<rect x="${panelX}" y="20" width="3" height="${panelLenTerm}" fill="#0a1f3d"/>`;
             svg += `</g>`;
             svg += `<text x="${panelX+3}" y="${20+panelLenTerm+11}" font-size="9" font-weight="700" fill="#0a1f3d" text-anchor="middle">${esIzq?"IZQ":"DER"}</text>`;
             svg += `<g data-piece="${muroSel}">`;
             svg += `<rect x="${capX}" y="17" width="8" height="6" fill="#0a1f3d"/>`;
-            svg += `<rect x="${x}" y="${floor-5}" width="${w}" height="5" fill="#0a1f3d"/>`;
+            svg += `<rect x="${x}" y="${floor-3}" width="${w}" height="3" fill="#0a1f3d"/>`;
             svg += `</g>`
         } else if (s.tipo === "panelMingit") {
             const mgPz = s.mgCode ? CATALOGO.piezas.find(p => p.codigo === s.mgCode) : null;
@@ -5161,11 +5161,11 @@ function buildBathroomSvg() {
             svg += `</g>`
         } else if (s.tipo === "panelCompleto") {
             svg += `<g data-piece="panel-${s.idxSlot}">`;
-            svg += `<rect x="${cx-3}" y="20" width="6" height="${esPmrLay&&s.idxSlot===0?cabHeight:panelLenPx(s.idxSlot)}" fill="#0a1f3d"/>`;
+            svg += `<rect x="${cx-1.5}" y="20" width="3" height="${esPmrLay&&s.idxSlot===0?cabHeight:panelLenPx(s.idxSlot)}" fill="#0a1f3d"/>`;
             svg += `</g>`;
             svg += `<g data-piece="pilastra-${s.idxSlot}">`;
             svg += `<rect x="${cx-5}" y="17" width="10" height="6" fill="#0a1f3d"/>`;
-            svg += `<rect x="${x}" y="${floor-5}" width="${w}" height="5" fill="#0a1f3d"/>`;
+            svg += `<rect x="${x}" y="${floor-3}" width="${w}" height="3" fill="#0a1f3d"/>`;
             svg += `</g>`
         } else if (s.tipo === "pilastra") {
             svg += `<g data-piece="panel-${s.idxSlot}">`;
@@ -5173,7 +5173,7 @@ function buildBathroomSvg() {
             svg += `</g>`;
             svg += `<g data-piece="pilastra-${s.idxSlot}">`;
             svg += `<rect x="${cx-4}" y="17" width="8" height="6" fill="#0a1f3d"/>`;
-            svg += `<rect x="${x}" y="${floor-5}" width="${w}" height="5" fill="#0a1f3d"/>`;
+            svg += `<rect x="${x}" y="${floor-3}" width="${w}" height="3" fill="#0a1f3d"/>`;
             svg += `</g>`
         } else if (s.tipo === "puerta" || s.tipo === "mingitorio") {
             const i = s.indiceCabina;
@@ -5212,11 +5212,11 @@ function buildBathroomSvg() {
                 const divX = x + w + divSlotW / 2;
                 const yDoorBot = yDoorTop + doorPx;
                 if (panelExtraPx > .5) {
-                    svg += `<rect x="${divX-3}" y="${floor}" width="6" height="${panelExtraPx}" fill="#0a1f3d"/>`
+                    svg += `<rect x="${divX-1.5}" y="${floor}" width="3" height="${panelExtraPx}" fill="#0a1f3d"/>`
                 }
                 const frenteExtraIdx = (areaCfg.pilastrasExtras || []).findIndex(ex => (ex.descripcion || "").toLowerCase().includes("frente del cuarto pmr"));
                 if (frenteExtraIdx >= 0) svg += `<g data-piece="extra-${frenteExtraIdx}">`;
-                svg += `<rect x="${divX-2}" y="${yDoorBot}" width="4" height="${frentePx}" fill="#0a1f3d"/>`;
+                svg += `<rect x="${divX-1.5}" y="${yDoorBot}" width="3" height="${frentePx}" fill="#0a1f3d"/>`;
                 if (frenteExtraIdx >= 0) svg += `</g>`;
                 const apertV = aperturas[i] || "DER_EXT";
                 const [ladoP, sentP] = apertV.split("_");
@@ -5226,9 +5226,7 @@ function buildBathroomSvg() {
                 const swingRight = sentP !== "INT";
                 const openX = divX + (swingRight ? doorPx : -doorPx);
                 svg += `<g data-piece="puerta-${i}">`;
-                svg += `<line x1="${divX}" y1="${hy}" x2="${openX}" y2="${hy}" stroke="#0a1f3d" stroke-width="2"/>`;
-                const sweepFlag = hingeTop === swingRight ? 0 : 1;
-                svg += `<path d="M ${divX} ${freeY} A ${doorPx} ${doorPx} 0 0 ${sweepFlag} ${openX} ${hy}" fill="none" stroke="#0a1f3d" stroke-width="0.8" stroke-dasharray="3,2"/>`;
+                svg += `<line x1="${divX}" y1="${hy}" x2="${divX+(swingRight?1:-1)*doorPx*Math.sin(Math.PI/9)}" y2="${hy+(hingeTop?1:-1)*doorPx*Math.cos(Math.PI/9)}" stroke="#0a1f3d" stroke-width="3"/>`;
                 svg += `<rect x="${divX-2}" y="${hy-2}" width="4" height="4" fill="#0a1f3d"/>`;
                 svg += `<text x="${divX+16}" y="${(yDoorTop+yDoorBot)/2+3}" font-size="8" fill="#0a1f3d" font-weight="700">${s.codigo} (lateral)</text>`;
                 svg += `</g>`;
@@ -5255,18 +5253,13 @@ function buildBathroomSvg() {
                     const [bisLado, bisDir] = aperturaVal.split("_");
                     const isIzq = bisLado === "IZQ";
                     const isAfuera = bisDir !== "INT";
-                    const swing = Math.min(w - 8, 24);
-                    const endY = floor + (isAfuera ? swing : -swing);
+                    const leafPx = Math.min(w - 6, cabHeight * .9);
+                    const hingePx = isIzq ? x + 2 : x + w - 2;
+                    const dirXsvg = isIzq ? 1 : -1;
+                    const dirYsvg = isAfuera ? 1 : -1;
                     svg += `<g data-piece="puerta-${i}">`;
-                    if (isIzq) {
-                        svg += `<line x1="${x}" y1="${floor}" x2="${x+12}" y2="${floor}" stroke="#0a1f3d" stroke-width="3"/>`;
-                        svg += `<line x1="${x+12}" y1="${floor}" x2="${x+w-6}" y2="${endY}" stroke="#0a1f3d" stroke-width="2"/>`;
-                        svg += `<line x1="${x+w-6}" y1="${endY}" x2="${x+w}" y2="${endY}" stroke="#0a1f3d" stroke-width="3"/>`
-                    } else {
-                        svg += `<line x1="${x+w-12}" y1="${floor}" x2="${x+w}" y2="${floor}" stroke="#0a1f3d" stroke-width="3"/>`;
-                        svg += `<line x1="${x+w-12}" y1="${floor}" x2="${x+6}" y2="${endY}" stroke="#0a1f3d" stroke-width="2"/>`;
-                        svg += `<line x1="${x}" y1="${endY}" x2="${x+6}" y2="${endY}" stroke="#0a1f3d" stroke-width="3"/>`
-                    }
+                    svg += `<rect x="${hingePx-2}" y="${floor-2}" width="4" height="4" fill="#0a1f3d"/>`;
+                    svg += `<line x1="${hingePx}" y1="${floor}" x2="${hingePx+dirXsvg*leafPx*Math.cos(Math.PI/9)}" y2="${floor+dirYsvg*leafPx*Math.sin(Math.PI/9)}" stroke="#0a1f3d" stroke-width="3"/>`;
                     svg += `</g>`
                 }
                 svg += `<text x="${cx}" y="${floor-6}" font-size="11" fill="#0a1f3d" font-weight="700" text-anchor="middle">${esMingit?"M":"C"}${i+1}</text>`
@@ -5308,8 +5301,6 @@ function buildBathroomSvg() {
             if (sobraProfPx > 0) {
                 svg += `<rect x="${floorStartX}" y="${floor}" width="${floorEndX-floorStartX}" height="${sobraProfPx}" fill="#f7fafc"/>`;
                 svg += `<line x1="${floorStartX}" y1="${floor}" x2="${floorEndX}" y2="${floor}" stroke="#94a3b8" stroke-width="0.7" stroke-dasharray="4,3"/>`;
-                svg += `<rect x="${padding}" y="${floorLugar}" width="${drawW}" height="8" fill="white" stroke="#0a1f3d" stroke-width="1"/>`;
-                svg += `<rect x="${padding}" y="${floorLugar}" width="${drawW}" height="8" fill="url(#wallHatch)" stroke="none"/>`;
                 svg += `<text x="${(floorStartX+floorEndX)/2}" y="${floor + sobraProfPx/2 + 3}" font-size="8" fill="#5a6472" font-weight="600" text-anchor="middle">Espacio libre: ${sobraProfCm} cm</text>`
             }
             const py1 = 20, py2 = floorLugar, pxx = 17, pmid = (py1 + py2) / 2;
@@ -7039,6 +7030,13 @@ function exportarCSV(proyecto) {
             })
         })
     }
+    const tub = typeof tubingDeProyecto === "function" ? tubingDeProyecto(proyecto) : null;
+    if (tub) {
+        tub.porArea.forEach(r => {
+            lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("TB" + r.corte), 1, csvCell("TUBING"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","));
+            if (r.kchl > 0) lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("KCHL"), r.kchl, csvCell("TUBING-KIT"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
+        })
+    }
     const csv = lines.join("\n");
     const blob = new Blob([csv], {
         type: "text/csv;charset=utf-8;"
@@ -7509,6 +7507,60 @@ function perfilUDeProyecto(proyecto) {
     return {
         porArea: porArea,
         totalMl: Math.round(porArea.reduce((s, r) => s + r.totalCm, 0)) / 100
+    }
+}
+
+function esModeloImperial(proyecto) {
+    return proyecto.modelo === "IMPERIAL"
+}
+
+function tubingDeArea(proyecto, areaName) {
+    if (!esModeloImperial(proyecto)) return null;
+    const a = (proyecto.configByArea || {})[areaName] || {};
+    const N = a.cabinas !== undefined ? a.cabinas : proyecto.cabinas || 0;
+    if (!N) return null;
+    const layoutCodigo = a.layout || proyecto.layout || "L";
+    const invertir = a.invertir !== undefined ? !!a.invertir : !!proyecto.invertir;
+    const anchoDe = c => {
+        const p = c ? CATALOGO.piezas.find(x => x.codigo === c) : null;
+        return p ? p.ancho : 0
+    };
+    let claro = a.claroCliente && a.claroCliente > 0 ? +a.claroCliente : 0;
+    if (!claro) {
+        let sum = 0;
+        for (let i = 0; i < N; i++) {
+            sum += anchoDe((a.puertas || [])[i]);
+            if (i < N - 1) sum += anchoDe((a.pilastras || [])[i])
+        }
+        if (a.muroIzq && a.muroIzq.codigo) sum += anchoDe(a.muroIzq.codigo);
+        if (a.muroDer && a.muroDer.codigo) sum += anchoDe(a.muroDer.codigo);
+        claro = Math.round(sum)
+    }
+    if (!claro) return null;
+    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layoutCodigo);
+    const hasRight = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
+    const leftWallEff = invertir ? hasRight : hasLeft;
+    const rightWallEff = invertir ? hasLeft : hasRight;
+    return {
+        corte: Math.round(claro + 10),
+        kchl: (leftWallEff ? 1 : 0) + (rightWallEff ? 1 : 0)
+    }
+}
+
+function tubingDeProyecto(proyecto) {
+    if (!esModeloImperial(proyecto)) return null;
+    const porArea = [];
+    (proyecto.areas || []).forEach(areaName => {
+        const r = tubingDeArea(proyecto, areaName);
+        if (r) porArea.push(Object.assign({
+            area: areaName
+        }, r))
+    });
+    if (!porArea.length) return null;
+    return {
+        porArea: porArea,
+        kchl: porArea.reduce((s, r) => s + r.kchl, 0),
+        totalMl: Math.round(porArea.reduce((s, r) => s + r.corte, 0)) / 100
     }
 }
 
@@ -8133,7 +8185,10 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             align: "center"
         })
     }
-    const grosorPz = 1.2;
+    const grosorPz = 1;
+    const angPuerta = Math.PI / 9;
+    const cosAng = Math.cos(angPuerta);
+    const sinAng = Math.sin(angPuerta);
     const leafLenDe = wMm => Math.min(wMm - 3, cabDepth * .78);
     let swingEff = swingExtra;
     seq.forEach(s => {
@@ -8142,7 +8197,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             const sentS = (apS.split("_")[1] || "EXT").toUpperCase();
             if (sentS !== "INT") {
                 const leaf = leafLenDe(s.ancho * scale);
-                if (leaf > 0) swingEff = Math.max(swingEff, leaf * Math.SQRT1_2 + 3)
+                if (leaf > 0) swingEff = Math.max(swingEff, leaf * sinAng + 3)
             }
         }
     });
@@ -8376,11 +8431,10 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 const openXp = divXp + (swingRightP ? doorMm : -doorMm);
                 doc.rect(divXp - 1, hyP - 1, 2, 2, "F");
                 doc.setDrawColor(10, 31, 61);
-                const dLeafP = doorMm * Math.SQRT1_2;
                 const dirXp = swingRightP ? 1 : -1;
                 const dirYp = hingeTopP ? 1 : -1;
                 doc.setLineWidth(grosorPz);
-                doc.line(divXp, hyP, divXp + dirXp * dLeafP, hyP + dirYp * dLeafP);
+                doc.line(divXp, hyP, divXp + dirXp * doorMm * sinAng, hyP + dirYp * doorMm * cosAng);
                 doc.setLineWidth(.55);
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(6);
@@ -8460,9 +8514,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 doc.setDrawColor(10, 31, 61);
                 const dirX = lado === "IZQ" ? 1 : -1;
                 const dirY = sentido === "EXT" ? 1 : -1;
-                const dLeaf = leafLen * Math.SQRT1_2;
                 doc.setLineWidth(grosorPz);
-                doc.line(hingeX, floorY, hingeX + dirX * dLeaf, floorY + dirY * dLeaf);
+                doc.line(hingeX, floorY, hingeX + dirX * leafLen * cosAng, floorY + dirY * leafLen * sinAng);
                 doc.setLineWidth(.55);
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(9);
