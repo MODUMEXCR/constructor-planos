@@ -8151,6 +8151,19 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             align: "center"
         })
     }
+    const grosorPz = 2;
+    const leafLenDe = wMm => Math.min(wMm - 3, cabDepth * .78);
+    let swingEff = swingExtra;
+    seq.forEach(s => {
+        if (s.tipo === "puerta" && !s.cuartoPmr) {
+            const apS = (areaCfg.aperturas || [])[s.indiceCabina - 1] || "";
+            const sentS = (apS.split("_")[1] || "EXT").toUpperCase();
+            if (sentS !== "INT") {
+                const leaf = leafLenDe(s.ancho * scale);
+                if (leaf > 0) swingEff = Math.max(swingEff, leaf * Math.SQRT1_2 + 3)
+            }
+        }
+    });
     let x = drawX;
     seq.forEach(s => {
         const w = s.ancho * scale;
@@ -8203,8 +8216,9 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             const mgAltoPdf = mgPzPdf && mgPzPdf.alto ? mgPzPdf.alto : 150;
             const fracPdf = Math.min(.8, Math.max(.35, mgAltoPdf / 150 * .6));
             doc.setDrawColor(10, 31, 61);
-            doc.setLineWidth(.9);
+            doc.setLineWidth(grosorPz);
             doc.line(px, drawTop, px, drawTop + cabDepth * fracPdf);
+            doc.setLineWidth(.55);
             if (s.panelDivCode) {
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(5.5);
@@ -8217,8 +8231,9 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             const mgAltoC = mgPzC && mgPzC.alto ? mgPzC.alto : 150;
             const fracC = Math.min(.8, Math.max(.35, mgAltoC / 150 * .6));
             doc.setDrawColor(10, 31, 61);
-            doc.setLineWidth(.9);
+            doc.setLineWidth(grosorPz);
             doc.line(lineXP, drawTop, lineXP, drawTop + cabDepth * fracC);
+            doc.setLineWidth(.55);
             if (s.mgCode) {
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(5.5);
@@ -8229,7 +8244,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             const px = x + w / 2;
             const panelHpc = esPmrLayPdf && s.idxSlot === 0 ? cabDepth : panelLenMm(s.panelDivCode);
             doc.setFillColor(10, 31, 61);
-            doc.rect(px - 1.5, drawTop, 3, panelHpc, "F");
+            doc.rect(px - grosorPz / 2, drawTop, grosorPz, panelHpc, "F");
             doc.rect(px - 2.5, drawTop - 2, 5, 4, "F");
             doc.rect(x, floorY - 2, w, 2, "F");
             doc.setFont("helvetica", "normal");
@@ -8241,7 +8256,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         } else if (s.tipo === "pilastra") {
             const px = x + w / 2;
             doc.setFillColor(10, 31, 61);
-            doc.rect(px - .5, drawTop, 1, panelLenMm(s.panelDivCode), "F");
+            doc.rect(px - grosorPz / 2, drawTop, grosorPz, panelLenMm(s.panelDivCode), "F");
             doc.rect(px - 1.5, drawTop - 2, 3, 4, "F");
             doc.rect(x, floorY - 2, w, 2, "F");
             doc.setFont("helvetica", "normal");
@@ -8269,11 +8284,11 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 align: "center"
             })
         } else if (s.tipo === "pilastra-terminal") {
-            const panelX = s.lado === "izq" ? x : x + w - 3;
+            const panelX = s.lado === "izq" ? x : x + w - grosorPz;
             const capX = s.lado === "izq" ? x + 2 : x + w - 5;
             const panelLenTermMm = panelLenMm(s.panelDivCode);
             doc.setFillColor(10, 31, 61);
-            doc.rect(panelX, drawTop, 3, panelLenTermMm, "F");
+            doc.rect(panelX, drawTop, grosorPz, panelLenTermMm, "F");
             doc.rect(capX, drawTop - 2, 3, 4, "F");
             doc.rect(x, floorY - 2, w, 2, "F");
             doc.setFont("helvetica", "normal");
@@ -8369,7 +8384,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 const yDoorTop = yDoorTopP;
                 const yDoorBot = yDoorTopP + doorMm;
                 doc.setFillColor(10, 31, 61);
-                if (panelExtraMm > .3) doc.rect(divXp - 1.5, floorY, 3, panelExtraMm, "F");
+                if (panelExtraMm > .3) doc.rect(divXp - grosorPz / 2, floorY, grosorPz, panelExtraMm, "F");
                 doc.rect(divXp - 1, yDoorBot, 2, frenteMm, "F");
                 const apertVp = (areaCfg.aperturas || [])[s.indiceCabina - 1] || "DER_EXT";
                 const [ladoVp, sentVp] = apertVp.split("_");
@@ -8379,12 +8394,12 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 const openXp = divXp + (swingRightP ? doorMm : -doorMm);
                 doc.rect(divXp - 1, hyP - 1, 2, 2, "F");
                 doc.setDrawColor(10, 31, 61);
+                const dLeafP = doorMm * Math.SQRT1_2;
+                const dirXp = swingRightP ? 1 : -1;
+                const dirYp = hingeTopP ? 1 : -1;
+                doc.setLineWidth(grosorPz);
+                doc.line(divXp, hyP, divXp + dirXp * dLeafP, hyP + dirYp * dLeafP);
                 doc.setLineWidth(.55);
-                doc.line(divXp, hyP, openXp, hyP);
-                doc.setLineDashPattern([1.5, 1], 0);
-                const quadVp = hingeTopP ? swingRightP ? "SE" : "SW" : swingRightP ? "NE" : "NW";
-                drawQuarterArc(doc, divXp, hyP, doorMm, quadVp, "S");
-                doc.setLineDashPattern([], 0);
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(6);
                 doc.setTextColor(10, 31, 61);
@@ -8456,20 +8471,17 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 } else {
                     lado = areaInvertir ? "DER" : "IZQ"
                 }
-                const r = Math.min(w - 4, swingExtra + 2);
+                const leafLen = leafLenDe(w);
                 const hingeX = lado === "IZQ" ? x + 1.5 : x + w - 1.5;
                 doc.setFillColor(10, 31, 61);
                 doc.rect(hingeX - 1, floorY - .6, 2, 1.2, "F");
                 doc.setDrawColor(10, 31, 61);
+                const dirX = lado === "IZQ" ? 1 : -1;
+                const dirY = sentido === "EXT" ? 1 : -1;
+                const dLeaf = leafLen * Math.SQRT1_2;
+                doc.setLineWidth(grosorPz);
+                doc.line(hingeX, floorY, hingeX + dirX * dLeaf, floorY + dirY * dLeaf);
                 doc.setLineWidth(.55);
-                let quad;
-                if (lado === "IZQ" && sentido === "EXT") quad = "SE";
-                if (lado === "IZQ" && sentido === "INT") quad = "NE";
-                if (lado === "DER" && sentido === "EXT") quad = "SW";
-                if (lado === "DER" && sentido === "INT") quad = "NW";
-                drawQuarterArc(doc, hingeX, floorY, r, quad, "S");
-                const endY = sentido === "EXT" ? floorY + r : floorY - r;
-                doc.line(hingeX, floorY, hingeX, endY);
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(9);
                 doc.setTextColor(10, 31, 61);
@@ -8512,7 +8524,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             })
         }
         if (s.tipo !== "muro" && s.tipo !== "mamparaCierreMingit") {
-            const dimY = Math.min(floorLugar + (esPmrLayPdf ? extraPmrPdf : swingExtra), cotaClampY) + 8;
+            const dimY = Math.min(floorLugar + (esPmrLayPdf ? extraPmrPdf : swingEff), cotaClampY) + 8;
             doc.setDrawColor(10, 31, 61);
             doc.setLineWidth(.3);
             doc.line(x, dimY, x + w, dimY);
@@ -8535,7 +8547,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         }
         x += w
     });
-    const dimTotalY = Math.min(floorLugar + (esPmrLayPdf ? extraPmrPdf : swingExtra), cotaClampY) + 22;
+    const dimTotalY = Math.min(floorLugar + (esPmrLayPdf ? extraPmrPdf : swingEff), cotaClampY) + 22;
     const murosTotCm = seq.filter(s => s.tipo === "muro").reduce((t, s) => t + s.ancho, 0);
     const claroTotalCm = areaCfg.claroCliente && areaCfg.claroCliente > 0 ? areaCfg.claroCliente : totalCm - murosTotCm;
     const xT1 = drawX + (seq[0] && seq[0].tipo === "muro" ? 15 * scale : 0);
