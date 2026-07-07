@@ -3569,7 +3569,7 @@ const PRECIO_MODELO_LABEL = {
     COLGANTE: "Colgante",
     TL_S3: "Touchless S3"
 };
-const PRECIO_MODELOS_OCULTOS = ["SUP_ESTANDAR", "SUP_ESTANDAR170", "SUP_REFORZADO", "SUP_REFORZADO170"];
+const PRECIO_MODELOS_OCULTOS = ["SUP_ESTANDAR", "SUP_ESTANDAR170", "SUP_REFORZADO", "SUP_REFORZADO170", "SUP_COLGANTE"];
 
 function preciosModelos() {
     return Object.keys(CATALOGO.preciosPorM2).filter(m => !PRECIO_MODELOS_OCULTOS.includes(m))
@@ -7827,15 +7827,15 @@ function drawCajetinEsen(doc, proyecto, opts) {
         ["Plano:", opts.plano],
         ["Ubicación:", ubic],
         ["# Presupuesto:", presup],
-        ["Fecha:", fecha],
-        ["Creado por:", proyecto.creadoPor || currentUser()?.nombre || "—"]
+        ["Fecha:", fecha]
     ], x0 + 26, cx1 - 2);
     drawPairs([
         ["Línea:", proyecto.linea || "—"],
         ["Modelo:", modeloNom],
         ["Acabado:", acabado],
         ["Color:", color],
-        ["Remate inferior:", term]
+        ["Remate inferior:", term],
+        ["Creado por:", proyecto.creadoPor || currentUser()?.nombre || "—"]
     ], cx1 + 3, cx2 - 2);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(6.2);
