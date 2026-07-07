@@ -8126,24 +8126,6 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         doc.setLineDashPattern([1.2, 1], 0);
         doc.line(floorStartX, floorY, floorEndX, floorY);
         doc.setLineDashPattern([], 0);
-        const owH = 3;
-        doc.setFillColor(255, 255, 255);
-        doc.setDrawColor(10, 31, 61);
-        doc.setLineWidth(.6);
-        doc.rect(floorStartX, floorLugar, floorEndX - floorStartX, owH, "FD");
-        doc.setLineWidth(.25);
-        const anchoOw = floorEndX - floorStartX;
-        for (let d = -owH; d < anchoOw; d += 1.6) {
-            const x1 = floorStartX + d,
-                y1 = floorLugar;
-            const x2 = floorStartX + d + owH,
-                y2 = floorLugar + owH;
-            const cx1 = Math.max(x1, floorStartX),
-                cy1 = y1 + (cx1 - x1);
-            const cx2 = Math.min(x2, floorEndX),
-                cy2 = y2 - (x2 - cx2);
-            if (cx1 < cx2) doc.line(cx1, Math.max(cy1, floorLugar), cx2, Math.min(cy2, floorLugar + owH))
-        }
         doc.setFont("helvetica", "normal");
         doc.setFontSize(6.5);
         doc.setTextColor(90, 100, 114);
