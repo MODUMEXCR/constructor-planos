@@ -2532,25 +2532,29 @@ const CATALOGO = {
                 puerta: 232.29,
                 panel: 195.81,
                 pilastra: 304.93,
-                mingitorio: 228.66
+                mingitorio: 228.66,
+                antepecho: 232.29
             },
             especiales: {
                 puerta: 277.47,
                 panel: 233.88,
                 pilastra: 364.21,
-                mingitorio: 273.13
+                mingitorio: 273.13,
+                antepecho: 277.47
             },
             lineaCRC: {
                 puerta: 133914.42,
                 panel: 134827.37,
                 pilastra: 184766.11,
-                mingitorio: 157449.89
+                mingitorio: 157449.89,
+                antepecho: 133914.42
             },
             especialesCRC: {
                 puerta: 159956.63,
                 panel: 134827.37,
                 pilastra: 184766.11,
-                mingitorio: 157449.89
+                mingitorio: 157449.89,
+                antepecho: 159956.63
             }
         },
         COLGANTE: {
@@ -3253,6 +3257,16 @@ if (!db.catalogos.preciosPorM2) {
         if (!db.catalogos.preciosPorM2[k]) {
             db.catalogos.preciosPorM2[k] = JSON.parse(JSON.stringify(CATALOGO.preciosPorM2[k]))
         }
+    });
+    Object.keys(CATALOGO.preciosPorM2).forEach(k => {
+        const litM = CATALOGO.preciosPorM2[k],
+            dbM = db.catalogos.preciosPorM2[k];
+        if (!litM || !dbM) return;
+        ["linea", "especiales", "lineaCRC", "especialesCRC", "lineaCR"].forEach(tier => {
+            if (litM[tier] && litM[tier].antepecho != null && dbM[tier] && dbM[tier].antepecho == null) {
+                dbM[tier].antepecho = litM[tier].antepecho
+            }
+        })
     })
 }
 CATALOGO.preciosPorM2 = db.catalogos.preciosPorM2;
@@ -3541,6 +3555,9 @@ const PRECIO_PIEZAS = [{
 }, {
     key: "mingitorio",
     label: "Mingitorio"
+}, {
+    key: "antepecho",
+    label: "Antepecho"
 }];
 const PRECIO_MODELO_LABEL = {
     ESTANDAR: "Estándar",
@@ -8844,7 +8861,7 @@ function familiaTarifa(familiaPieza) {
         case "MG":
             return "mingitorio";
         case "AN":
-            return "puerta";
+            return "antepecho";
         default:
             return "panel"
     }
@@ -8870,6 +8887,7 @@ function calcularPrecioPieza(pieza, productoCodigo, terminacionCodigo, tier, mon
         const tiersValidos = ["linea", "especiales", "aceroInox", "antigrafiti"];
         const setKey = tiersValidos.includes(tier) ? tier : "especiales";
         let usd = modelo[setKey] && modelo[setKey][fam] != null ? modelo[setKey][fam] : 0;
+        if (!usd && fam === "antepecho" && modelo[setKey]) usd = modelo[setKey].puerta || 0;
         if (moneda === "CRC") {
             if (setKey === "linea" && modelo.lineaCR && modelo.lineaCR[fam] != null) usd = modelo.lineaCR[fam];
             return m2 * usd * (parseFloat(tipoCambioColones) || 0)
@@ -8879,7 +8897,8 @@ function calcularPrecioPieza(pieza, productoCodigo, terminacionCodigo, tier, mon
     const tierKey = tier === "linea" ? "linea" : "especiales";
     const key = moneda === "CRC" ? tierKey + "CRC" : tierKey;
     const t = modelo[key] || modelo[tierKey] || modelo.especiales || modelo.linea || modelo;
-    const tarifa = t[fam] || 0;
+    let tarifa = t[fam] || 0;
+    if (!tarifa && fam === "antepecho") tarifa = t.puerta || 0;
     return m2 * tarifa
 }
 
