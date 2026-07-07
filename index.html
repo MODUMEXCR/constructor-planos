@@ -4144,6 +4144,7 @@ function regionDistribuidorActual() {
 
 function puertaSoloCRPermitida(pieza) {
     if (!pieza || pieza.familia !== "PT" || !ANCHOS_PUERTA_SOLO_CR.includes(pieza.ancho)) return true;
+    if (typeof rolVeTodo === "function" && rolVeTodo(typeof currentUser === "function" ? currentUser() : null)) return true;
     return normRegion(regionDistribuidorActual()) === normRegion("Costa Rica")
 }
 
