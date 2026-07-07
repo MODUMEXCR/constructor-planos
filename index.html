@@ -4133,6 +4133,19 @@ function monedaDeRegion(region) {
 function regionNoCotiza(region) {
     return normRegion(region) === normRegion("México")
 }
+const ANCHOS_PUERTA_SOLO_CR = [62, 64, 92, 94];
+
+function regionDistribuidorActual() {
+    return regionDeProyecto({
+        distribuidor: cfg && cfg.distribuidor,
+        distribuidorId: cfg && cfg.distribuidorId
+    })
+}
+
+function puertaSoloCRPermitida(pieza) {
+    if (!pieza || pieza.familia !== "PT" || !ANCHOS_PUERTA_SOLO_CR.includes(pieza.ancho)) return true;
+    return normRegion(regionDistribuidorActual()) === normRegion("Costa Rica")
+}
 
 function sincronizarMurosConLayout() {
     const a = typeof activeAreaCfg === "function" ? activeAreaCfg() : null;
@@ -5480,6 +5493,7 @@ function anchosPermitidosPorModelo(modeloCod, familia) {
 
 function piezaPermitidaPorModelo(pieza, modeloCod, altoTouchless) {
     const m = (modeloCod || "").toUpperCase();
+    if (!puertaSoloCRPermitida(pieza)) return false;
     if (m === "TL_S3" && pieza.familia === "PN" && altoTouchless && altoTouchless !== 150 && (pieza.ancho === 165 || pieza.ancho === 180)) return false;
     const r = anchosPermitidosPorModelo(modeloCod, pieza.familia);
     if (!r) return true;
