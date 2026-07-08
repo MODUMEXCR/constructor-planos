@@ -5114,6 +5114,7 @@ function buildBathroomSvg() {
     const floorStartX = padding + (leftWall ? 15 * scale : 0);
     const floorEndX = padding + drawW - (rightWall ? 15 * scale : 0);
     svg += `<rect x="${floorStartX}" y="20" width="${floorEndX-floorStartX}" height="${cabHeight}" fill="#f0f3f7"/>`;
+    if (sobraProfPx > 0) svg += `<rect x="${floorStartX}" y="${floor}" width="${floorEndX-floorStartX}" height="${sobraProfPx}" fill="#f7fafc"/>`;
     let x = padding;
     seq.forEach(s => {
         const w = s.ancho * scale;
@@ -5311,7 +5312,6 @@ function buildBathroomSvg() {
         const profCm = profLugarCm;
         if (profCm > 0) {
             if (sobraProfPx > 0) {
-                svg += `<rect x="${floorStartX}" y="${floor}" width="${floorEndX-floorStartX}" height="${sobraProfPx}" fill="#f7fafc"/>`;
                 svg += `<line x1="${floorStartX}" y1="${floor}" x2="${floorEndX}" y2="${floor}" stroke="#94a3b8" stroke-width="0.7" stroke-dasharray="4,3"/>`;
                 svg += `<text x="${(floorStartX+floorEndX)/2}" y="${floor + sobraProfPx/2 + 3}" font-size="8" fill="#5a6472" font-weight="600" text-anchor="middle">Espacio libre: ${sobraProfCm} cm</text>`
             }
