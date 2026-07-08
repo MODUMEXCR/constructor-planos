@@ -5155,8 +5155,8 @@ function buildBathroomSvg() {
                 break
             }
         }
-        const dz = CATALOGO.piezas.find(p => p.codigo === (areaCfg.paneles || [])[0]);
-        if (dz) pmrDivPanelCm = dz.ancho
+        const dzAncho = anchoDePiezaCodigo((areaCfg.paneles || [])[0]);
+        if (dzAncho > 0) pmrDivPanelCm = dzAncho
     }
     const pmrPanelExtraCm = Math.max(0, pmrDivPanelCm - pmrCabPanelCm);
     const extraPmr = esPmrLay ? Math.round(cabHeight * (pmrPanelExtraCm + 90 + 45) / pmrCabPanelCm) : 0;
@@ -5430,7 +5430,19 @@ function buildBathroomSvg() {
             if (c === "" || c == null || isNaN(c)) return;
             const cn = Number(c);
             const cb = cabinaCentersX[i];
-            if (!cb || cb.esMingit) return;
+            // Cuarto PMR (i=0): el centro va sobre la PROFUNDIDAD (eje vertical izq), no sobre el claro.
+            if (esPmrLay && i === 0) {
+                const profCm2 = profLugarCm || 0;
+                if (profCm2 > 0) {
+                    const yM = Math.max(20, Math.min(floorLugar, floorLugar - cn / profCm2 * (floorLugar - 20)));
+                    svg += `<g data-piece="centro-pmr">`;
+                    svg += `<polygon points="24,${yM-5} 24,${yM+5} 32,${yM}" fill="#f5c542" stroke="#0a1f3d" stroke-width="0.8"/>`;
+                    svg += `<text x="34" y="${yM+3}" font-size="8" fill="#0a1f3d" font-weight="700">${cn} cm (fondo)</text>`;
+                    svg += `</g>`
+                }
+                return
+            }
+            if (!cb) return;
             const xMarker = xClaroIzq + cn * scale;
             svg += `<g data-piece="centro-${i}">`;
             svg += `<polygon points="${xMarker-5},${markerY+8} ${xMarker+5},${markerY+8} ${xMarker},${markerY}" fill="#f5c542" stroke="#0a1f3d" stroke-width="0.8"/>`;
@@ -6068,13 +6080,19 @@ function sugerirModulacion({
         if (claroHoriz < 60) return {
             error: `El cuarto PMR de ${anchoPmr} cm deja solo ${claroHoriz} cm para cabinas — reducí el ancho del cuarto o aumentá el vano`
         };
+        // Cierre con MG: cuando la fila TERMINA en mingitorio y NO hay muro derecho
+        // (PMR sin muro = cierrePanel), el extremo der. cierra con una mampara MG (no
+        // pilastra + panel). Eso agrega 1 mampara más (N mamparas para N urinales) y
+        // elimina la pilastra terminal + el panel de cierre.
+        const cierreMingit = esCierrePanel && (nMingit || 0) > 0;
+        const grosorMGtotal = cierreMingit ? (nMingit || 0) * 1.27 : Math.max(0, (nMingit || 0) - 1) * 1.27;
         const claroAjustadoH = claroHoriz - (esCierrePanel ? 0 : 1) + 1.5 * nEst;
         let bestP = null;
         for (const ap of opcionesPuerta) {
             for (const apI of nDiv > 0 ? opcionesPilInt : [0]) {
                 for (const apJ of opcionesPilEsq) {
-                    for (const apE2 of opcionesPilEsq) {
-                        const total = nEst * ap + (nMingit || 0) * anchoMG + grosorDivisoresMG + nDiv * apI + apJ + apE2;
+                    for (const apE2 of (cierreMingit ? [0] : opcionesPilEsq)) {
+                        const total = nEst * ap + (nMingit || 0) * anchoMG + grosorMGtotal + nDiv * apI + apJ + apE2;
                         const diff = claroAjustadoH - total;
                         const score = Math.abs(diff) + (nEst > 0 ? Math.abs(ap - 60) * .05 : 0);
                         if (!bestP || score < bestP.score) bestP = {
@@ -6120,16 +6138,23 @@ function sugerirModulacion({
             nCanaletasP = 1
         }
         const codPuertaPmrLateral = "PT90";
-        const codPanelDivisor = CATALOGO.piezas.find(p => p.codigo === "PN165") ? "PN165" : "PN150";
+        // Divisor del cuarto PMR: corre a lo largo de la PROFUNDIDAD. Puerta lateral
+        // PT90 (90) + frente PI45 (45) fijos; el PANEL divisor se corta a medida =
+        // profundidad − 90 − 45. Si no hay profundidad válida → PN165 (como antes).
+        const profPmr = (typeof leerDimensionesLugar === "function" ? (leerDimensionesLugar() || {}).paredOpuesta : 0) || 0;
+        const anchoFrentePmr = 45, anchoPuertaLat = 90;
+        const anchoPanelDiv = profPmr >= (anchoPuertaLat + anchoFrentePmr + 40) ? Math.round(profPmr - anchoPuertaLat - anchoFrentePmr) : 0;
+        const codPanelDivisor = anchoPanelDiv > 0 ? ("PN" + anchoPanelDiv) : (CATALOGO.piezas.find(p => p.codigo === "PN165") ? "PN165" : "PN150");
         const codPilFrentePmr = `PI45${sufR}`;
-        const cierreDerTxt = esCierrePanel ? "terminal der (cierra con panel PN150)" : "a muro der";
-        const pasosP = [`Claro del vano: ${claro} cm`, `− Cuarto PMR (espacio libre, sin modulación): ${anchoPmr} cm → segmento de cabinas = ${claroHoriz} cm`, esCierrePanel ? "Sin muro derecho: cierre con pilastra terminal + panel (sin rebaja de herraje)" : `− 1 cm × 1 pilastra a muro der (herraje) = ${(claroHoriz-1).toFixed(1)} cm`, nEst > 0 ? `+ 1.5 cm × ${nEst} puerta(s) (clearance bisagra) = ${claroAjustadoH.toFixed(1)} cm` : null, `Segmento: PI${bestP.apJ} (junto al divisor) + ${nEst}×PT${bestP.ap}${nDiv>0?" + "+nDiv+"×PI"+bestP.apI+" (central)":""} + PI${bestP.apE2} (${cierreDerTxt})`, `Cuarto PMR (perpendicular, en el divisor): ${codPanelDivisor} + ${codPuertaPmrLateral} puerta lateral + ${codPilFrentePmr} frente`].filter(Boolean);
+        const codMGCierre = cierreMingit ? (aCfg.mgTipo || "MG60120") : null;
+        const cierreDerTxt = cierreMingit ? "cierra con mampara MG (mingitorio, sin muro der)" : esCierrePanel ? "terminal der (cierra con panel PN150)" : "a muro der";
+        const pasosP = [`Claro del vano: ${claro} cm`, `− Cuarto PMR (espacio libre, sin modulación): ${anchoPmr} cm → segmento de cabinas = ${claroHoriz} cm`, cierreMingit ? "Termina en mingitorio sin muro der: cierre con mampara MG" : esCierrePanel ? "Sin muro derecho: cierre con pilastra terminal + panel" : `− 1 cm × 1 pilastra a muro der (herraje) = ${(claroHoriz-1).toFixed(1)} cm`, nEst > 0 ? `+ 1.5 cm × ${nEst} puerta(s) (clearance bisagra) = ${claroAjustadoH.toFixed(1)} cm` : null, `Segmento: PI${bestP.apJ} (junto al divisor) + ${nEst}×PT${bestP.ap}${nDiv>0?" + "+nDiv+"×PI"+bestP.apI+" (central)":""}${(nMingit||0)>0?" + "+(nMingit)+"×MG60":""}${cierreMingit?" + MG (cierre der)":" + PI"+bestP.apE2+" ("+cierreDerTxt+")"}`, `Cuarto PMR (perpendicular, en el divisor, sobre la profundidad ${profPmr||"—"} cm): ${codPanelDivisor} + ${codPuertaPmrLateral} puerta lateral + ${codPilFrentePmr} frente`].filter(Boolean);
         return {
             nCabinas: N,
             nEstandar: nEst,
             nAccesible: 1,
             nPilInternas: nDiv,
-            nPilEsquinas: 2,
+            nPilEsquinas: cierreMingit ? 1 : 2,
             nMingit: nMingit || 0,
             nPuertas: nEst + 1,
             layout: layoutCodigo,
@@ -6138,26 +6163,30 @@ function sugerirModulacion({
             esPmrCuarto: true,
             anchoPmrCuarto: anchoPmr,
             esCierrePanel: esCierrePanel,
+            cierreMingit: cierreMingit,
+            codMGCierre: codMGCierre,
             codPuerta: `PT${bestP.ap}`,
             codPuertaAcc: codPuertaPmrLateral,
             codPilInt: nDiv > 0 ? `PI${bestP.apI}${sufR}` : null,
             codPilEsq: `PI${bestP.apJ}${sufR}`,
-            codPilEsq2: `PI${bestP.apE2}${sufR}`,
+            codPilEsq2: cierreMingit ? null : `PI${bestP.apE2}${sufR}`,
             codPanelDivisor: codPanelDivisor,
+            anchoPanelDivisor: anchoDePiezaCodigo(codPanelDivisor),
+            profundidad: profPmr,
             codPilFrentePmr: codPilFrentePmr,
-            codPanelCierre: esCierrePanel ? "PN150" : null,
+            codPanelCierre: (esCierrePanel && !cierreMingit) ? "PN150" : null,
             codMG: (nMingit || 0) > 0 ? "MG60" : null,
             anchoPuerta: bestP.ap,
             anchoPuertaAcc: 90,
             anchoPilInt: bestP.apI,
             anchoPilEsq: bestP.apJ,
-            anchoPilEsq2: bestP.apE2,
+            anchoPilEsq2: cierreMingit ? null : bestP.apE2,
             anchoMG: (nMingit || 0) > 0 ? anchoMG : null,
             total: bestP.total + anchoPmr,
             diferencia: bestP.diff,
             ajuste: ajusteP,
             pasos: pasosP,
-            pilEsqTxt: `PI${bestP.apJ} (junto al divisor) + PI${bestP.apE2} (${cierreDerTxt})`,
+            pilEsqTxt: cierreMingit ? `PI${bestP.apJ} (junto al divisor) + MG (cierre der)` : `PI${bestP.apJ} (junto al divisor) + PI${bestP.apE2} (${cierreDerTxt})`,
             codCanaleta: codCanaletaP,
             anchoCanaleta: anchoCanaletaP,
             nCanaletas: nCanaletasP
@@ -6328,16 +6357,18 @@ function mostrarSugerencia(s) {
     if (s.esPmrCuarto) {
         items.push(`<strong>Cuarto PMR:</strong> ${s.anchoPmrCuarto} cm <span class="dim">— espacio libre (no se modula); giro Ø1.50 m</span>`);
         items.push(`<strong>1</strong> × ${s.codPuertaAcc} <span class="dim">— puerta LATERAL del cuarto PMR (en el panel divisor, perpendicular)</span>`);
-        items.push(`<strong>1</strong> × ${s.codPanelDivisor} <span class="dim">— panel divisor profundo entre el cuarto y las cabinas</span>`);
+        items.push(`<strong>1</strong> × ${s.codPanelDivisor} <span class="dim">— panel divisor a medida = profundidad ${s.profundidad||"—"} − puerta 90 − frente 45 = ${s.anchoPanelDivisor} cm</span>`);
         items.push(`<strong>1</strong> × ${s.codPilFrentePmr} <span class="dim">— pilastra del frente del cuarto (junto a la puerta lateral)</span>`);
-        if (s.esCierrePanel) {
+        if (s.cierreMingit) {
+            items.push(`<strong>1</strong> × ${s.codMGCierre} <span class="dim">— mampara MG de CIERRE al final (termina en mingitorio, sin muro der)</span>`)
+        } else if (s.esCierrePanel) {
             items.push(`<strong>1</strong> × ${s.codPanelCierre||"PN150"} <span class="dim">— panel de CIERRE al final (sin muro derecho)</span>`)
         }
     }
     if (s.nPilEsquinas > 0) {
         if (s.esPmrCuarto) {
             items.push(`<strong>1</strong> × ${s.codPilEsq} <span class="dim">— pilastra junto al divisor (${s.anchoPilEsq} cm, recibe el segmento)</span>`);
-            items.push(s.esCierrePanel ? `<strong>1</strong> × ${s.codPilEsq2} <span class="dim">— pilastra TERMINAL der. (${s.anchoPilEsq2} cm, junto al panel de cierre)</span>` : `<strong>1</strong> × ${s.codPilEsq2} <span class="dim">— pilastra a muro der. (${s.anchoPilEsq2} cm)</span>`)
+            if (!s.cierreMingit) items.push(s.esCierrePanel ? `<strong>1</strong> × ${s.codPilEsq2} <span class="dim">— pilastra TERMINAL der. (${s.anchoPilEsq2} cm, junto al panel de cierre)</span>` : `<strong>1</strong> × ${s.codPilEsq2} <span class="dim">— pilastra a muro der. (${s.anchoPilEsq2} cm)</span>`)
         } else if (s.nPilEsquinas === 2 && s.anchoPilEsq2 && s.anchoPilEsq !== s.anchoPilEsq2) {
             items.push(`<strong>1</strong> × ${s.codPilEsq} <span class="dim">— pilastra a muro izq. (${s.anchoPilEsq} cm)</span>`);
             items.push(`<strong>1</strong> × ${s.codPilEsq2} <span class="dim">— pilastra a muro der. (${s.anchoPilEsq2} cm)</span>`)
@@ -6366,6 +6397,16 @@ function panelSugeridoSegunProfundidad(modelo, profDisponible, altoTouchless) {
     const fit = permitidos.filter(d => d <= maxAncho).sort((a, b) => b - a)[0];
     if (fit != null) return "PN" + fit;
     return "PN" + Math.min(...estandar)
+}
+
+// Ancho (cm) de una pieza por su código: del catálogo si existe, si no lo parsea del
+// código (para piezas "a medida" que no están en el catálogo, ej. panel divisor PMR "PN85").
+function anchoDePiezaCodigo(code) {
+    if (!code) return 0;
+    const pz = CATALOGO.piezas.find(p => p.codigo === code);
+    if (pz && pz.ancho) return pz.ancho;
+    const m = String(code).match(/(\d+(?:\.\d+)?)/);
+    return m ? parseFloat(m[1]) : 0
 }
 
 function aplicarSugerencia(s) {
@@ -6420,7 +6461,7 @@ function aplicarSugerencia(s) {
             a.pilastras[i] = i < N - 1 && !(esMingit && nextEsMingit) ? s.codPilInt : ""
         }
         if (s.esPmrCuarto && i === N - 1 && i > 0) {
-            a.paneles[i] = s.esCierrePanel ? s.codPanelCierre || "PN150" : ""
+            a.paneles[i] = s.cierreMingit ? (s.codMGCierre || a.mgTipo || "MG60120") : (s.esCierrePanel ? s.codPanelCierre || "PN150" : "")
         }
     }
     if (s.esPmrCuarto) {
@@ -6439,7 +6480,9 @@ function aplicarSugerencia(s) {
     }
     if (s.esPmrCuarto) {
         a.muroIzq = null;
-        a.muroDer = {
+        // Si cierra con mingitorio (termina en urinal sin muro der), NO hay pilastra
+        // terminal a la derecha: el cierre lo dibuja la mampara MG (ver buildBathroomSvg).
+        a.muroDer = s.cierreMingit ? null : {
             codigo: s.codPilEsq2 || s.codPilEsq,
             esMuro: !s.esCierrePanel
         }
@@ -6673,17 +6716,25 @@ function renderCentrosDescarga() {
     }
     const N = a.cabinas || 0;
     const tipos = a.tiposCabina || [];
-    const cabinasBaño = [];
-    for (let i = 0; i < N; i++)
-        if ((tipos[i] || "Baño") !== "Mingitorio") cabinasBaño.push(i);
-    if (cabinasBaño.length === 0) {
-        cont.innerHTML = '<div class="dim" style="font-size:12px;">No hay cabinas tipo Baño en esta área.</div>';
+    const esPmr = !!(CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {}).pmrCuarto;
+    // Qué cabinas llevan centro de descarga y sobre qué eje:
+    //  - PMR: el cuarto (i=0) sobre la PROFUNDIDAD; los urinales sobre el CLARO.
+    //  - Resto: baños sobre el claro (los urinales sueltos también, sobre el claro).
+    const centros = [];
+    for (let i = 0; i < N; i++) {
+        const t = tipos[i] || "Baño";
+        if (esPmr && i === 0) centros.push({ i: i, eje: "prof", label: "Cuarto PMR (profundidad)", ph: "cm desde el fondo" });
+        else if (t === "Mingitorio") centros.push({ i: i, eje: "claro", label: "Urinal M" + (i + 1), ph: "cm desde muro izq" });
+        else centros.push({ i: i, eje: "claro", label: "Centro C" + (i + 1), ph: "cm desde muro izq" });
+    }
+    if (centros.length === 0) {
+        cont.innerHTML = '<div class="dim" style="font-size:12px;">No hay cabinas en esta área.</div>';
         valBox.innerHTML = "";
         return
     }
     if (!Array.isArray(a.centrosDescarga)) a.centrosDescarga = [];
     while (a.centrosDescarga.length < N) a.centrosDescarga.push("");
-    cont.innerHTML = cabinasBaño.map(i => `\n    <div style="display:flex; align-items:center; gap:8px;">\n      <label style="font-size:12px; color:var(--text-soft); min-width:90px;">Centro C${i+1}:</label>\n      <input type="number" class="form-input" style="max-width: 110px;" min="0" max="9999" step="0.5"\n             data-centro-idx="${i}" placeholder="cm desde muro izq" value="${a.centrosDescarga[i]||""}">\n      <span class="dim" style="font-size:11px;" data-centro-chip="${i}"></span>\n    </div>\n  `).join("");
+    cont.innerHTML = centros.map(c => `\n    <div style="display:flex; align-items:center; gap:8px;">\n      <label style="font-size:12px; color:var(--text-soft); min-width:130px;">${c.label}${c.eje==="prof"?' <span style="color:var(--accent);">↕</span>':''}:</label>\n      <input type="number" class="form-input" style="max-width: 110px;" min="0" max="9999" step="0.5"\n             data-centro-idx="${c.i}" placeholder="${c.ph}" value="${a.centrosDescarga[c.i]||""}">\n      <span class="dim" style="font-size:11px;" data-centro-chip="${c.i}"></span>\n    </div>\n  `).join("");
     cont.querySelectorAll("[data-centro-idx]").forEach(inp => {
         inp.oninput = e => {
             const idx = +e.target.dataset.centroIdx;
@@ -6702,10 +6753,14 @@ function actualizarValidacionCentros() {
     if (!a || !valBox) return;
     const info = leerDimensionesLugar();
     const claro = info ? info.paredCabinas : null;
+    const esPmr = !!(CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {}).pmrCuarto;
+    const prof = info ? info.paredOpuesta : null;
+    // El centro del cuarto PMR (i=0) va sobre la profundidad → se excluye del orden del claro.
+    const centrosClaro = esPmr ? (a.centrosDescarga || []).map((c, i) => i === 0 ? "" : c) : (a.centrosDescarga || []);
     const {
         errores: errores,
         warns: warns
-    } = validarCentrosDescarga(a.centrosDescarga || [], claro);
+    } = validarCentrosDescarga(centrosClaro, claro);
     document.querySelectorAll("[data-centro-chip]").forEach(chip => {
         const idx = +chip.dataset.centroChip;
         const c = a.centrosDescarga[idx];
@@ -6715,6 +6770,13 @@ function actualizarValidacionCentros() {
             return
         }
         const cn = Number(c);
+        // Cuarto PMR: se valida contra la PROFUNDIDAD (desde el fondo), no el claro.
+        if (esPmr && idx === 0) {
+            if (!prof) { chip.textContent = ""; return }
+            if (cn < CENTRO_MURO_MINIMO_CM || cn > prof - CENTRO_MURO_MINIMO_CM) { chip.textContent = "✕ no cabe"; chip.style.color = "var(--danger)"; }
+            else { chip.textContent = "✓ OK"; chip.style.color = "var(--ok)"; }
+            return
+        }
         if (!claro) {
             chip.textContent = "";
             return
@@ -7146,7 +7208,12 @@ function exportarCSV(proyecto) {
             }
             const cp = (areaCfg.paneles || [])[i];
             if (cp) {
-                const p = CATALOGO.piezas.find(x => x.codigo === cp);
+                // Panel "a medida" (ej. divisor PMR PN85) que no está en el catálogo → sintético.
+                const p = CATALOGO.piezas.find(x => x.codigo === cp) || (/^PN\d/.test(cp) ? {
+                    codigo: cp,
+                    familia: "PN",
+                    ancho: anchoDePiezaCodigo(cp)
+                } : null);
                 if (p) agregar(p, determinarSubTipoModumex(p, ctx), areaName, altoDeCabina(p.familia, areaCfg, i))
             }
             if (tipoCab !== "Mingitorio") {
@@ -8325,8 +8392,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 break
             }
         }
-        const dz = CATALOGO.piezas.find(p => p.codigo === (areaCfg.paneles || [])[0]);
-        if (dz) pmrDivPanelCmPdf = dz.ancho
+        const dzAnchoPdf = anchoDePiezaCodigo((areaCfg.paneles || [])[0]);
+        if (dzAnchoPdf > 0) pmrDivPanelCmPdf = dzAnchoPdf
     }
     const pmrPanelExtraCmPdf = Math.max(0, pmrDivPanelCmPdf - pmrCabPanelCmPdf);
     const extraPmrPdf = esPmrLayPdf ? cabDepth * (pmrPanelExtraCmPdf + 90 + 45) / pmrCabPanelCmPdf : 0;
