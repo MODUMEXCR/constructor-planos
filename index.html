@@ -979,6 +979,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
             <div class="form-help" style="margin-top:4px; font-size:11px;">
               Largo del panel divisor (sobre la profundidad). Default 100 cm. El divisor = panel + puerta 90 + frente, y el frente completa la profundidad del lugar.
             </div>
+            <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-size:12px; font-weight:600; cursor:pointer;">
+              <input type="checkbox" id="cfg-pil-central-pmr" style="width:auto;">
+              Pilastra entre el cuarto PMR y las cabinas/mingitorios
+            </label>
+            <div class="form-help" style="margin-top:4px; font-size:11px;">
+              Por defecto sin pilastra (el cuarto pega directo). Marcá esta casilla si querés una pilastra de separación.
+            </div>
           </div>
           <div id="cfg-accesible-row" style="display:none; margin-top:10px; padding:10px 12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px;">
             <label class="form-label" style="font-size:12px; font-weight:600;">Ancho de la cabina accesible (cm)</label>
@@ -3944,6 +3951,13 @@ function initConfigurador() {
         renderPreview();
         recalcularSugerencia()
     };
+    const chkPilCentral = document.getElementById("cfg-pil-central-pmr");
+    if (chkPilCentral) chkPilCentral.onchange = () => {
+        const a = activeAreaCfg();
+        if (a) a.pilCentralPmr = chkPilCentral.checked;
+        renderPreview();
+        recalcularSugerencia()
+    };
     const inpAcc = document.getElementById("cfg-ancho-accesible");
     if (inpAcc) inpAcc.oninput = () => {
         const a = activeAreaCfg();
@@ -3976,7 +3990,9 @@ function actualizarInputPmrCuarto() {
         const a = activeAreaCfg();
         inp.value = a && a.anchoPmrCuarto || 162;
         const inpPD = document.getElementById("cfg-panel-div-pmr");
-        if (inpPD) inpPD.value = a && a.anchoPanelDivisorPmr || 100
+        if (inpPD) inpPD.value = a && a.anchoPanelDivisorPmr || 100;
+        const chkPC = document.getElementById("cfg-pil-central-pmr");
+        if (chkPC) chkPC.checked = !!(a && a.pilCentralPmr)
     }
     if (typeof actualizarInputAccesible === "function") actualizarInputAccesible();
     if (typeof actualizarInputTouchless === "function") actualizarInputTouchless()
@@ -4630,6 +4646,7 @@ function makeDefaultAreaCfg() {
         canaletas: [],
         anchoPmrCuarto: 162,
         anchoPanelDivisorPmr: 100,
+        pilCentralPmr: false,
         anchoAccesible: 150,
         altoTouchless: 180,
         centrosDescarga: [],
@@ -5061,7 +5078,7 @@ function buildBathroomSvg() {
                 ancho: anchoSlot,
                 indiceCabina: i
             })
-        } else if (layout.pmrCuarto && i === 0) {
+        } else if (layout.pmrCuarto && i === accCabinaIdx) {
             seq.push({
                 tipo: "puerta",
                 codigo: puertaCode || "PT90",
@@ -5088,7 +5105,7 @@ function buildBathroomSvg() {
             let tipoDivisor = "pilastra";
             if (ambosMingit) tipoDivisor = "panelMingit";
             else if (esBañoMixto) tipoDivisor = "panelCompleto";
-            if (layout.pmrCuarto && i === 0) tipoDivisor = "panelCompleto";
+            if (layout.pmrCuarto && i === (cfg.invertir ? N - 2 : 0)) tipoDivisor = "panelCompleto";
             seq.push({
                 tipo: tipoDivisor,
                 codigo: pilCode || "",
@@ -5317,19 +5334,24 @@ function buildBathroomSvg() {
                 svg += `<rect x="${x}" y="${floorCuarto}" width="${w}" height="8" fill="white" stroke="#0a1f3d" stroke-width="1"/>`;
                 svg += `<rect x="${x}" y="${floorCuarto}" width="${w}" height="8" fill="url(#wallHatch)" stroke="none"/>`;
                 const wcY = 42;
-                svg += `<g data-piece="panel-${i}" transform="translate(${x+10}, ${wcY})">\n          <rect width="6" height="28" rx="2" fill="#0a1f3d"/>\n          <ellipse cx="26" cy="14" rx="17" ry="13" fill="none" stroke="#0a1f3d" stroke-width="2"/>\n        </g>`;
-                svg += `<line x1="${x+8}" y1="${wcY-8}" x2="${x+56}" y2="${wcY-8}" stroke="#0a1f3d" stroke-width="1.4"/>`;
-                svg += `<line x1="${x+8}" y1="${wcY-8}" x2="${x+8}" y2="${wcY+40}" stroke="#0a1f3d" stroke-width="1.4"/>`;
+                const wcTx = cfg.invertir ? `translate(${x+w-10}, ${wcY}) scale(-1,1)` : `translate(${x+10}, ${wcY})`;
+                svg += `<g data-piece="panel-${i}" transform="${wcTx}">\n          <rect width="6" height="28" rx="2" fill="#0a1f3d"/>\n          <ellipse cx="26" cy="14" rx="17" ry="13" fill="none" stroke="#0a1f3d" stroke-width="2"/>\n        </g>`;
+                const cLwc = cfg.invertir ? x + w - 8 : x + 8,
+                    cLwc2 = cfg.invertir ? x + w - 56 : x + 56;
+                svg += `<line x1="${cLwc}" y1="${wcY-8}" x2="${cLwc2}" y2="${wcY-8}" stroke="#0a1f3d" stroke-width="1.4"/>`;
+                svg += `<line x1="${cLwc}" y1="${wcY-8}" x2="${cLwc}" y2="${wcY+40}" stroke="#0a1f3d" stroke-width="1.4"/>`;
                 const ccx = x + w / 2,
                     ccy = (20 + floorCuarto) / 2;
                 const rG = Math.min(75 * scale, w * .42, (floorCuarto - 20) * .42);
                 svg += `<circle cx="${ccx}" cy="${ccy}" r="${rG}" fill="none" stroke="#5db0e0" stroke-width="1.2" stroke-dasharray="5,4"/>`;
                 svg += `<text x="${ccx}" y="${ccy+rG-5}" font-size="8" fill="#5db0e0" font-weight="700" text-anchor="middle">Ø1.50</text>`;
                 svg += `<text x="${ccx-11}" y="${ccy+6}" font-size="22" fill="#5db0e0">♿</text>`;
-                svg += `<g transform="translate(${x+12}, ${floorCuarto-19})">\n          <rect width="36" height="13" rx="2" fill="white" stroke="#0a1f3d" stroke-width="1.4"/>\n          <ellipse cx="18" cy="6.5" rx="10" ry="4.5" fill="none" stroke="#0a1f3d" stroke-width="1"/>\n        </g>`;
-                const divPilPz = CATALOGO.piezas.find(p => p.codigo === (areaCfg.pilastras || [])[0]);
+                const sinkTx = cfg.invertir ? `translate(${x+w-12}, ${floorCuarto-19}) scale(-1,1)` : `translate(${x+12}, ${floorCuarto-19})`;
+                svg += `<g transform="${sinkTx}">\n          <rect width="36" height="13" rx="2" fill="white" stroke="#0a1f3d" stroke-width="1.4"/>\n          <ellipse cx="18" cy="6.5" rx="10" ry="4.5" fill="none" stroke="#0a1f3d" stroke-width="1"/>\n        </g>`;
+                const sgnDivS = cfg.invertir ? -1 : 1;
+                const divPilPz = CATALOGO.piezas.find(p => p.codigo === (areaCfg.pilastras || [])[cfg.invertir ? N - 2 : 0]);
                 const divSlotW = (divPilPz ? divPilPz.ancho : 5) * scale;
-                const divX = x + w + divSlotW / 2;
+                const divX = cfg.invertir ? x - divSlotW / 2 : x + w + divSlotW / 2;
                 // Panel divisor: desde el muro (arriba) hasta donde arranca la puerta.
                 if (panelPx > .5) {
                     svg += `<rect x="${divX-1.5}" y="20" width="3" height="${panelPx}" fill="#0a1f3d"/>`
@@ -5346,11 +5368,11 @@ function buildBathroomSvg() {
                 const swingRight = sentP !== "INT";
                 const openX = divX + (swingRight ? doorPx : -doorPx);
                 svg += `<g data-piece="puerta-${i}">`;
-                svg += `<line x1="${divX}" y1="${hy}" x2="${divX+(swingRight?1:-1)*doorPx*Math.sin(Math.PI/9)}" y2="${hy+(hingeTop?1:-1)*doorPx*Math.cos(Math.PI/9)}" stroke="#0a1f3d" stroke-width="3"/>`;
+                svg += `<line x1="${divX}" y1="${hy}" x2="${divX+(swingRight?1:-1)*sgnDivS*doorPx*Math.sin(Math.PI/9)}" y2="${hy+(hingeTop?1:-1)*doorPx*Math.cos(Math.PI/9)}" stroke="#0a1f3d" stroke-width="3"/>`;
                 svg += `<rect x="${divX-2}" y="${hy-2}" width="4" height="4" fill="#0a1f3d"/>`;
-                svg += `<text x="${divX+16}" y="${(yDoorTop+yDoorBot)/2+3}" font-size="8" fill="#0a1f3d" font-weight="700">${s.codigo} (lateral)</text>`;
+                svg += `<text x="${divX+16*sgnDivS}" y="${(yDoorTop+yDoorBot)/2+3}" font-size="8" fill="#0a1f3d" font-weight="700" text-anchor="${cfg.invertir?'end':'start'}">${s.codigo} (lateral)</text>`;
                 svg += `</g>`;
-                const cotaV = (yy, vv) => `<text x="${divX+9}" y="${yy}" font-size="7" fill="#dc2626" font-weight="700" text-anchor="middle" transform="rotate(90 ${divX+9} ${yy})">${vv}.0</text>`;
+                const cotaV = (yy, vv) => `<text x="${divX+9*sgnDivS}" y="${yy}" font-size="7" fill="#dc2626" font-weight="700" text-anchor="middle" transform="rotate(90 ${divX+9*sgnDivS} ${yy})">${vv}.0</text>`;
                 svg += cotaV((20 + yDoorTop) / 2, profPanel);
                 svg += cotaV((yDoorTop + yDoorBot) / 2, wDoor);
                 svg += cotaV(yDoorBot + frentePx / 2, wFrente);
@@ -5451,8 +5473,8 @@ function buildBathroomSvg() {
             if (c === "" || c == null || isNaN(c)) return;
             const cn = Number(c);
             const cb = cabinaCentersX[i];
-            // Cuarto PMR (i=0): el centro va sobre la PROFUNDIDAD (eje vertical izq), no sobre el claro.
-            if (esPmrLay && i === 0) {
+            // Cuarto PMR: el centro va sobre la PROFUNDIDAD (eje vertical izq), no sobre el claro.
+            if (esPmrLay && i === accCabinaIdx) {
                 const profCm2 = profLugarCm || 0;
                 if (profCm2 > 0) {
                     const yM = Math.max(20, Math.min(floorLugar, floorLugar - cn / profCm2 * (floorLugar - 20)));
@@ -6108,10 +6130,11 @@ function sugerirModulacion({
         const cierreMingit = esCierrePanel && (nMingit || 0) > 0;
         const grosorMGtotal = cierreMingit ? (nMingit || 0) * 1.27 : Math.max(0, (nMingit || 0) - 1) * 1.27;
         const claroAjustadoH = claroHoriz - (esCierrePanel ? 0 : 1) + 1.5 * nEst;
+        const usarPilCentral = aCfg.pilCentralPmr === true;
         let bestP = null;
         for (const ap of opcionesPuerta) {
             for (const apI of nDiv > 0 ? opcionesPilInt : [0]) {
-                for (const apJ of opcionesPilEsq) {
+                for (const apJ of (usarPilCentral ? opcionesPilEsq : [0])) {
                     for (const apE2 of (cierreMingit ? [0] : opcionesPilEsq)) {
                         const total = nEst * ap + (nMingit || 0) * anchoMG + grosorMGtotal + nDiv * apI + apJ + apE2;
                         const diff = claroAjustadoH - total;
@@ -6166,18 +6189,37 @@ function sugerirModulacion({
         const profPmr = (typeof leerDimensionesLugar === "function" ? (leerDimensionesLugar() || {}).paredOpuesta : 0) || 0;
         const anchoPuertaLat = 90;
         const anchoPanelDiv = Math.max(30, parseInt(aCfg.anchoPanelDivisorPmr, 10) || 100);
-        const anchoFrentePmr = profPmr >= (anchoPanelDiv + anchoPuertaLat + 10) ? Math.round(profPmr - anchoPanelDiv - anchoPuertaLat) : 45;
+        const minFrentePmr = 10;
+        const frenteRawPmr = profPmr - anchoPanelDiv - anchoPuertaLat;
+        const anchoFrentePmr = profPmr > 0 ? Math.max(0, Math.round(frenteRawPmr)) : 45;
+        let ajusteProfPmr;
+        if (profPmr <= 0) {
+            ajusteProfPmr = {
+                tipo: "sinDato",
+                msg: "ⓘ Definí la profundidad del lugar para validar que las piezas del cuarto PMR calcen en el fondo"
+            }
+        } else if (frenteRawPmr < minFrentePmr) {
+            ajusteProfPmr = {
+                tipo: "falta",
+                msg: `✕ No calza en profundidad: panel ${anchoPanelDiv} + puerta 90 necesitan ${anchoPanelDiv + anchoPuertaLat + minFrentePmr} cm y el fondo mide ${profPmr} cm — reducí el panel divisor del cuarto`
+            }
+        } else {
+            ajusteProfPmr = {
+                tipo: "exacto",
+                msg: `✓ Profundidad: ${anchoPanelDiv} (panel) + 90 (puerta) + ${anchoFrentePmr} (frente) = ${anchoPanelDiv + anchoPuertaLat + anchoFrentePmr} cm = fondo ${profPmr} cm`
+            }
+        }
         const codPanelDivisor = "PN" + anchoPanelDiv;
         const codPilFrentePmr = `PI${anchoFrentePmr}${sufR}`;
         const codMGCierre = cierreMingit ? (aCfg.mgTipo || "MG60120") : null;
         const cierreDerTxt = cierreMingit ? "cierra con mampara MG (mingitorio, sin muro der)" : esCierrePanel ? "terminal der (cierra con panel PN150)" : "a muro der";
-        const pasosP = [`Claro del vano: ${claro} cm`, `− Cuarto PMR (espacio libre, sin modulación): ${anchoPmr} cm → segmento de cabinas = ${claroHoriz} cm`, cierreMingit ? "Termina en mingitorio sin muro der: cierre con mampara MG" : esCierrePanel ? "Sin muro derecho: cierre con pilastra terminal + panel" : `− 1 cm × 1 pilastra a muro der (herraje) = ${(claroHoriz-1).toFixed(1)} cm`, nEst > 0 ? `+ 1.5 cm × ${nEst} puerta(s) (clearance bisagra) = ${claroAjustadoH.toFixed(1)} cm` : null, `Segmento: PI${bestP.apJ} (junto al divisor) + ${nEst}×PT${bestP.ap}${nDiv>0?" + "+nDiv+"×PI"+bestP.apI+" (central)":""}${(nMingit||0)>0?" + "+(nMingit)+"×MG60":""}${cierreMingit?" + MG (cierre der)":" + PI"+bestP.apE2+" ("+cierreDerTxt+")"}`, `Cuarto PMR (perpendicular, en el divisor, sobre la profundidad ${profPmr||"—"} cm): ${codPanelDivisor} + ${codPuertaPmrLateral} puerta lateral + ${codPilFrentePmr} frente`].filter(Boolean);
+        const pasosP = [`Claro del vano: ${claro} cm`, `− Cuarto PMR (espacio libre, sin modulación): ${anchoPmr} cm → segmento de cabinas = ${claroHoriz} cm`, cierreMingit ? "Termina en mingitorio sin muro der: cierre con mampara MG" : esCierrePanel ? "Sin muro derecho: cierre con pilastra terminal + panel" : `− 1 cm × 1 pilastra a muro der (herraje) = ${(claroHoriz-1).toFixed(1)} cm`, nEst > 0 ? `+ 1.5 cm × ${nEst} puerta(s) (clearance bisagra) = ${claroAjustadoH.toFixed(1)} cm` : null, `Segmento: ${bestP.apJ>0?"PI"+bestP.apJ+" (junto al divisor) + ":""}${nEst}×PT${bestP.ap}${nDiv>0?" + "+nDiv+"×PI"+bestP.apI+" (central)":""}${(nMingit||0)>0?" + "+(nMingit)+"×MG60":""}${cierreMingit?" + MG (cierre der)":" + PI"+bestP.apE2+" ("+cierreDerTxt+")"}`, `Cuarto PMR (perpendicular, en el divisor, sobre la profundidad ${profPmr||"—"} cm): ${codPanelDivisor} + ${codPuertaPmrLateral} puerta lateral + ${codPilFrentePmr} frente`, ajusteProfPmr.msg].filter(Boolean);
         return {
             nCabinas: N,
             nEstandar: nEst,
             nAccesible: 1,
             nPilInternas: nDiv,
-            nPilEsquinas: cierreMingit ? 1 : 2,
+            nPilEsquinas: (usarPilCentral ? 1 : 0) + (cierreMingit ? 0 : 1),
             nMingit: nMingit || 0,
             nPuertas: nEst + 1,
             layout: layoutCodigo,
@@ -6191,7 +6233,8 @@ function sugerirModulacion({
             codPuerta: `PT${bestP.ap}`,
             codPuertaAcc: codPuertaPmrLateral,
             codPilInt: nDiv > 0 ? `PI${bestP.apI}${sufR}` : null,
-            codPilEsq: `PI${bestP.apJ}${sufR}`,
+            codPilEsq: bestP.apJ > 0 ? `PI${bestP.apJ}${sufR}` : "",
+            usarPilCentral: usarPilCentral,
             codPilEsq2: cierreMingit ? null : `PI${bestP.apE2}${sufR}`,
             codPanelDivisor: codPanelDivisor,
             anchoPanelDivisor: anchoPanelDiv,
@@ -6209,8 +6252,9 @@ function sugerirModulacion({
             total: bestP.total + anchoPmr,
             diferencia: bestP.diff,
             ajuste: ajusteP,
+            ajusteProf: ajusteProfPmr,
             pasos: pasosP,
-            pilEsqTxt: cierreMingit ? `PI${bestP.apJ} (junto al divisor) + MG (cierre der)` : `PI${bestP.apJ} (junto al divisor) + PI${bestP.apE2} (${cierreDerTxt})`,
+            pilEsqTxt: `${bestP.apJ>0?"PI"+bestP.apJ+" (junto al divisor)":"sin pilastra central"}${cierreMingit?" + MG (cierre der)":" + PI"+bestP.apE2+" ("+cierreDerTxt+")"}`,
             codCanaleta: codCanaletaP,
             anchoCanaleta: anchoCanaletaP,
             nCanaletas: nCanaletasP
@@ -6391,7 +6435,7 @@ function mostrarSugerencia(s) {
     }
     if (s.nPilEsquinas > 0) {
         if (s.esPmrCuarto) {
-            items.push(`<strong>1</strong> × ${s.codPilEsq} <span class="dim">— pilastra junto al divisor (${s.anchoPilEsq} cm, recibe el segmento)</span>`);
+            if (s.usarPilCentral && s.codPilEsq) items.push(`<strong>1</strong> × ${s.codPilEsq} <span class="dim">— pilastra junto al divisor (${s.anchoPilEsq} cm, recibe el segmento)</span>`);
             if (!s.cierreMingit) items.push(s.esCierrePanel ? `<strong>1</strong> × ${s.codPilEsq2} <span class="dim">— pilastra TERMINAL der. (${s.anchoPilEsq2} cm, junto al panel de cierre)</span>` : `<strong>1</strong> × ${s.codPilEsq2} <span class="dim">— pilastra a muro der. (${s.anchoPilEsq2} cm)</span>`)
         } else if (s.nPilEsquinas === 2 && s.anchoPilEsq2 && s.anchoPilEsq !== s.anchoPilEsq2) {
             items.push(`<strong>1</strong> × ${s.codPilEsq} <span class="dim">— pilastra a muro izq. (${s.anchoPilEsq} cm)</span>`);
@@ -6405,7 +6449,7 @@ function mostrarSugerencia(s) {
     }
     const diffClass = s.ajuste.tipo === "exacto" ? "ok" : s.ajuste.tipo === "canaleta" ? "ok" : s.ajuste.tipo === "sobra" ? "warn" : "bad";
     const pasosHtml = (s.pasos || []).map((p, i) => `<li><span class="dim">Paso ${i+1}:</span> ${escapeHtml(p)}</li>`).join("");
-    cont.innerHTML = `\n    <h4>💡 Modulación sugerida — ${s.claro} cm de claro · ${s.nCabinas} cabinas · Layout ${s.layout}</h4>\n    <ul>${items.map(it=>`<li>${it}</li>`).join("")}</ul>\n    <details style="margin-top: 10px; background: rgba(0,0,0,.04); padding: 8px 12px; border-radius: 6px;">\n      <summary style="cursor:pointer; font-size:12px; font-weight:600; color:var(--brand);">▸ Cálculo (fórmula oficial Modumex)</summary>\n      <ol style="margin: 8px 0 4px 16px; padding: 0; font-size: 12px; line-height: 1.6;">${pasosHtml}</ol>\n      <div class="dim" style="font-size:11px; margin-top: 6px;">Regla oficial: − 1 cm por pilastra a muro (herraje); + 1.5 cm por puerta (clearance bisagra).</div>\n    </details>\n    <div class="resumen ${diffClass}" style="margin-top: 10px;">\n      <span>Suma de piezas: <b>${s.total} cm</b></span>\n      <span>${escapeHtml(s.ajuste.msg)}</span>\n    </div>\n    <button class="btn btn-primary" id="btn-aplicar-sug" type="button">Aplicar al área activa</button>\n  `;
+    cont.innerHTML = `\n    <h4>💡 Modulación sugerida — ${s.claro} cm de claro · ${s.nCabinas} cabinas · Layout ${s.layout}</h4>\n    <ul>${items.map(it=>`<li>${it}</li>`).join("")}</ul>\n    <details style="margin-top: 10px; background: rgba(0,0,0,.04); padding: 8px 12px; border-radius: 6px;">\n      <summary style="cursor:pointer; font-size:12px; font-weight:600; color:var(--brand);">▸ Cálculo (fórmula oficial Modumex)</summary>\n      <ol style="margin: 8px 0 4px 16px; padding: 0; font-size: 12px; line-height: 1.6;">${pasosHtml}</ol>\n      <div class="dim" style="font-size:11px; margin-top: 6px;">Regla oficial: − 1 cm por pilastra a muro (herraje); + 1.5 cm por puerta (clearance bisagra).</div>\n    </details>\n    <div class="resumen ${diffClass}" style="margin-top: 10px;">\n      <span>Suma de piezas: <b>${s.total} cm</b></span>\n      <span>${escapeHtml(s.ajuste.msg)}</span>\n    </div>\n    ${s.esPmrCuarto && s.ajusteProf ? `<div class="resumen ${s.ajusteProf.tipo==="exacto"?"ok":s.ajusteProf.tipo==="sinDato"?"warn":"bad"}" style="margin-top: 8px;">\n      <span>Profundidad del cuarto PMR</span>\n      <span>${escapeHtml(s.ajusteProf.msg)}</span>\n    </div>` : ""}\n    <button class="btn btn-primary" id="btn-aplicar-sug" type="button">Aplicar al área activa</button>\n  `;
     cont.hidden = false;
     document.getElementById("btn-aplicar-sug").onclick = () => aplicarSugerencia(s)
 }
@@ -6443,6 +6487,7 @@ function aplicarSugerencia(s) {
     const layout = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || CATALOGO.layouts[0];
     const N = cfg.cabinas;
     const accCabinaIdx = cfg.invertir ? N - 1 : 0;
+    const cierrePmrIdx = cfg.invertir ? 0 : N - 1;
     const regaderasPrev = new Set((a.tiposCabina || []).map((t, i) => t === "Regadera" ? i : -1).filter(i => i >= 0));
     a.puertas = [];
     a.paneles = [];
@@ -6479,20 +6524,22 @@ function aplicarSugerencia(s) {
             const debeBarrerInterior = esAcc && (lado === "IZQ" && esExtremoMuroDer || lado === "DER" && esExtremoMuroIzq);
             a.aperturas[i] = lado + (debeBarrerInterior ? "_INT" : "_EXT")
         }
-        if (s.esPmrCuarto && i === 0) {
+        if (s.esPmrCuarto && i === accCabinaIdx) {
+            a.pilastras[i] = cfg.invertir ? "" : s.codPilEsq
+        } else if (s.esPmrCuarto && cfg.invertir && i === N - 2) {
             a.pilastras[i] = s.codPilEsq
         } else {
             a.pilastras[i] = i < N - 1 && !(esMingit && nextEsMingit) ? s.codPilInt : ""
         }
-        if (s.esPmrCuarto && i === N - 1 && i > 0) {
+        if (s.esPmrCuarto && i === cierrePmrIdx && i !== accCabinaIdx) {
             a.paneles[i] = s.cierreMingit ? (s.codMGCierre || a.mgTipo || "MG60120") : (s.esCierrePanel ? s.codPanelCierre || "PN150" : "")
         }
     }
     if (s.esPmrCuarto) {
         a.anchoPmrCuarto = s.anchoPmrCuarto || a.anchoPmrCuarto || 162;
-        a.paneles[0] = s.codPanelDivisor || "PN150";
-        a.puertas[0] = s.codPuertaAcc || "PT90";
-        a.aperturas[0] = "DER_EXT";
+        a.paneles[accCabinaIdx] = s.codPanelDivisor || "PN150";
+        a.puertas[accCabinaIdx] = s.codPuertaAcc || "PT90";
+        a.aperturas[accCabinaIdx] = cfg.invertir ? "IZQ_EXT" : "DER_EXT";
         const yaTieneFrentePmr = a.pilastrasExtras && a.pilastrasExtras.some(ex => (ex.descripcion || "").toLowerCase().includes("frente del cuarto pmr"));
         if (!yaTieneFrentePmr) {
             if (!a.pilastrasExtras) a.pilastrasExtras = [];
@@ -6503,12 +6550,19 @@ function aplicarSugerencia(s) {
         }
     }
     if (s.esPmrCuarto) {
-        a.muroIzq = null;
-        // Si cierra con mingitorio (termina en urinal sin muro der), NO hay pilastra
-        // terminal a la derecha: el cierre lo dibuja la mampara MG (ver buildBathroomSvg).
-        a.muroDer = s.cierreMingit ? null : {
+        // El cierre (pilastra terminal / o nada si termina en mingitorio con mampara MG)
+        // va en el extremo OPUESTO al cuarto. Al invertir, el cuarto va a la derecha con
+        // la pared, así que el cierre pasa a la izquierda.
+        const cierrePmrMuro = s.cierreMingit ? null : {
             codigo: s.codPilEsq2 || s.codPilEsq,
             esMuro: !s.esCierrePanel
+        };
+        if (cfg.invertir) {
+            a.muroDer = null;
+            a.muroIzq = cierrePmrMuro
+        } else {
+            a.muroIzq = null;
+            a.muroDer = cierrePmrMuro
         }
     } else {
         const codMuroIzq = s.codPilEsq;
@@ -6747,7 +6801,7 @@ function renderCentrosDescarga() {
     const centros = [];
     for (let i = 0; i < N; i++) {
         const t = tipos[i] || "Baño";
-        if (esPmr && i === 0) centros.push({ i: i, eje: "prof", label: "Cuarto PMR (profundidad)", ph: "cm desde el fondo" });
+        if (esPmr && i === (cfg.invertir ? N - 1 : 0)) centros.push({ i: i, eje: "prof", label: "Cuarto PMR (profundidad)", ph: "cm desde el fondo" });
         else if (t === "Mingitorio") centros.push({ i: i, eje: "claro", label: "Urinal M" + (i + 1), ph: "cm desde muro izq" });
         else centros.push({ i: i, eje: "claro", label: "Centro C" + (i + 1), ph: "cm desde muro izq" });
     }
@@ -6779,8 +6833,9 @@ function actualizarValidacionCentros() {
     const claro = info ? info.paredCabinas : null;
     const esPmr = !!(CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {}).pmrCuarto;
     const prof = info ? info.paredOpuesta : null;
-    // El centro del cuarto PMR (i=0) va sobre la profundidad → se excluye del orden del claro.
-    const centrosClaro = esPmr ? (a.centrosDescarga || []).map((c, i) => i === 0 ? "" : c) : (a.centrosDescarga || []);
+    // El centro del cuarto PMR va sobre la profundidad → se excluye del orden del claro.
+    const pmrIdxCentro = cfg.invertir ? cfg.cabinas - 1 : 0;
+    const centrosClaro = esPmr ? (a.centrosDescarga || []).map((c, i) => i === pmrIdxCentro ? "" : c) : (a.centrosDescarga || []);
     const {
         errores: errores,
         warns: warns
@@ -8282,7 +8337,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 codigo: mgCode,
                 anchoSlot: anchoSlotPdf
             })
-        } else if ((layoutCodigo === "P+" || layoutCodigo === "PP") && i === 0) {
+        } else if ((layoutCodigo === "P+" || layoutCodigo === "PP") && i === (areaInvertir ? N - 1 : 0)) {
             seq.push({
                 tipo: "puerta",
                 codigo: puertaCode || "PT90",
@@ -8308,7 +8363,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             let tipoDivisor = "pilastra";
             if (ambosMingit) tipoDivisor = "panelMingit";
             else if (esBañoMixto) tipoDivisor = "panelCompleto";
-            if ((layoutCodigo === "P+" || layoutCodigo === "PP") && i === 0) tipoDivisor = "panelCompleto";
+            if ((layoutCodigo === "P+" || layoutCodigo === "PP") && i === (areaInvertir ? N - 2 : 0)) tipoDivisor = "panelCompleto";
             seq.push({
                 tipo: tipoDivisor,
                 codigo: pilCode || "",
@@ -8689,14 +8744,15 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                         doc.line(hx1, Math.max(hy1, floorCuarto), hx2, Math.min(hy2, floorCuarto + 4))
                     }
                 }
+                const invF = areaInvertir;
                 doc.setFillColor(10, 31, 61);
-                doc.rect(x + 4, drawTop + 8, 2.5, 12, "F");
+                doc.rect(invF ? x + w - 6.5 : x + 4, drawTop + 8, 2.5, 12, "F");
                 doc.setDrawColor(10, 31, 61);
                 doc.setLineWidth(.6);
-                doc.ellipse(x + 13, drawTop + 14, 7, 5.5, "S");
+                doc.ellipse(invF ? x + w - 13 : x + 13, drawTop + 14, 7, 5.5, "S");
                 doc.setLineWidth(.5);
-                doc.line(x + 3, drawTop + 4, x + 22, drawTop + 4);
-                doc.line(x + 3, drawTop + 4, x + 3, drawTop + 22);
+                doc.line(invF ? x + w - 3 : x + 3, drawTop + 4, invF ? x + w - 22 : x + 22, drawTop + 4);
+                doc.line(invF ? x + w - 3 : x + 3, drawTop + 4, invF ? x + w - 3 : x + 3, drawTop + 22);
                 const ccx = x + w / 2,
                     ccy = (drawTop + floorCuarto) / 2;
                 const rG = Math.min(75 * scale, w * .42, (floorCuarto - drawTop) * .42);
@@ -8721,8 +8777,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 doc.setDrawColor(10, 31, 61);
                 doc.setLineWidth(.6);
                 doc.setFillColor(255, 255, 255);
-                doc.rect(x + 5, floorCuarto - 9, 16, 6.5, "FD");
-                doc.ellipse(x + 13, floorCuarto - 5.7, 4.5, 2, "S");
+                doc.rect(invF ? x + w - 21 : x + 5, floorCuarto - 9, 16, 6.5, "FD");
+                doc.ellipse(invF ? x + w - 13 : x + 13, floorCuarto - 5.7, 4.5, 2, "S");
                 if (s.panelCode) {
                     doc.setFont("helvetica", "normal");
                     doc.setFontSize(7);
@@ -8731,9 +8787,10 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                         align: "center"
                     })
                 }
-                const divPilPzP = CATALOGO.piezas.find(p => p.codigo === (areaCfg.pilastras || [])[0]);
+                const sgnDivP = areaInvertir ? -1 : 1;
+                const divPilPzP = CATALOGO.piezas.find(p => p.codigo === (areaCfg.pilastras || [])[areaInvertir ? N - 2 : 0]);
                 const divSlotWp = (divPilPzP ? divPilPzP.ancho : 5) * scale;
-                const divXp = x + w + divSlotWp / 2;
+                const divXp = areaInvertir ? x - divSlotWp / 2 : x + w + divSlotWp / 2;
                 const yDoorTop = yDoorTopP;
                 const yDoorBot = yDoorTopP + doorMm;
                 doc.setFillColor(10, 31, 61);
@@ -8744,10 +8801,9 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 const hingeTopP = ladoVp !== "IZQ";
                 const hyP = hingeTopP ? yDoorTop : yDoorBot;
                 const swingRightP = sentVp !== "INT";
-                const openXp = divXp + (swingRightP ? doorMm : -doorMm);
                 doc.rect(divXp - 1, hyP - 1, 2, 2, "F");
                 doc.setDrawColor(10, 31, 61);
-                const dirXp = swingRightP ? 1 : -1;
+                const dirXp = (swingRightP ? 1 : -1) * sgnDivP;
                 const dirYp = hingeTopP ? 1 : -1;
                 doc.setLineWidth(grosorPz);
                 doc.line(divXp, hyP, divXp + dirXp * doorMm * sinAng, hyP + dirYp * doorMm * cosAng);
@@ -8755,19 +8811,21 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(6);
                 doc.setTextColor(10, 31, 61);
-                doc.text(`${s.codigo} (lateral)`, divXp + 8, (yDoorTop + yDoorBot) / 2 + 1);
+                doc.text(`${s.codigo} (lateral)`, divXp + 8 * sgnDivP, (yDoorTop + yDoorBot) / 2 + 1, {
+                    align: areaInvertir ? "right" : "left"
+                });
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(6);
                 doc.setTextColor(220, 50, 50);
-                doc.text(`${profPanel}.0`, divXp + 4, (drawTop + yDoorTop) / 2, {
+                doc.text(`${profPanel}.0`, divXp + 4 * sgnDivP, (drawTop + yDoorTop) / 2, {
                     angle: 90,
                     align: "center"
                 });
-                doc.text(`${wDoor}.0`, divXp + 4, (yDoorTop + yDoorBot) / 2, {
+                doc.text(`${wDoor}.0`, divXp + 4 * sgnDivP, (yDoorTop + yDoorBot) / 2, {
                     angle: 90,
                     align: "center"
                 });
-                doc.text(`${wFrente}.0`, divXp + 4, yDoorBot + frenteMm / 2, {
+                doc.text(`${wFrente}.0`, divXp + 4 * sgnDivP, yDoorBot + frenteMm / 2, {
                     angle: 90,
                     align: "center"
                 });
