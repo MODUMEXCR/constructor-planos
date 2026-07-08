@@ -8017,7 +8017,7 @@ function drawCajetinEsen(doc, proyecto, opts) {
     const ubic = ubicacionProyecto(proyecto);
     const presup = proyecto.presupuesto || proyecto.codigo || "—";
     const acabado = proyecto.acabado || "Laminado compacto 12.7mm";
-    const color = proyecto.color || "—";
+    const color = proyecto.colorSecundarioActivo && proyecto.colorSecundario ? `${proyecto.color}, ${proyecto.colorSecundario} (${etiquetaPiezasColorSecundario(proyecto)})` : proyecto.color || "—";
     const obs = proyecto.observaciones || "Las medidas de la estructura indicadas en este plano son generadas a partir del proyecto " + "arquitectónico y deben asegurarse para garantizar una correcta instalación de las mamparas, " + "paneles, mingitorios y/o puertas.";
     const areaLbl = opts.cantidad && opts.cantidad > 1 ? `${opts.area} (cantidad ${opts.cantidad})` : opts.area;
     const SP = 3;
