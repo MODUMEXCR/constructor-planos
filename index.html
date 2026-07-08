@@ -936,12 +936,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           <h3><span class="step">1</span>Nombra tu proyecto</h3>
           <div class="form-grid">
             <div class="form-row">
-              <label class="form-label">Número de Expediente</label>
+              <label class="form-label">N° de plano</label>
               <div class="input-with-button">
-                <input type="text" class="form-input" id="cfg-codigo" placeholder="S00088, CR0022, etc.">
-                <button class="btn btn-secondary" id="btn-consecutivo" type="button" title="Generar Nº consecutivo (no se repite)">Nº</button>
+                <input type="text" class="form-input" id="cfg-codigo" placeholder="Se asigna solo…">
+                <button class="btn btn-secondary" id="btn-consecutivo" type="button" title="Generar otro consecutivo (no se repite)">Nº</button>
               </div>
-              <div class="form-help" id="cfg-codigo-hint">Asignación manual, o generá un consecutivo con el botón «Nº»</div>
+              <div class="form-help" id="cfg-codigo-hint">Se asigna un consecutivo automático para organizar tus planos. Podés cambiarlo.</div>
             </div>
             <div class="form-row">
               <label class="form-label">Nombre del proyecto</label>
@@ -1206,7 +1206,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
       <thead>
         <tr>
           <th>Fecha</th>
-          <th>Expediente</th>
+          <th>N° Plano</th>
           <th>Proyecto</th>
           <th>Área</th>
           <th># Cabinas</th>
@@ -3401,6 +3401,7 @@ function nav(page) {
     if (page === "configurador" && typeof fillDistribuidorSelect === "function") {
         Promise.resolve(refreshDistribuidoresCache()).then(() => fillDistribuidorSelect())
     }
+    if (page === "configurador") sugerirConsecutivoSiVacio()
 }
 document.querySelectorAll(".nav a").forEach(a => a.addEventListener("click", () => nav(a.dataset.page)));
 
@@ -3850,6 +3851,8 @@ const cfg = {
     mingitorios: 0,
     regaderas: 0,
     preferCorta: false,
+    revisionActual: "00",
+    yaEmitido: false,
     configByArea: {}
 };
 
@@ -3895,10 +3898,9 @@ function initConfigurador() {
             recalcularSugerencia()
         })
     });
-    const ultimo = (db.proyectos || []).slice(-1)[0]?.codigo;
-    document.getElementById("cfg-codigo-hint").textContent = ultimo ? `Último expediente usado: ${ultimo}` : "Asignación manual por comercial";
     updateAltura();
     bindCfg();
+    sugerirConsecutivoSiVacio();
     const inpPmr = document.getElementById("cfg-ancho-pmr");
     if (inpPmr) inpPmr.oninput = () => {
         const a = activeAreaCfg();
@@ -4205,7 +4207,7 @@ function bindCfg() {
             const num = await generarConsecutivoExpediente();
             $("cfg-codigo").value = num;
             cfg.codigo = num;
-            toast("Nº de Expediente generado: " + num, "ok")
+            toast("N° de plano generado: " + num, "ok")
         }
     }
     $("cfg-nombre").oninput = e => cfg.nombre = e.target.value.trim();
@@ -6426,7 +6428,7 @@ function ubicacionProyecto(p) {
     if (partes.length) return partes.join(", ");
     return p.cp || p.ubicacion || "—"
 }
-async function generarConsecutivoExpediente() {
+async function codigosProyectoExistentes() {
     let codigos = (db.proyectos || []).map(p => p.codigo).filter(Boolean);
     if (SB && sesionSupabase) {
         try {
@@ -6438,12 +6440,58 @@ async function generarConsecutivoExpediente() {
             console.warn("No se pudieron leer códigos de la nube:", e)
         }
     }
-    const usados = new Set(codigos.map(c => String(c).trim()));
+    return codigos.map(c => String(c).trim()).filter(Boolean)
+}
+
+function separarBaseRevision(codigo) {
+    const s = String(codigo || "").trim();
+    const m = /^(.*\d)([A-Za-z]*)$/.exec(s);
+    if (!m) return {
+        base: s,
+        letra: ""
+    };
+    return {
+        base: m[1],
+        letra: (m[2] || "").toUpperCase()
+    }
+}
+
+function siguienteLetraRevision(letrasUsadas) {
+    let maxIdx = 0;
+    (letrasUsadas || []).forEach(l => {
+        if (l && l.length === 1) {
+            const idx = l.charCodeAt(0) - 64;
+            if (idx >= 1 && idx <= 26) maxIdx = Math.max(maxIdx, idx)
+        }
+    });
+    const next = maxIdx + 1;
+    return next <= 26 ? String.fromCharCode(64 + next) : "A" + String(next - 26)
+}
+
+async function siguienteCodigoRevision(codigoActual) {
+    const {
+        base: base
+    } = separarBaseRevision(codigoActual);
+    const codigos = await codigosProyectoExistentes();
+    const letras = codigos.map(c => {
+        const s = separarBaseRevision(c);
+        return s.base === base ? s.letra : null
+    }).filter(x => x !== null);
+    const letra = siguienteLetraRevision(letras);
+    return {
+        codigo: base + letra,
+        revision: letra
+    }
+}
+
+async function generarConsecutivoExpediente() {
+    const codigos = await codigosProyectoExistentes();
+    const usados = new Set(codigos);
     let maxN = 0,
         prefijo = "",
         ancho = 5;
     usados.forEach(c => {
-        const m = /^([A-Za-z]*)(\d+)$/.exec(c);
+        const m = /^([A-Za-z]*)(\d+)[A-Za-z]*$/.exec(c);
         if (m) {
             const n = parseInt(m[2], 10);
             if (n >= maxN) {
@@ -6460,6 +6508,16 @@ async function generarConsecutivoExpediente() {
         cand = prefijo + String(n).padStart(ancho, "0")
     } while (usados.has(cand));
     return cand
+}
+
+async function sugerirConsecutivoSiVacio() {
+    if (cfg.editandoId || cfg.codigo) return;
+    try {
+        const num = await generarConsecutivoExpediente();
+        cfg.codigo = num;
+        const el = document.getElementById("cfg-codigo");
+        if (el && !el.value) el.value = num
+    } catch (e) {}
 }
 
 function actualizarInfoPared() {
@@ -6702,7 +6760,7 @@ function proximaAreaEnBlanco() {
 }
 async function guardarProyectoActual(descargar) {
     if (!cfg.codigo) {
-        toast("Falta el Número de Expediente", "danger");
+        toast("Falta el N° de plano", "danger");
         return
     }
     if (!cfg.nombre) {
@@ -6715,7 +6773,17 @@ async function guardarProyectoActual(descargar) {
     }
     const conectado = !!(SB && sesionSupabase);
     const editando = conectado ? !!cfg.editandoId : !!(cfg.editandoId && db.proyectos.some(p => p.id === cfg.editandoId));
-    if (!conectado && db.proyectos.some(p => p.codigo === cfg.codigo && p.id !== cfg.editandoId)) {
+    const crearRevision = descargar && !!cfg.yaEmitido;
+    let codigoFinal = cfg.codigo;
+    let revisionFinal = "00";
+    if (crearRevision) {
+        const rev = await siguienteCodigoRevision(cfg.codigo);
+        codigoFinal = rev.codigo;
+        revisionFinal = rev.revision
+    } else if (editando) {
+        revisionFinal = cfg.revisionActual || "00"
+    }
+    if (!crearRevision && !conectado && db.proyectos.some(p => p.codigo === codigoFinal && p.id !== cfg.editandoId)) {
         toast("Ya existe un proyecto con ese código", "danger");
         return
     }
@@ -6732,7 +6800,8 @@ async function guardarProyectoActual(descargar) {
     const layoutsUsados = Array.from(new Set((cfg.areas || []).map(n => (cfg.configByArea[n] || {}).layout).filter(Boolean)));
     const proyecto = {
         id: uid(),
-        codigo: cfg.codigo,
+        codigo: codigoFinal,
+        revision: revisionFinal,
         nombre: cfg.nombre,
         fecha: ahora.toISOString(),
         usuarioId: currentUser()?.id,
@@ -6759,6 +6828,7 @@ async function guardarProyectoActual(descargar) {
         configByArea: JSON.parse(JSON.stringify(cfg.configByArea)),
         piezas: piezas
     };
+    if (crearRevision) cfg.editandoId = null;
     if (conectado) {
         try {
             await guardarProyectoSupabase(proyecto)
@@ -6767,7 +6837,7 @@ async function guardarProyectoActual(descargar) {
             return
         }
     } else {
-        if (editando) {
+        if (editando && !crearRevision) {
             proyecto.id = cfg.editandoId;
             const idx = db.proyectos.findIndex(p => p.id === cfg.editandoId);
             if (idx >= 0) db.proyectos[idx] = proyecto;
@@ -6777,7 +6847,7 @@ async function guardarProyectoActual(descargar) {
         }
         persist()
     }
-    const accion = editando ? "actualizado" : "guardado";
+    const accion = crearRevision ? `guardado como revisión ${revisionFinal} (${codigoFinal})` : editando ? "actualizado" : "guardado";
     if (!descargar) {
         cfg.editandoId = proyecto.id;
         const idxBlank = proximaAreaEnBlanco();
@@ -6792,7 +6862,28 @@ async function guardarProyectoActual(descargar) {
     cfg.editandoId = null;
     exportarPDF(proyecto);
     toast(`Proyecto ${accion} · planos (PDF) descargados. Los archivos CIP/SICLICK se descargan desde Mis Proyectos.`, "ok");
+    resetConfiguradorNuevo();
     nav("proyectos")
+}
+
+function resetConfiguradorNuevo() {
+    cfg.codigo = "";
+    cfg.nombre = "";
+    cfg.revisionActual = "00";
+    cfg.yaEmitido = false;
+    cfg.editandoId = null;
+    cfg.areas = [];
+    cfg.areaActivaIdx = -1;
+    cfg.configByArea = {};
+    const set = (id, v) => {
+        const el = document.getElementById(id);
+        if (el) el.value = v
+    };
+    set("cfg-codigo", "");
+    set("cfg-nombre", "");
+    if (typeof renderAreaList === "function") renderAreaList();
+    if (typeof renderPreview === "function") renderPreview();
+    sugerirConsecutivoSiVacio()
 }
 const COLOR_ABREV_MODUMEX = {
     "FASHION WHITE": "FW",
@@ -7170,11 +7261,11 @@ function exportarPDF(proyecto) {
     doc.setFontSize(8);
     doc.setTextColor(10, 31, 61);
     const rotLines = [
-        ["EXPEDIENTE:", proyecto.codigo || "—"],
+        ["N° PLANO:", proyecto.codigo || "—"],
         ["OBRA:", proyecto.nombre || "—"],
         ["UBICACIÓN OBRA:", ubicacionProyecto(proyecto)],
         ["FECHA:", new Date(proyecto.fecha).toLocaleDateString("es-ES")],
-        ["REVISIÓN:", "00"],
+        ["REVISIÓN:", proyecto.revision || "00"],
         ["VERSIÓN:", "1.0"],
         ["CREADO POR:", proyecto.creadoPor || currentUser()?.nombre || "—"],
         ["DISTRIBUIDOR:", proyecto.distribuidor || "—"],
@@ -9406,7 +9497,7 @@ function generarPdfCotizacion(cot) {
         ["Entrega:", cot.tiempoEntrega]
     ];
     const rightLines = [
-        ["Expediente:", cot.proyectoCodigo],
+        ["N° Plano:", cot.proyectoCodigo],
         ["Proyecto:", cot.proyectoNombre],
         ["Creado por:", cot.creadoPor || "—"],
         ["Producto:", cot.productoNombre],
@@ -9759,6 +9850,8 @@ function cargarProyectoEnConfigurador(p) {
     cfg.cabinas = a0.cabinas !== undefined ? a0.cabinas : p.cabinas || 3;
     cfg.invertir = !!a0.invertir;
     cfg.editandoId = p.id;
+    cfg.revisionActual = p.revision || "00";
+    cfg.yaEmitido = true;
     fillModelosPorLinea(cfg.linea);
     const set = (id, val) => {
         const el = document.getElementById(id);
@@ -9790,7 +9883,7 @@ function cargarProyectoEnConfigurador(p) {
     renderAreaList();
     activarArea(cfg.areaActivaIdx);
     nav("configurador");
-    toast(`Editando "${p.codigo}" — al Obtener Planos se actualizará este proyecto`, "ok")
+    toast(`Editando "${p.codigo}" — con Guardar se actualiza; al Obtener Planos se crea una nueva revisión (${separarBaseRevision(p.codigo).base}A, B…)`, "ok")
 }
 const FAMILIA_LABELS = {
     PT: "Puerta",
