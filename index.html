@@ -1078,6 +1078,24 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
               <input type="hidden" id="cfg-color">
               <div class="form-help" style="font-size:10px; margin-top:2px;">Los colores de <b>Línea</b> (en stock) están en la lista. Si escribís uno que no está, se cotiza como <b>Especial</b>.</div>
             </div>
+            <div class="form-row full">
+              <label class="form-label" style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                <input type="checkbox" id="cfg-color-sec-activo" style="width:auto; margin:0;"> Piezas con un segundo color
+              </label>
+              <div id="cfg-color-sec-box" style="display:none; margin-top:8px; padding:10px; border:1px dashed #cbd5e1; border-radius:8px;">
+                <label class="form-label">Color secundario <span class="muted" id="cfg-color-sec-tier"></span></label>
+                <input class="form-input" id="cfg-color-sec" list="cfg-color-sec-list" autocomplete="off" placeholder="Elegí o escribí el color">
+                <datalist id="cfg-color-sec-list"></datalist>
+                <div class="form-help" style="margin:8px 0 4px;">¿Qué piezas van en el color secundario? (las demás usan el principal)</div>
+                <div id="cfg-color-sec-piezas" style="display:flex; flex-wrap:wrap; gap:12px;">
+                  <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:400;"><input type="checkbox" data-fam="PT" style="width:auto;margin:0;">Puertas</label>
+                  <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:400;"><input type="checkbox" data-fam="PI" style="width:auto;margin:0;">Pilastras</label>
+                  <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:400;"><input type="checkbox" data-fam="PN" style="width:auto;margin:0;">Paneles laterales</label>
+                  <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:400;"><input type="checkbox" data-fam="MG" style="width:auto;margin:0;">Divisores de mingitorio</label>
+                  <label style="display:flex;align-items:center;gap:5px;font-size:13px;cursor:pointer;font-weight:400;"><input type="checkbox" data-fam="AN" style="width:auto;margin:0;">Antepecho (Scudo)</label>
+                </div>
+              </div>
+            </div>
             <div class="form-row">
               <label class="form-label">Distribuidor <span style="color: var(--text-mute); font-weight: 400;">(opcional)</span></label>
               <select class="form-select" id="cfg-distribuidor"></select>
@@ -3842,6 +3860,9 @@ const cfg = {
     terminacion: "ZOCLO",
     acabado: "Laminado Compacto",
     color: "ALUMINA 2103",
+    colorSecundarioActivo: false,
+    colorSecundario: "",
+    piezasColorSecundario: {},
     distribuidor: "",
     repeticiones: 1,
     ubicPais: "",
@@ -3872,6 +3893,7 @@ function initConfigurador() {
         label: p
     }))));
     poblarColoresDatalist();
+    sincronizarColorSecundarioUI();
     fillDistribuidorSelect();
     actualizarBotonSugerirSegunLinea();
     const lc = document.getElementById("cfg-layouts");
@@ -4042,6 +4064,41 @@ function actualizarIndicadorTierColor() {
         aceroInox: "· Acero Inoxidable",
         antigrafiti: "· Esmaltada Antigrafiti"
     }[t] || "· Especial (bajo pedido)"
+}
+const TIER_ETIQUETA = {
+    linea: "· Línea (en stock)",
+    especiales: "· Especial (bajo pedido)",
+    aceroInox: "· Acero Inoxidable",
+    antigrafiti: "· Esmaltada Antigrafiti"
+};
+
+function poblarColorSecundarioDatalist() {
+    const dl = document.getElementById("cfg-color-sec-list");
+    if (!dl) return;
+    const lineaAct = (cfg.linea || "").toUpperCase();
+    const cols = (CATALOGO.colores || []).filter(c => !c.lineas || c.lineas.some(l => String(l).toUpperCase() === lineaAct));
+    dl.innerHTML = cols.map(c => `<option value="${escapeHtml(c.nombre)}">`).join("")
+}
+
+function actualizarTierColorSecundario() {
+    const span = document.getElementById("cfg-color-sec-tier");
+    if (!span) return;
+    const val = cfg.colorSecundario || "";
+    span.textContent = val ? (TIER_ETIQUETA[tierDeColor(val)] || TIER_ETIQUETA.especiales) : ""
+}
+
+function sincronizarColorSecundarioUI() {
+    poblarColorSecundarioDatalist();
+    const chk = document.getElementById("cfg-color-sec-activo");
+    const box = document.getElementById("cfg-color-sec-box");
+    const inp = document.getElementById("cfg-color-sec");
+    if (chk) chk.checked = !!cfg.colorSecundarioActivo;
+    if (box) box.style.display = cfg.colorSecundarioActivo ? "" : "none";
+    if (inp) inp.value = cfg.colorSecundario || "";
+    document.querySelectorAll("#cfg-color-sec-piezas input[data-fam]").forEach(c => {
+        c.checked = !!(cfg.piezasColorSecundario && cfg.piezasColorSecundario[c.dataset.fam])
+    });
+    actualizarTierColorSecundario()
 }
 
 function fillModelosPorLinea(linea) {
@@ -4234,6 +4291,7 @@ function bindCfg() {
         actualizarBotonSugerirSegunLinea();
         if (typeof actualizarInputTouchless === "function") actualizarInputTouchless();
         poblarColoresDatalist();
+        poblarColorSecundarioDatalist();
         if (typeof recalcularSugerencia === "function") recalcularSugerencia()
     };
     $("cfg-modelo").onchange = e => {
@@ -4279,6 +4337,26 @@ function bindCfg() {
         actualizarIndicadorTierColor()
     };
     poblarColoresDatalist();
+    {
+        const chkSec = $("cfg-color-sec-activo");
+        const boxSec = $("cfg-color-sec-box");
+        const inpSec = $("cfg-color-sec");
+        if (chkSec) chkSec.onchange = e => {
+            cfg.colorSecundarioActivo = e.target.checked;
+            if (boxSec) boxSec.style.display = e.target.checked ? "" : "none";
+            if (e.target.checked && !cfg.piezasColorSecundario) cfg.piezasColorSecundario = {}
+        };
+        if (inpSec) inpSec.oninput = e => {
+            cfg.colorSecundario = e.target.value.trim();
+            actualizarTierColorSecundario()
+        };
+        document.querySelectorAll("#cfg-color-sec-piezas input[data-fam]").forEach(c => {
+            c.onchange = e => {
+                if (!cfg.piezasColorSecundario) cfg.piezasColorSecundario = {};
+                cfg.piezasColorSecundario[e.target.dataset.fam] = e.target.checked
+            }
+        })
+    }
     $("cfg-distribuidor").onchange = e => {
         cfg.distribuidor = e.target.value
     };
@@ -6816,6 +6894,9 @@ async function guardarProyectoActual(descargar) {
         terminacion: cfg.terminacion,
         acabado: cfg.acabado,
         color: cfg.color,
+        colorSecundarioActivo: !!cfg.colorSecundarioActivo,
+        colorSecundario: cfg.colorSecundarioActivo ? cfg.colorSecundario || "" : "",
+        piezasColorSecundario: cfg.colorSecundarioActivo ? Object.assign({}, cfg.piezasColorSecundario) : {},
         distribuidor: cfg.distribuidor || "",
         repeticiones: cfg.repeticiones,
         ubicPais: cfg.ubicPais || "",
@@ -6875,12 +6956,16 @@ function resetConfiguradorNuevo() {
     cfg.areas = [];
     cfg.areaActivaIdx = -1;
     cfg.configByArea = {};
+    cfg.colorSecundarioActivo = false;
+    cfg.colorSecundario = "";
+    cfg.piezasColorSecundario = {};
     const set = (id, v) => {
         const el = document.getElementById(id);
         if (el) el.value = v
     };
     set("cfg-codigo", "");
     set("cfg-nombre", "");
+    if (typeof sincronizarColorSecundarioUI === "function") sincronizarColorSecundarioUI();
     if (typeof renderAreaList === "function") renderAreaList();
     if (typeof renderPreview === "function") renderPreview();
     sugerirConsecutivoSiVacio()
@@ -6906,10 +6991,31 @@ function familiaSkuModumex(familia) {
     return familia === "PI" ? "PL" : familia
 }
 
+function piezaUsaColorSecundario(familia, proyecto) {
+    return !!(proyecto && proyecto.colorSecundarioActivo && proyecto.colorSecundario && proyecto.piezasColorSecundario && proyecto.piezasColorSecundario[familia])
+}
+
+function colorDePieza(familia, proyecto) {
+    if (piezaUsaColorSecundario(familia, proyecto)) return proyecto.colorSecundario;
+    return proyecto ? proyecto.color : ""
+}
+const PIEZAS_COLOR_LABEL = {
+    PT: "Puertas",
+    PN: "Paneles laterales",
+    PI: "Pilastras",
+    MG: "Divisores de mingitorio",
+    AN: "Antepecho"
+};
+
+function etiquetaPiezasColorSecundario(proyecto) {
+    const p = (proyecto && proyecto.piezasColorSecundario) || {};
+    return Object.keys(PIEZAS_COLOR_LABEL).filter(f => p[f]).map(f => PIEZAS_COLOR_LABEL[f]).join(", ")
+}
+
 function generarSkuLargo(pieza, proyecto, altoOverride) {
     const familiaSku = familiaSkuModumex(pieza.familia);
     const altoEfectivo = altoOverride != null ? altoOverride : alturaPiezaSegunModelo(pieza.familia, proyecto.modelo, proyecto.terminacion, proyecto.altoTouchless);
-    const colorShort = colorAbreviadoModumex(proyecto.color);
+    const colorShort = colorAbreviadoModumex(colorDePieza(pieza.familia, proyecto));
     const sistemaCode = proyecto.terminacion === "PATAS" ? "P" : "Z";
     return `LM1LCRF${familiaSku}${pieza.ancho}${altoEfectivo}${colorShort}${sistemaCode}`
 }
@@ -6999,6 +7105,7 @@ function exportarCSV(proyecto) {
             sku: sku,
             subTipo: subTipo,
             area: areaName,
+            color: colorDePieza(pieza.familia, proyecto),
             cantidad: 0
         };
         grupos[key].cantidad++
@@ -7103,7 +7210,7 @@ function exportarCSV(proyecto) {
     const lines = ["Codigo,Obra,Distribuidor,SKU,Cantidad,SubTipo,Orientacion,Area,Modelo,Sistema,Color,KAP"];
     Object.values(grupos).forEach(g => {
         const orientacion = orientacionDeSubTipo(g.subTipo);
-        lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell(g.sku), g.cantidad, csvCell(g.subTipo), orientacion, csvCell(g.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
+        lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell(g.sku), g.cantidad, csvCell(g.subTipo), orientacion, csvCell(g.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(g.color || color), kap].join(","))
     });
     (proyecto.herrajesExtra || []).forEach(h => {
         lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell(h.codigo), h.cantidad || 1, csvCell("HERRAJE" + (h.linea ? "-" + h.linea : "")), "", csvCell("Herrajes extra"), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
@@ -7120,9 +7227,10 @@ function exportarCSV(proyecto) {
     }
     const antep = typeof antepechosDeProyecto === "function" ? antepechosDeProyecto(proyecto) : null;
     if (antep) {
+        const colorAntep = colorDePieza("AN", proyecto);
         antep.porArea.forEach(r => {
             r.items.forEach(it => {
-                lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("AN" + it.ancho + "X" + it.alto), it.cantidad, csvCell("ANTEPECHO"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
+                lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("AN" + it.ancho + "X" + it.alto), it.cantidad, csvCell("ANTEPECHO"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(colorAntep), kap].join(","))
             })
         })
     }
@@ -7251,7 +7359,7 @@ function exportarPDF(proyecto) {
     doc.setFontSize(10);
     doc.setTextColor(40, 40, 40);
     let yd = m + 108;
-    const desc = [`DESCRIPCIÓN DEL MODELO A INSTALAR:`, `Suministro e instalación de mamparas sanitarias de laminado compacto.`, `Puertas y pilastras de 12.7mm de espesor y paneles laterales de 12mm.`, `Línea ${proyecto.linea} ${proyecto.modelo==="ESTANDAR"?"ESTÁNDAR":"REFORZADO"},`, `fijación a piso con ${proyecto.terminacion==="ZOCLO"?"zoclo de acero inoxidable":"patas"};`, `herrajes, bisagras y cerrojos de acero inoxidable.`, altura ? `Pilastras de ${altura/100}m, puertas y paneles laterales de 1.50m de altura.` : "", `COLOR DE DIVISIONES: ${proyecto.color}`].filter(Boolean);
+    const desc = [`DESCRIPCIÓN DEL MODELO A INSTALAR:`, `Suministro e instalación de mamparas sanitarias de laminado compacto.`, `Puertas y pilastras de 12.7mm de espesor y paneles laterales de 12mm.`, `Línea ${proyecto.linea} ${proyecto.modelo==="ESTANDAR"?"ESTÁNDAR":"REFORZADO"},`, `fijación a piso con ${proyecto.terminacion==="ZOCLO"?"zoclo de acero inoxidable":"patas"};`, `herrajes, bisagras y cerrojos de acero inoxidable.`, altura ? `Pilastras de ${altura/100}m, puertas y paneles laterales de 1.50m de altura.` : "", proyecto.colorSecundarioActivo && proyecto.colorSecundario ? `COLOR PRINCIPAL: ${proyecto.color}` : `COLOR DE DIVISIONES: ${proyecto.color}`, proyecto.colorSecundarioActivo && proyecto.colorSecundario ? `COLOR SECUNDARIO: ${proyecto.colorSecundario} (${etiquetaPiezasColorSecundario(proyecto)})` : ""].filter(Boolean);
     desc.forEach(line => {
         doc.text(line, m + 6, yd);
         yd += 5
@@ -7277,6 +7385,11 @@ function exportarPDF(proyecto) {
         ["ALTURA PILASTRA:", altura + " cm"],
         ["KAP:", proyecto.kap ? "SÍ (abre puerta de pie)" : "NO"]
     ];
+    if (proyecto.colorSecundarioActivo && proyecto.colorSecundario) {
+        const iC = rotLines.findIndex(r => r[0] === "COLOR:");
+        if (iC >= 0) rotLines[iC] = ["COLOR 1:", proyecto.color];
+        rotLines.splice(iC >= 0 ? iC + 1 : rotLines.length, 0, ["COLOR 2:", `${proyecto.colorSecundario} (${etiquetaPiezasColorSecundario(proyecto)})`]);
+    }
     rotLines.forEach(([k, v]) => {
         doc.setFont("helvetica", "bold");
         doc.text(k, rotX + 4, ry);
@@ -9092,10 +9205,13 @@ function cotizar(proyecto, opts) {
     const lineas = (proyecto.piezas || []).map(p => {
         const altoEfectivo = p.alto != null ? p.alto : alturaPiezaSegunModelo(p.familia, opts.producto, terminacion, proyecto.altoTouchless);
         const m2Unit = p.ancho * altoEfectivo / 1e4;
-        const precioU = calcularPrecioPieza(p, opts.producto, terminacion, tier, moneda, opts.tcColones, proyecto.altoTouchless) * fx;
+        const usaSec = piezaUsaColorSecundario(p.familia, proyecto);
+        const tierP = usaSec ? tierDeColor(proyecto.colorSecundario) : tier;
+        const precioU = calcularPrecioPieza(p, opts.producto, terminacion, tierP, moneda, opts.tcColones, proyecto.altoTouchless) * fx;
         return {
             codigo: p.codigo,
             descripcion: describirPiezaCotizacion(p, opts.producto, altoEfectivo),
+            color: colorDePieza(p.familia, proyecto),
             ancho: p.ancho,
             alto: altoEfectivo,
             cantidad: p.cantidad,
@@ -9150,6 +9266,8 @@ function cotizar(proyecto, opts) {
         tier: tier,
         tipoCambio: fx,
         color: proyecto.color,
+        colorSecundario: proyecto.colorSecundarioActivo ? proyecto.colorSecundario || "" : "",
+        colorSecundarioPiezas: proyecto.colorSecundarioActivo ? etiquetaPiezasColorSecundario(proyecto) : "",
         remateInferior: proyecto.terminacion === "ZOCLO" ? "Zoclo de acero inoxidable" : "Patas",
         ubicacion: ubicacionProyecto(proyecto),
         lineas: lineas,
@@ -9502,7 +9620,7 @@ function generarPdfCotizacion(cot) {
         ["Creado por:", cot.creadoPor || "—"],
         ["Producto:", cot.productoNombre],
         ["Moneda:", monedaTxt],
-        ["Color:", cot.color || "—"],
+        ["Color:", cot.colorSecundario ? `${cot.color} · 2° ${cot.colorSecundario} (${cot.colorSecundarioPiezas})` : cot.color || "—"],
         ["Remate inferior:", cot.remateInferior],
         ["Ubicación de la obra:", cot.ubicacion || "—"]
     ];
@@ -9831,6 +9949,9 @@ function cargarProyectoEnConfigurador(p) {
     cfg.terminacion = p.terminacion;
     cfg.acabado = p.acabado;
     cfg.color = p.color;
+    cfg.colorSecundarioActivo = !!p.colorSecundarioActivo;
+    cfg.colorSecundario = p.colorSecundario || "";
+    cfg.piezasColorSecundario = Object.assign({}, p.piezasColorSecundario || {});
     cfg.distribuidor = p.distribuidor || "";
     cfg.repeticiones = p.repeticiones || 1;
     cfg.ubicPais = p.ubicPais || "";
@@ -9866,6 +9987,7 @@ function cargarProyectoEnConfigurador(p) {
     set("cfg-color", cfg.color);
     if (typeof sincronizarColorUI === "function") sincronizarColorUI();
     if (typeof actualizarIndicadorTierColor === "function") actualizarIndicadorTierColor();
+    if (typeof sincronizarColorSecundarioUI === "function") sincronizarColorSecundarioUI();
     set("cfg-distribuidor", cfg.distribuidor);
     set("cfg-ubic-pais", cfg.ubicPais);
     set("cfg-ubic-region", cfg.ubicRegion);
