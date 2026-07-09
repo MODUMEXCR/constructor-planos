@@ -8740,7 +8740,28 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         }
     }
     const grosorPz = 1;
-    const angPuerta = Math.PI / 9;
+    const PZT = 2.4;
+    const pzRectV = (cxp, yTop, len) => {
+        doc.setFillColor(217, 217, 217);
+        doc.setDrawColor(10, 31, 61);
+        doc.setLineWidth(.5);
+        doc.rect(cxp - PZT / 2, yTop, PZT, Math.max(.5, len), "FD")
+    };
+    const tBracket = (cxp, yTop) => {
+        doc.setFillColor(10, 31, 61);
+        doc.rect(cxp - PZT / 2 - 1.4, yTop - .9, PZT + 2.8, 1.1, "F");
+        doc.rect(cxp - PZT / 2 - 1.4, yTop, 1.4, 3, "F");
+        doc.rect(cxp + PZT / 2, yTop, 1.4, 3, "F")
+    };
+    const doorRect = (x0, y0, x1, y1) => {
+        const ddx = x1 - x0, ddy = y1 - y0, dl = Math.hypot(ddx, ddy) || 1;
+        const pxp = -ddy / dl * PZT / 2, pyp = ddx / dl * PZT / 2;
+        doc.setFillColor(217, 217, 217);
+        doc.setDrawColor(10, 31, 61);
+        doc.setLineWidth(.5);
+        doc.lines([[ddx, ddy], [-2 * pxp, -2 * pyp], [-ddx, -ddy], [2 * pxp, 2 * pyp]], x0 + pxp, y0 + pyp, [1, 1], "FD", true)
+    };
+    const angPuerta = Math.PI / 12;
     const cosAng = Math.cos(angPuerta);
     const sinAng = Math.sin(angPuerta);
     const leafLenDe = wMm => Math.min(wMm - 3, cabDepth * .78);
@@ -8806,9 +8827,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             const mgPzPdf = s.panelDivCode ? CATALOGO.piezas.find(p => p.codigo === s.panelDivCode) : null;
             const mgAltoPdf = mgPzPdf && mgPzPdf.alto ? mgPzPdf.alto : 150;
             const fracPdf = Math.min(.8, Math.max(.35, mgAltoPdf / 150 * .6));
-            doc.setDrawColor(10, 31, 61);
-            doc.setLineWidth(grosorPz);
-            doc.line(px, drawTop, px, drawTop + cabDepth * fracPdf);
+            pzRectV(px, drawTop, cabDepth * fracPdf);
+            tBracket(px, drawTop);
             doc.setLineWidth(.55);
             if (s.panelDivCode) {
                 doc.setFont("helvetica", "normal");
@@ -8821,9 +8841,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             const mgPzC = s.mgCode ? CATALOGO.piezas.find(p => p.codigo === s.mgCode) : null;
             const mgAltoC = mgPzC && mgPzC.alto ? mgPzC.alto : 150;
             const fracC = Math.min(.8, Math.max(.35, mgAltoC / 150 * .6));
-            doc.setDrawColor(10, 31, 61);
-            doc.setLineWidth(grosorPz);
-            doc.line(lineXP, drawTop, lineXP, drawTop + cabDepth * fracC);
+            pzRectV(lineXP, drawTop, cabDepth * fracC);
+            tBracket(lineXP, drawTop);
             doc.setLineWidth(.55);
             if (s.mgCode) {
                 doc.setFont("helvetica", "normal");
@@ -8834,9 +8853,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         } else if (s.tipo === "panelCompleto") {
             const px = x + w / 2;
             const panelHpc = esPmrLayPdf && s.idxSlot === 0 ? cabDepth : panelLenMm(s.panelDivCode);
+            pzRectV(px, drawTop, panelHpc);
             doc.setFillColor(10, 31, 61);
-            doc.rect(px - grosorPz / 2, drawTop, grosorPz, panelHpc, "F");
-            doc.rect(px - 2.5, drawTop - 2, 5, 4, "F");
             doc.rect(x, floorY - grosorPz, w, grosorPz, "F");
             doc.setFont("helvetica", "normal");
             doc.setFontSize(6);
@@ -8846,9 +8864,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             })
         } else if (s.tipo === "pilastra") {
             const px = x + w / 2;
+            pzRectV(px, drawTop, panelLenMm(s.panelDivCode));
             doc.setFillColor(10, 31, 61);
-            doc.rect(px - grosorPz / 2, drawTop, grosorPz, panelLenMm(s.panelDivCode), "F");
-            doc.rect(px - 1.5, drawTop - 2, 3, 4, "F");
             doc.rect(x, floorY - grosorPz, w, grosorPz, "F");
             doc.setFont("helvetica", "normal");
             doc.setFontSize(6);
@@ -8878,9 +8895,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             const panelX = s.lado === "izq" ? x : x + w - grosorPz;
             const capX = s.lado === "izq" ? x + 2 : x + w - 5;
             const panelLenTermMm = panelLenMm(s.panelDivCode);
+            pzRectV(panelX + grosorPz / 2, drawTop, panelLenTermMm);
             doc.setFillColor(10, 31, 61);
-            doc.rect(panelX, drawTop, grosorPz, panelLenTermMm, "F");
-            doc.rect(capX, drawTop - 2, 3, 4, "F");
             doc.rect(x, floorY - grosorPz, w, grosorPz, "F");
             doc.setFont("helvetica", "normal");
             doc.setFontSize(6);
@@ -8979,8 +8995,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 const yDoorTop = yDoorTopP;
                 const yDoorBot = yDoorTopP + doorMm;
                 doc.setFillColor(10, 31, 61);
-                if (panelMm > .5) doc.rect(divXp - grosorPz / 2, drawTop, grosorPz, panelMm, "F");
-                doc.rect(divXp - 1, yDoorBot, 2, frenteMm, "F");
+                if (panelMm > .5) pzRectV(divXp, drawTop, panelMm);
+                pzRectV(divXp, yDoorBot, frenteMm);
                 const apertVp = (areaCfg.aperturas || [])[s.indiceCabina - 1] || "DER_EXT";
                 const [ladoVp, sentVp] = apertVp.split("_");
                 const hingeTopP = ladoVp !== "IZQ";
@@ -8990,8 +9006,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 doc.setDrawColor(10, 31, 61);
                 const dirXp = (swingRightP ? 1 : -1) * sgnDivP;
                 const dirYp = hingeTopP ? 1 : -1;
-                doc.setLineWidth(grosorPz);
-                doc.line(divXp, hyP, divXp + dirXp * doorMm * sinAng, hyP + dirYp * doorMm * cosAng);
+                doorRect(divXp, hyP, divXp + dirXp * doorMm * sinAng, hyP + dirYp * doorMm * cosAng);
                 doc.setLineWidth(.55);
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(6);
@@ -9069,8 +9084,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 doc.setDrawColor(10, 31, 61);
                 const dirX = lado === "IZQ" ? 1 : -1;
                 const dirY = sentido === "EXT" ? 1 : -1;
-                doc.setLineWidth(grosorPz);
-                doc.line(hingeX, floorY, hingeX + dirX * leafLen * cosAng, floorY + dirY * leafLen * sinAng);
+                doorRect(hingeX, floorY, hingeX + dirX * leafLen * cosAng, floorY + dirY * leafLen * sinAng);
                 doc.setLineWidth(.55);
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(9);
