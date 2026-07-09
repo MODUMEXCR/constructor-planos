@@ -5387,7 +5387,7 @@ function buildBathroomSvg() {
             if (labelCota && labelCota !== "—") {
                 svg += `<text x="${cx}" y="${dimY-5}" font-size="8.5" fill="#0a1f3d" font-weight="700" text-anchor="middle">${labelCota}</text>`
             }
-            svg += `<text x="${cx}" y="${dimY+10}" font-size="8.5" fill="#5a6472" text-anchor="middle">${s.ancho} cm</text>`
+            svg += `<text x="${cx}" y="${dimY+10}" font-size="8.5" fill="#5a6472" text-anchor="middle">${+(+s.ancho).toFixed(1)} cm</text>`
         }
         x += w
     });
@@ -5400,7 +5400,7 @@ function buildBathroomSvg() {
     svg += `<line x1="${xT1}" y1="${dimTotalY}" x2="${xT2}" y2="${dimTotalY}" stroke="#0a1f3d" stroke-width="1"/>`;
     svg += `<line x1="${xT1}" y1="${dimTotalY-4}" x2="${xT1}" y2="${dimTotalY+4}" stroke="#0a1f3d" stroke-width="1"/>`;
     svg += `<line x1="${xT2}" y1="${dimTotalY-4}" x2="${xT2}" y2="${dimTotalY+4}" stroke="#0a1f3d" stroke-width="1"/>`;
-    svg += `<text x="${(xT1+xT2)/2}" y="${dimTotalY+13}" font-size="10" fill="#0a1f3d" font-weight="700" text-anchor="middle">CLARO TOTAL: ${claroTotalCm} cm</text>`;
+    svg += `<text x="${(xT1+xT2)/2}" y="${dimTotalY+13}" font-size="10" fill="#0a1f3d" font-weight="700" text-anchor="middle">CLARO TOTAL: ${+(+claroTotalCm).toFixed(1)} cm</text>`;
     const ajusteCm = areaCfg.ajusteInstalacionCm || 0;
     if (ajusteCm > 0) {
         const ax = padding + drawW - 10;
@@ -6225,13 +6225,22 @@ function sugerirModulacion({
                 }
             }
         }
-        const tolExactoP = esCierrePanel ? 0 : .5;
+        // Sin muro (PMR cierrePanel) hay ~5 cm de corrimiento de pilastras/mingitorios en obra.
+        // Si sobra espacio y hay mingitorios, se reparte entre ellos (orinales más anchos) para
+        // cerrar el hueco; el resto lo absorbe el corrimiento (tolerancia 5 cm sin muro).
+        let anchoUrinalP = anchoMG;
+        if ((nMingit || 0) > 0 && bestP.diff > .5) {
+            anchoUrinalP = anchoMG + bestP.diff / (nMingit || 1);
+            bestP.total = claroAjustadoH;
+            bestP.diff = 0
+        }
+        const tolExactoP = esCierrePanel ? 5 : .5;
         const absDiffP = Math.abs(bestP.diff);
         let ajusteP;
         if (absDiffP <= tolExactoP) {
             ajusteP = {
                 tipo: "exacto",
-                msg: "✓ Calza exacto" + (absDiffP > .5 ? ` (ajuste de ${absDiffP.toFixed(1)} cm absorbido por el herraje)` : ""),
+                msg: "✓ Calza" + (esCierrePanel && absDiffP > .5 ? ` (el extremo sin muro absorbe ${absDiffP.toFixed(1)} cm — se corren las piezas hasta ±5 cm)` : absDiffP > .5 ? ` (ajuste de ${absDiffP.toFixed(1)} cm absorbido por el herraje)` : " exacto"),
                 ajusteInstalacionCm: absDiffP > .1 ? absDiffP : 0
             }
         } else if (bestP.diff > 0 && absDiffP <= 5) ajusteP = {
@@ -6322,6 +6331,7 @@ function sugerirModulacion({
             anchoPilEsq: bestP.apJ,
             anchoPilEsq2: cierreMingit ? null : bestP.apE2,
             anchoMG: (nMingit || 0) > 0 ? anchoMG : null,
+            anchoUrinal: (nMingit || 0) > 0 ? anchoUrinalP : null,
             total: bestP.total + anchoPmr,
             diferencia: bestP.diff,
             ajuste: ajusteP,
@@ -9086,7 +9096,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(10, 31, 61);
-    doc.text(`CLARO TOTAL: ${claroTotalCm} cm`, (xT1 + xT2) / 2, dimTotalY + 6, {
+    doc.text(`CLARO TOTAL: ${+(+claroTotalCm).toFixed(1)} cm`, (xT1 + xT2) / 2, dimTotalY + 6, {
         align: "center"
     });
     {
@@ -9154,7 +9164,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(9);
         doc.setTextColor(10, 31, 61);
-        doc.text(`${cabinasRunCm} cm`, cabinasRunX0 + cabinasRunMm / 2, dimTopY - 2, {
+        doc.text(`${+(+cabinasRunCm).toFixed(1)} cm`, cabinasRunX0 + cabinasRunMm / 2, dimTopY - 2, {
             align: "center"
         })
     }
