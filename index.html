@@ -5316,7 +5316,9 @@ function buildBathroomSvg() {
                 svg += `<g data-piece="cabina-${i}" data-cabina-idx="${i}"><rect x="${x}" y="20" width="${w}" height="${floorCuarto-20}" fill="transparent"/></g>`;
                 svg += `<rect x="${x}" y="${floorCuarto}" width="${w}" height="8" fill="white" stroke="#0a1f3d" stroke-width="1"/>`;
                 svg += `<rect x="${x}" y="${floorCuarto}" width="${w}" height="8" fill="url(#wallHatch)" stroke="none"/>`;
-                const wcY = 42;
+                let wcY = 42;
+                const cDescPmr = (areaCfg.centrosDescarga || [])[i];
+                if (cDescPmr !== "" && cDescPmr != null && !isNaN(cDescPmr)) wcY = Math.max(24, Math.min(floorCuarto - 44, 20 + Number(cDescPmr) * pxCm - 14));
                 const wcTx = cfg.invertir ? `translate(${x+w-10}, ${wcY}) scale(-1,1)` : `translate(${x+10}, ${wcY})`;
                 svg += `<g data-piece="panel-${i}" transform="${wcTx}">\n          <rect width="6" height="28" rx="2" fill="#0a1f3d"/>\n          <ellipse cx="26" cy="14" rx="17" ry="13" fill="none" stroke="#0a1f3d" stroke-width="2"/>\n        </g>`;
                 const cLwc = cfg.invertir ? x + w - 8 : x + 8,
@@ -5364,10 +5366,12 @@ function buildBathroomSvg() {
             } else {
                 svg += `<g data-piece="cabina-${i}" data-cabina-idx="${i}">`;
                 svg += `<rect x="${x}" y="20" width="${w}" height="${cabHeight}" fill="transparent"/>`;
+                const cDescCl = (areaCfg.centrosDescarga || [])[i];
+                const fxCenter = cDescCl !== "" && cDescCl != null && !isNaN(cDescCl) ? Math.max(x + 16, Math.min(x + w - 16, floorStartX + Number(cDescCl) * scale)) : cx;
                 if (esMingit) {
-                    svg += `<g transform="translate(${cx-14},36)">\n          <ellipse cx="14" cy="28" rx="14" ry="26" fill="#e3e6ec" stroke="#0a1f3d" stroke-width="2"/>\n          <ellipse cx="14" cy="28" rx="9" ry="20" fill="none" stroke="#0a1f3d" stroke-width="1.2"/>\n          <circle cx="14" cy="20" r="3" fill="#0a1f3d"/>\n        </g>`
+                    svg += `<g transform="translate(${fxCenter-14},36)">\n          <ellipse cx="14" cy="28" rx="14" ry="26" fill="#e3e6ec" stroke="#0a1f3d" stroke-width="2"/>\n          <ellipse cx="14" cy="28" rx="9" ry="20" fill="none" stroke="#0a1f3d" stroke-width="1.2"/>\n          <circle cx="14" cy="20" r="3" fill="#0a1f3d"/>\n        </g>`
                 } else {
-                    svg += `<g transform="translate(${cx-14},48)">\n          <rect width="28" height="6" rx="2" fill="#0a1f3d"/>\n          <ellipse cx="14" cy="22" rx="14" ry="20" fill="none" stroke="#0a1f3d" stroke-width="2"/>\n        </g>`
+                    svg += `<g transform="translate(${fxCenter-14},48)">\n          <rect width="28" height="6" rx="2" fill="#0a1f3d"/>\n          <ellipse cx="14" cy="22" rx="14" ry="20" fill="none" stroke="#0a1f3d" stroke-width="2"/>\n        </g>`
                 }
                 svg += `</g>`;
                 if (isAccCabina) svg += `<text x="${cx-11}" y="105" font-size="22" fill="#5db0e0">♿</text>`;
@@ -5448,8 +5452,10 @@ function buildBathroomSvg() {
         seq.forEach(item => {
             const w = item.ancho * scale;
             if (item.tipo === "puerta" || item.tipo === "mingitorio") {
+                const cd = centrosCm[item.indiceCabina];
+                const xFx = cd !== "" && cd != null && !isNaN(cd) ? Math.max(xRun + 16, Math.min(xRun + w - 16, xClaroIzq + Number(cd) * scale)) : xRun + w / 2;
                 cabinaCentersX[item.indiceCabina] = {
-                    xCenter: xRun + w / 2,
+                    xCenter: xFx,
                     esMingit: item.tipo === "mingitorio"
                 }
             }
@@ -5464,7 +5470,7 @@ function buildBathroomSvg() {
             if (esPmrLay && i === accCabinaIdx) {
                 const profCm2 = profLugarCm || 0;
                 if (profCm2 > 0) {
-                    const yM = Math.max(20, Math.min(floorLugar, floorLugar - cn / profCm2 * (floorLugar - 20)));
+                    const yM = Math.max(20, Math.min(floorProfPmr, 20 + cn * cabHeight / 150));
                     svg += `<g data-piece="centro-pmr">`;
                     svg += `<polygon points="24,${yM-5} 24,${yM+5} 32,${yM}" fill="#f5c542" stroke="#0a1f3d" stroke-width="0.8"/>`;
                     svg += `<text x="34" y="${yM+3}" font-size="8" fill="#0a1f3d" font-weight="700">${cn} cm (fondo)</text>`;
@@ -8919,14 +8925,17 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                     }
                 }
                 const invF = areaInvertir;
+                let wcDy = 0;
+                const cDescPmrP = (areaCfg.centrosDescarga || [])[s.indiceCabina - 1];
+                if (cDescPmrP !== "" && cDescPmrP != null && !isNaN(cDescPmrP)) wcDy = Math.max(0, Math.min(floorCuarto - drawTop - 24, Number(cDescPmrP) * mmCm - 14));
                 doc.setFillColor(10, 31, 61);
-                doc.rect(invF ? x + w - 6.5 : x + 4, drawTop + 8, 2.5, 12, "F");
+                doc.rect(invF ? x + w - 6.5 : x + 4, drawTop + 8 + wcDy, 2.5, 12, "F");
                 doc.setDrawColor(10, 31, 61);
                 doc.setLineWidth(.6);
-                doc.ellipse(invF ? x + w - 13 : x + 13, drawTop + 14, 7, 5.5, "S");
+                doc.ellipse(invF ? x + w - 13 : x + 13, drawTop + 14 + wcDy, 7, 5.5, "S");
                 doc.setLineWidth(.5);
-                doc.line(invF ? x + w - 3 : x + 3, drawTop + 4, invF ? x + w - 22 : x + 22, drawTop + 4);
-                doc.line(invF ? x + w - 3 : x + 3, drawTop + 4, invF ? x + w - 3 : x + 3, drawTop + 22);
+                doc.line(invF ? x + w - 3 : x + 3, drawTop + 4 + wcDy, invF ? x + w - 22 : x + 22, drawTop + 4 + wcDy);
+                doc.line(invF ? x + w - 3 : x + 3, drawTop + 4 + wcDy, invF ? x + w - 3 : x + 3, drawTop + 22 + wcDy);
                 const ccx = x + w / 2,
                     ccy = (drawTop + floorCuarto) / 2;
                 const rG = Math.min(75 * scale, w * .42, (floorCuarto - drawTop) * .42);
@@ -9008,7 +9017,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                     align: "center"
                 })
             } else {
-                const wcCx = cx;
+                const cDescB = (areaCfg.centrosDescarga || [])[s.indiceCabina - 1];
+                const wcCx = cDescB !== "" && cDescB != null && !isNaN(cDescB) ? Math.max(x + 8, Math.min(x + w - 8, floorStartX + Number(cDescB) * scale)) : cx;
                 const wcCy = drawTop + cabDepth * .4;
                 const tankW = Math.min(w * .55, 14);
                 doc.setFillColor(10, 31, 61);
@@ -9072,14 +9082,16 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             }
         } else if (s.tipo === "mingitorio") {
             const cx = x + w / 2;
+            const cDescU = (areaCfg.centrosDescarga || [])[s.indiceCabina - 1];
+            const fxCx = cDescU !== "" && cDescU != null && !isNaN(cDescU) ? Math.max(x + w * .32 + 1, Math.min(x + w - w * .32 - 1, floorStartX + Number(cDescU) * scale)) : cx;
             doc.setFillColor(225, 230, 238);
             doc.setDrawColor(10, 31, 61);
             doc.setLineWidth(.6);
-            doc.ellipse(cx, drawTop + cabDepth * .32, w * .32, cabDepth * .2, "FD");
+            doc.ellipse(fxCx, drawTop + cabDepth * .32, w * .32, cabDepth * .2, "FD");
             doc.setLineWidth(.4);
-            doc.ellipse(cx, drawTop + cabDepth * .32, w * .22, cabDepth * .14, "S");
+            doc.ellipse(fxCx, drawTop + cabDepth * .32, w * .22, cabDepth * .14, "S");
             doc.setFillColor(10, 31, 61);
-            doc.circle(cx, drawTop + cabDepth * .26, .8, "F");
+            doc.circle(fxCx, drawTop + cabDepth * .26, .8, "F");
             if (s.panelCode) {
                 const panelPieza = CATALOGO.piezas.find(p => p.codigo === s.panelCode);
                 const panelAncho = panelPieza ? panelPieza.ancho : 150;
