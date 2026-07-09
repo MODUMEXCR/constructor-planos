@@ -5640,10 +5640,22 @@ function renderPreviewControls(tab) {
         const esRegaderaCab = tiposCabActiva[i] === "Regadera";
         const _areaPC = activeAreaCfg() || {};
         if ((tab === "puertas" || tab === "pilastras") && esMingitorio) continue;
-        // El divisor del cuarto PMR (panel + puerta lateral + pilastra de separación) se
-        // edita en su propia sección; se omiten los dropdowns por-cabina redundantes.
-        if (_esPmrPC && (tab === "paneles" || tab === "puertas") && i === _cuartoIdxPC) continue;
-        if (_esPmrPC && tab === "pilastras" && i === _sepIdxPC) continue;
+        // Divisor del cuarto PMR: cada pieza en su pestaña (panel en Paneles, puerta lateral
+        // en Puertas, pilastra de separación en Pilastras). No lleva selector de apertura
+        // (el lado de la puerta lo fija el layout/inversión).
+        if (_esPmrPC && tab === "paneles" && i === _cuartoIdxPC) {
+            html += pmrCtrlHtml("panel", _areaPC);
+            continue
+        }
+        if (_esPmrPC && tab === "puertas" && i === _cuartoIdxPC) {
+            html += pmrCtrlHtml("door", _areaPC);
+            continue
+        }
+        if (_esPmrPC && tab === "pilastras" && i === _sepIdxPC) {
+            html += pmrCtrlHtml("pilastra", _areaPC);
+            continue
+        }
+        if (_esPmrPC && tab === "pilastras" && i === _cuartoIdxPC && i !== _sepIdxPC) continue;
         let dropdownHtml;
         if (tab === "paneles" && esMingitorio) {
             const optsMG = piezasMG.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("");
@@ -5691,9 +5703,6 @@ function renderPreviewControls(tab) {
             const ctrlIzq = `\n        <label>\n          <span>Panel de cierre IZQUIERDO (isla)</span>\n          <select data-tab="panelCierreIzq">\n            <option value="">— Elegir —</option>\n            ${optsPN}\n          </select>\n        </label>`;
             html = ctrlIzq + html
         }
-    }
-    if (_esPmrPC) {
-        html = renderPmrCuartoControls(activeAreaCfg() || {}) + html
     }
     cont.innerHTML = html;
     if (tab === "pilastras") {
@@ -5820,7 +5829,7 @@ function renderPreviewControls(tab) {
                 pmrFit.style.color = "#dc2626"
             }
         };
-        if (pmrPanel) pmrPanel.oninput = () => {
+        if (pmrPanel) pmrPanel.onchange = () => {
             aPmr.anchoPanelDivisorPmr = Math.max(30, parseInt(pmrPanel.value, 10) || 100);
             pintarFit(recomputarDivisorPmr(aPmr));
             redrawCanvasOnly()
@@ -5844,7 +5853,11 @@ function renderPreviewControls(tab) {
     bindHighlights(cont)
 }
 
-function renderPmrCuartoControls(a) {
+// Control del divisor del cuarto PMR para el previsualizador, por tipo de pieza:
+// "panel" (dropdown de anchos, pestaña Paneles), "door" (puerta lateral, pestaña Puertas,
+// sin selector de lado) y "pilastra" (separación, pestaña Pilastras). El frente se recalcula
+// solo (recomputarDivisorPmr) y el mensaje de ajuste sale bajo el panel/puerta.
+function pmrCtrlHtml(kind, a) {
     const N = a.cabinas || cfg.cabinas || 0;
     const cuartoIdx = cfg.invertir ? N - 1 : 0;
     const sepIdx = cfg.invertir ? N - 2 : 0;
@@ -5853,9 +5866,6 @@ function renderPmrCuartoControls(a) {
     const doorW = anchoDePiezaCodigo(doorCode) || 90;
     const prof = (typeof leerDimensionesLugar === "function" ? (leerDimensionesLugar() || {}).paredOpuesta : 0) || 0;
     const frente = prof > 0 ? Math.max(0, Math.round(prof - panel - doorW)) : 45;
-    const sepActual = (a.pilastras || [])[sepIdx] || "";
-    const pilOpts = CATALOGO.piezas.filter(p => p.familia === "PI" && !p.sufijo && p.ancho <= 30 && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual())).map(p => `<option value="${p.codigo}"${sepActual===p.codigo?" selected":""}>${p.codigo} (${p.ancho} cm)</option>`).join("");
-    const doorOpts = ["PT90", "PT92"].map(c => `<option value="${c}"${doorCode===c?" selected":""}>${c} (${anchoDePiezaCodigo(c)||c.replace("PT","")} cm)</option>`).join("");
     let fitTxt, fitColor;
     if (prof <= 0) {
         fitTxt = "Definí la profundidad del lugar (paso 1) para validar el fondo.";
@@ -5867,7 +5877,22 @@ function renderPmrCuartoControls(a) {
         fitTxt = `✕ No calza: panel ${panel} + puerta ${doorW} necesitan ${panel+doorW+10} cm y el fondo mide ${prof} cm — reducí el panel`;
         fitColor = "#dc2626"
     }
-    return `\n    <div class="pmr-cuarto-ctrl" style="grid-column:1/-1; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:10px 12px; margin-bottom:10px;">\n      <div style="font-weight:700; font-size:12px; color:var(--brand); margin-bottom:8px;">🚻 Cuarto PMR — divisor (editá acá, se dibuja al instante)</div>\n      <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">\n        <label style="display:flex; flex-direction:column; gap:4px;">\n          <span style="font-size:12px; color:var(--text-soft); font-weight:600;">Panel divisor (cm)</span>\n          <input type="number" data-pmr="panel" value="${panel}" min="30" max="300" step="1" style="width:110px;">\n        </label>\n        <label style="display:flex; flex-direction:column; gap:4px;">\n          <span style="font-size:12px; color:var(--text-soft); font-weight:600;">Puerta lateral</span>\n          <select data-pmr="door" style="width:140px;">${doorOpts}</select>\n        </label>\n        <label style="display:flex; flex-direction:column; gap:4px;">\n          <span style="font-size:12px; color:var(--text-soft); font-weight:600;">Pilastra de separación</span>\n          <select data-pmr="pilastra" style="min-width:210px;">\n            <option value=""${sepActual===""?" selected":""}>— Sin pilastra (pega directo) —</option>\n            ${pilOpts}\n          </select>\n        </label>\n      </div>\n      <div data-pmr="fitmsg" style="margin-top:8px; font-size:11px; font-weight:600; color:${fitColor};">${escapeHtml(fitTxt)}</div>\n    </div>`
+    const fitDiv = `<div data-pmr="fitmsg" style="font-size:10px; font-weight:600; color:${fitColor}; margin-top:4px;">${escapeHtml(fitTxt)}</div>`;
+    if (kind === "panel") {
+        const widths = [60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160];
+        if (widths.indexOf(panel) < 0) widths.push(panel);
+        widths.sort((x, y) => x - y);
+        const opts = widths.map(w => `<option value="${w}"${w===panel?" selected":""}>${w} cm</option>`).join("");
+        return `\n        <label>\n          <span>Cuarto PMR · panel divisor</span>\n          <select data-pmr="panel">${opts}</select>\n          ${fitDiv}\n        </label>`
+    }
+    if (kind === "door") {
+        const doorPz = CATALOGO.piezas.filter(p => p.familia === "PT" && !p.sufijo && (p.ancho === 90 || p.ancho === 92) && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual()));
+        const opts = doorPz.map(p => `<option value="${p.codigo}"${doorCode===p.codigo?" selected":""}>${p.codigo} (${p.ancho} cm)</option>`).join("") || `<option value="PT90" selected>PT90 (90 cm)</option>`;
+        return `\n        <label>\n          <span>Cuarto PMR · puerta lateral</span>\n          <select data-pmr="door">${opts}</select>\n          <div class="form-help" style="font-size:10px; margin-top:2px;">Lateral (perpendicular); el lado lo fija el layout.</div>\n          ${fitDiv}\n        </label>`
+    }
+    const sepActual = (a.pilastras || [])[sepIdx] || "";
+    const pilOpts = CATALOGO.piezas.filter(p => p.familia === "PI" && !p.sufijo && p.ancho <= 30 && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual())).map(p => `<option value="${p.codigo}"${sepActual===p.codigo?" selected":""}>${p.codigo} (${p.ancho} cm)</option>`).join("");
+    return `\n        <label>\n          <span>Cuarto PMR · pilastra de separación</span>\n          <select data-pmr="pilastra">\n            <option value=""${sepActual===""?" selected":""}>— Sin pilastra (pega directo) —</option>\n            ${pilOpts}\n          </select>\n        </label>`
 }
 
 function pieceSelectorFor(tab, idx) {
