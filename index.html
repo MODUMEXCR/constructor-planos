@@ -9186,7 +9186,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         if (profCmPdf > 0) {
             // En PMR la cota de profundidad debe llegar al fondo real del cuarto (no a 150).
             const floorProfPmrPdf = esPmrLayPdf ? drawTop + profCmPdf * cabDepth / (pmrCabPanelCmPdf || 150) : floorLugar;
-            const pxx = drawX - 5,
+            const pxx = drawX + (leftWallEff ? 15 * scale : 0) + 5,
                 pmid = (drawTop + floorProfPmrPdf) / 2;
             doc.setDrawColor(10, 31, 61);
             doc.setLineWidth(.4);
@@ -9195,9 +9195,9 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             doc.line(pxx - 1.5, floorProfPmrPdf, pxx + 1.5, floorProfPmrPdf);
             if (sobraProfMm > 0) doc.line(pxx - 1.2, floorY, pxx + 1.2, floorY);
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(7);
+            doc.setFontSize(6.5);
             doc.setTextColor(10, 31, 61);
-            doc.text(`PROFUNDIDAD: ${profCmPdf} cm`, pxx - 2, pmid, {
+            doc.text(`PROFUNDIDAD: ${profCmPdf} cm`, pxx + 3, pmid, {
                 angle: 90,
                 align: "center"
             })
