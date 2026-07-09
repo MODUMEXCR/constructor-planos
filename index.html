@@ -5326,7 +5326,7 @@ function buildBathroomSvg() {
                 const divX = cfg.invertir ? x - divSlotW / 2 : x + w + divSlotW / 2;
                 // Panel divisor: desde el muro (arriba) hasta donde arranca la puerta.
                 if (panelPx > .5) {
-                    svg += `<rect x="${divX-1.5}" y="20" width="3" height="${panelPx}" fill="#0a1f3d"/>`
+                    svg += `<rect data-piece="panel-${i}" x="${divX-1.5}" y="20" width="3" height="${panelPx}" fill="#0a1f3d"/>`
                 }
                 const frenteExtraIdx = (areaCfg.pilastrasExtras || []).findIndex(ex => (ex.descripcion || "").toLowerCase().includes("frente del cuarto pmr"));
                 if (frenteExtraIdx >= 0) svg += `<g data-piece="extra-${frenteExtraIdx}">`;
@@ -5519,7 +5519,9 @@ function buildBathroomSvg() {
             const cosW = pieza.ancho * scale / 2;
             const barH = 4;
             const gapPx = Math.max(1.5, 1 * scale);
-            const yBar = floor - 5 - (k + 1) * (gapPx + barH);
+            // En PMR la costilla refuerza el PANEL divisor → se dibuja pegada al panel
+            // (región superior, junto al muro de fondo), no cerca del piso.
+            const yBar = layout.pmrCuarto ? 20 + 12 + k * (gapPx + barH) : floor - 5 - (k + 1) * (gapPx + barH);
             const x0 = panelALaDer ? panelLineX - cosW : panelLineX;
             svg += `<g data-piece="extra-${idx}">`;
             svg += `<rect x="${x0}" y="${yBar}" width="${cosW}" height="${barH}" fill="#5db0e0" stroke="#0a1f3d" stroke-width="0.8"/>`;
@@ -5888,7 +5890,9 @@ function pmrCtrlHtml(kind, a) {
     if (kind === "door") {
         const doorPz = CATALOGO.piezas.filter(p => p.familia === "PT" && !p.sufijo && (p.ancho === 90 || p.ancho === 92) && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual()));
         const opts = doorPz.map(p => `<option value="${p.codigo}"${doorCode===p.codigo?" selected":""}>${p.codigo} (${p.ancho} cm)</option>`).join("") || `<option value="PT90" selected>PT90 (90 cm)</option>`;
-        return `\n        <label>\n          <span>Cuarto PMR · puerta lateral</span>\n          <select data-pmr="door">${opts}</select>\n          <div class="form-help" style="font-size:10px; margin-top:2px;">Lateral (perpendicular); el lado lo fija el layout.</div>\n          ${fitDiv}\n        </label>`
+        const apVal = (a.aperturas || [])[cuartoIdx] || (cfg.invertir ? "IZQ_EXT" : "DER_EXT");
+        const apOpt = (v, lbl) => `<option value="${v}"${apVal===v?" selected":""}>${lbl}</option>`;
+        return `\n        <label>\n          <span>Cuarto PMR · puerta lateral</span>\n          <select data-pmr="door">${opts}</select>\n        </label>\n        <label>\n          <span>Apertura (cuarto PMR)</span>\n          <select data-tab="apertura" data-idx="${cuartoIdx}">\n            ${apOpt("IZQ_EXT","Izquierda · abre exterior")}\n            ${apOpt("IZQ_INT","Izquierda · abre interior")}\n            ${apOpt("DER_EXT","Derecha · abre exterior")}\n            ${apOpt("DER_INT","Derecha · abre interior")}\n          </select>\n          <div class="form-help" style="font-size:10px; margin-top:2px;">Puerta lateral perpendicular; el lado (izq/der del divisor) lo fija el layout.</div>\n        </label>\n        ${fitDiv}`
     }
     const sepActual = (a.pilastras || [])[sepIdx] || "";
     const pilOpts = CATALOGO.piezas.filter(p => p.familia === "PI" && !p.sufijo && p.ancho <= 30 && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual())).map(p => `<option value="${p.codigo}"${sepActual===p.codigo?" selected":""}>${p.codigo} (${p.ancho} cm)</option>`).join("");
@@ -5939,15 +5943,24 @@ function bindHighlights(cont) {
         if (el.matches("[data-extra-idx]")) {
             return `[data-piece="extra-${+el.dataset.extraIdx}"]`
         }
+        if (el.matches("[data-pmr]")) {
+            const N = cfg.cabinas || 0;
+            const cuartoIdx = cfg.invertir ? N - 1 : 0;
+            const sepIdx = cfg.invertir ? N - 2 : 0;
+            const kind = el.dataset.pmr;
+            if (kind === "panel") return `[data-piece="panel-${cuartoIdx}"]`;
+            if (kind === "door") return `[data-piece="puerta-${cuartoIdx}"]`;
+            if (kind === "pilastra") return `[data-piece="pilastra-${sepIdx}"]`
+        }
         return null
     };
     cont.addEventListener("mouseover", e => {
-        const t = e.target.closest("select[data-tab], [data-extra-idx]");
+        const t = e.target.closest("select[data-tab], [data-extra-idx], [data-pmr]");
         if (t && cont.contains(t)) highlight(selectorForEl(t))
     });
     cont.addEventListener("mouseout", e => {
-        const t = e.target.closest("select[data-tab], [data-extra-idx]");
-        const next = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("select[data-tab], [data-extra-idx]");
+        const t = e.target.closest("select[data-tab], [data-extra-idx], [data-pmr]");
+        const next = e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest("select[data-tab], [data-extra-idx], [data-pmr]");
         if (t && !next) clearAll()
     });
     cont.addEventListener("focusin", e => highlight(selectorForEl(e.target)));
@@ -9225,7 +9238,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 const cosW = pieza.ancho * scale / 2;
                 const barH = 2;
                 const gapMm = Math.max(.8, 1 * scale);
-                const yBar = floorY - 2 - gapMm - barH - k * (barH + gapMm);
+                // PMR: la costilla refuerza el panel divisor → pegada al panel (arriba).
+                const yBar = esPmrLayPdf ? drawTop + 5 + k * (barH + gapMm) : floorY - 2 - gapMm - barH - k * (barH + gapMm);
                 const x0 = panelALaDer ? panelLineX - cosW : panelLineX;
                 doc.setFillColor(93, 176, 224);
                 doc.setDrawColor(10, 31, 61);
