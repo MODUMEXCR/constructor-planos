@@ -4809,6 +4809,10 @@ function renderPreview() {
 
 function aperturaInteriorBloqueada(a, i) {
     if (!a || cfg.modelo === "KIDS") return false;
+    // El cuarto PMR no aplica la regla <135: la puerta lateral da al cuarto amplio (Ø1.50),
+    // no a una cabina angosta, y el panel divisor va contra el cuarto/pared.
+    const layoutAB = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
+    if (layoutAB.pmrCuarto && i === (cfg.invertir ? cfg.cabinas - 1 : 0)) return false;
     const pcode = (a.paneles || [])[i];
     const pz = pcode ? CATALOGO.piezas.find(p => p.codigo === pcode) : null;
     return !!(pz && pz.familia === "PN" && pz.ancho < 135)
@@ -6014,7 +6018,8 @@ function bindExtrasSection(cont, a) {
             const fn = e => {
                 const i = +e.target.dataset.extraIdx;
                 const f = e.target.dataset.extraField;
-                if (a.pilastrasExtras[i]) a.pilastrasExtras[i][f] = e.target.value
+                if (a.pilastrasExtras[i]) a.pilastrasExtras[i][f] = e.target.value;
+                if (typeof redrawCanvasOnly === "function") redrawCanvasOnly()
             };
             el.onchange = fn;
             el.oninput = fn
@@ -6022,11 +6027,15 @@ function bindExtrasSection(cont, a) {
         extrasList.querySelectorAll("[data-remove-extra]").forEach(b => {
             b.onclick = () => {
                 a.pilastrasExtras.splice(+b.dataset.removeExtra, 1);
-                renderList()
+                renderList();
+                if (typeof redrawCanvasOnly === "function") redrawCanvasOnly()
             }
         })
     };
     renderList();
+    const redrawX = () => {
+        if (typeof redrawCanvasOnly === "function") redrawCanvasOnly()
+    };
     const addBtn = cont.querySelector('[data-action="add-extra"]');
     if (addBtn) addBtn.onclick = () => {
         if (!a.pilastrasExtras) a.pilastrasExtras = [];
@@ -6034,7 +6043,8 @@ function bindExtrasSection(cont, a) {
             codigo: "",
             descripcion: ""
         });
-        renderList()
+        renderList();
+        redrawX()
     };
     const addCostilla = cont.querySelector('[data-action="add-costilla"]');
     if (addCostilla) addCostilla.onclick = () => {
@@ -6044,7 +6054,8 @@ function bindExtrasSection(cont, a) {
             codigo: codDef,
             descripcion: "Pilastra costilla para refuerzo de cabina PMR"
         });
-        renderList()
+        renderList();
+        redrawX()
     };
     const addEntrada = cont.querySelector('[data-action="add-entrada"]');
     if (addEntrada) addEntrada.onclick = () => {
@@ -6058,7 +6069,8 @@ function bindExtrasSection(cont, a) {
             codigo: codDef,
             descripcion: "Pilastra entrada puerta a muro (tope cierre)"
         });
-        renderList()
+        renderList();
+        redrawX()
     }
 }
 
