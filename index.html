@@ -4881,11 +4881,14 @@ function actualizarValidacionModulacion() {
         }
         if (i < N - 1) {
             const nextEsMingit = (a.tiposCabina || [])[i + 1] === "Mingitorio";
+            // En PMR la pilastra de separación (borde del cuarto) es OPCIONAL: el divisor
+            // panel+puerta+frente ya separa el cuarto, así que no se exige.
+            const esSepPmr = esPmrCuartoVal && i === (cfg.invertir ? N - 2 : 0);
             if (esMingit && nextEsMingit) {} else {
                 const pi = (a.pilastras || [])[i];
                 const pieza = pi ? CATALOGO.piezas.find(p => p.codigo === pi) : null;
                 if (pieza) suma += pieza.ancho;
-                else faltantes.push(`Pilastra entre C${i+1}-C${i+2}`)
+                else if (!esSepPmr) faltantes.push(`Pilastra entre C${i+1}-C${i+2}`)
             }
         }
     }
@@ -5186,6 +5189,9 @@ function buildBathroomSvg() {
     const sobraProfPx = sobraProfCm > 0 ? cabHeight * sobraProfCm / panelBaseCm : 0;
     const floor = 20 + cabHeight;
     const floorLugar = floor + sobraProfPx;
+    // Profundidad total del lugar en px (fondo real). En PMR el cuarto llega hasta acá; el
+    // resto del área (mingitorios) también debe verse hasta el fondo → rectángulo uniforme.
+    const floorProfPmr = esPmrLay && profLugarCm > 0 ? 20 + profLugarCm * cabHeight / 150 : floorLugar;
     const totalH = cabHeight + 100 + extraPmr + sobraProfPx + (hayCentros ? 30 : 0);
     const dimY = floorLugar + extraPmr + 38;
     const dimTotalY = floorLugar + extraPmr + 64;
@@ -5208,6 +5214,7 @@ function buildBathroomSvg() {
     const floorEndX = padding + drawW - (rightWall ? 15 * scale : 0);
     svg += `<rect x="${floorStartX}" y="20" width="${floorEndX-floorStartX}" height="${cabHeight}" fill="#f0f3f7"/>`;
     if (sobraProfPx > 0) svg += `<rect x="${floorStartX}" y="${floor}" width="${floorEndX-floorStartX}" height="${sobraProfPx}" fill="#f7fafc"/>`;
+    else if (esPmrLay && floorProfPmr > floor + .5) svg += `<rect x="${floorStartX}" y="${floor}" width="${floorEndX-floorStartX}" height="${floorProfPmr-floor}" fill="#f7fafc"/>`;
     let x = padding;
     seq.forEach(s => {
         const w = s.ancho * scale;
@@ -5321,9 +5328,10 @@ function buildBathroomSvg() {
                 const sinkTx = cfg.invertir ? `translate(${x+w-12}, ${floorCuarto-19}) scale(-1,1)` : `translate(${x+12}, ${floorCuarto-19})`;
                 svg += `<g transform="${sinkTx}">\n          <rect width="36" height="13" rx="2" fill="white" stroke="#0a1f3d" stroke-width="1.4"/>\n          <ellipse cx="18" cy="6.5" rx="10" ry="4.5" fill="none" stroke="#0a1f3d" stroke-width="1"/>\n        </g>`;
                 const sgnDivS = cfg.invertir ? -1 : 1;
-                const divPilPz = CATALOGO.piezas.find(p => p.codigo === (areaCfg.pilastras || [])[cfg.invertir ? N - 2 : 0]);
-                const divSlotW = (divPilPz ? divPilPz.ancho : 5) * scale;
-                const divX = cfg.invertir ? x - divSlotW / 2 : x + w + divSlotW / 2;
+                // El divisor (panel+puerta+frente) es la pared del cuarto → va en el BORDE del
+                // cuarto. Si hay pilastra de separación, su slot queda por fuera (no encima de
+                // la puerta).
+                const divX = cfg.invertir ? x : x + w;
                 // Panel divisor: desde el muro (arriba) hasta donde arranca la puerta.
                 if (panelPx > .5) {
                     svg += `<rect data-piece="panel-${i}" x="${divX-1.5}" y="20" width="3" height="${panelPx}" fill="#0a1f3d"/>`
@@ -5416,7 +5424,10 @@ function buildBathroomSvg() {
                 svg += `<line x1="${floorStartX}" y1="${floor}" x2="${floorEndX}" y2="${floor}" stroke="#94a3b8" stroke-width="0.7" stroke-dasharray="4,3"/>`;
                 svg += `<text x="${(floorStartX+floorEndX)/2}" y="${floor + sobraProfPx/2 + 3}" font-size="8" fill="#5a6472" font-weight="600" text-anchor="middle">Espacio libre: ${sobraProfCm} cm</text>`
             }
-            const py1 = 20, py2 = floorLugar, pxx = 17, pmid = (py1 + py2) / 2;
+            const py1 = 20,
+                py2 = esPmrLay ? 20 + (profLugarCm || 0) * cabHeight / 150 : floorLugar,
+                pxx = 17,
+                pmid = (py1 + py2) / 2;
             svg += `<line x1="${pxx}" y1="${py1}" x2="${pxx}" y2="${py2}" stroke="#0a1f3d" stroke-width="1"/>`;
             svg += `<line x1="${pxx-4}" y1="${py1}" x2="${pxx+4}" y2="${py1}" stroke="#0a1f3d" stroke-width="1"/>`;
             svg += `<line x1="${pxx-4}" y1="${py2}" x2="${pxx+4}" y2="${py2}" stroke="#0a1f3d" stroke-width="1"/>`;
@@ -8696,6 +8707,13 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         doc.text(`Espacio libre: ${Math.round(sobraProfCmPdf)} cm`, (floorStartX + floorEndX) / 2, floorY + sobraProfMm / 2 + 2, {
             align: "center"
         })
+    } else if (esPmrLayPdf && profLugarCmPdf > 0) {
+        // PMR: extender el área hasta el fondo real (rectángulo uniforme con el cuarto).
+        const floorProfPmrBg = drawTop + profLugarCmPdf * cabDepth / (pmrCabPanelCmPdf || 150);
+        if (floorProfPmrBg > floorY + .5) {
+            doc.setFillColor(247, 250, 252);
+            doc.rect(floorStartX, floorY, floorEndX - floorStartX, floorProfPmrBg - floorY, "F")
+        }
     }
     const grosorPz = 1;
     const angPuerta = Math.PI / 9;
@@ -8928,9 +8946,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                     })
                 }
                 const sgnDivP = areaInvertir ? -1 : 1;
-                const divPilPzP = CATALOGO.piezas.find(p => p.codigo === (areaCfg.pilastras || [])[areaInvertir ? N - 2 : 0]);
-                const divSlotWp = (divPilPzP ? divPilPzP.ancho : 5) * scale;
-                const divXp = areaInvertir ? x - divSlotWp / 2 : x + w + divSlotWp / 2;
+                const divXp = areaInvertir ? x : x + w;
                 const yDoorTop = yDoorTopP;
                 const yDoorBot = yDoorTopP + doorMm;
                 doc.setFillColor(10, 31, 61);
@@ -9133,13 +9149,15 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             profCmPdf = areaCfg.preferCorta ? mA : nA
         }
         if (profCmPdf > 0) {
+            // En PMR la cota de profundidad debe llegar al fondo real del cuarto (no a 150).
+            const floorProfPmrPdf = esPmrLayPdf ? drawTop + profCmPdf * cabDepth / (pmrCabPanelCmPdf || 150) : floorLugar;
             const pxx = drawX - 5,
-                pmid = (drawTop + floorLugar) / 2;
+                pmid = (drawTop + floorProfPmrPdf) / 2;
             doc.setDrawColor(10, 31, 61);
             doc.setLineWidth(.4);
-            doc.line(pxx, drawTop, pxx, floorLugar);
+            doc.line(pxx, drawTop, pxx, floorProfPmrPdf);
             doc.line(pxx - 1.5, drawTop, pxx + 1.5, drawTop);
-            doc.line(pxx - 1.5, floorLugar, pxx + 1.5, floorLugar);
+            doc.line(pxx - 1.5, floorProfPmrPdf, pxx + 1.5, floorProfPmrPdf);
             if (sobraProfMm > 0) doc.line(pxx - 1.2, floorY, pxx + 1.2, floorY);
             doc.setFont("helvetica", "bold");
             doc.setFontSize(7);
