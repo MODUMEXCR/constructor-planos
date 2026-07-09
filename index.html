@@ -8982,14 +8982,6 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 doc.setFillColor(255, 255, 255);
                 doc.rect(invF ? x + w - 21 : x + 5, floorCuarto - 9, 16, 6.5, "FD");
                 doc.ellipse(invF ? x + w - 13 : x + 13, floorCuarto - 5.7, 4.5, 2, "S");
-                if (s.panelCode) {
-                    doc.setFont("helvetica", "normal");
-                    doc.setFontSize(7);
-                    doc.setTextColor(80, 80, 80);
-                    doc.text(`${s.panelCode} · ${profPanel} cm`, ccx, drawTop + 7, {
-                        align: "center"
-                    })
-                }
                 const sgnDivP = areaInvertir ? -1 : 1;
                 const divXp = areaInvertir ? x : x + w;
                 const yDoorTop = yDoorTopP;
@@ -9050,23 +9042,6 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                         align: "center"
                     })
                 }
-                if (s.panelCode) {
-                    const panelPieza = CATALOGO.piezas.find(p => p.codigo === s.panelCode);
-                    const panelAncho = panelPieza ? panelPieza.ancho : 150;
-                    doc.setFont("helvetica", "normal");
-                    doc.setFontSize(7);
-                    doc.setTextColor(80, 80, 80);
-                    doc.text(`${s.panelCode} · ${panelAncho} cm`, cx, drawTop + cabDepth * .8, {
-                        align: "center"
-                    });
-                    doc.setFont("helvetica", "bold");
-                    doc.setFontSize(7);
-                    doc.setTextColor(220, 50, 50);
-                    doc.text(`${panelAncho.toFixed(1)}`, x + w - 2, drawTop + cabDepth * .55, {
-                        angle: 90,
-                        align: "center"
-                    })
-                }
                 const apertura = (areaCfg.aperturas || [])[s.indiceCabina - 1] || "";
                 let lado = "IZQ",
                     sentido = "EXT";
@@ -9099,23 +9074,6 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             const uw = Math.min(w * .42, 13), uh = cabDepth * .32;
             const fxCx = cDescU !== "" && cDescU != null && !isNaN(cDescU) ? Math.max(x + uw / 2 + 1, Math.min(x + w - uw / 2 - 1, floorStartX + Number(cDescU) * scale)) : cx;
             doc.addImage(ORINAL_IMG_B64, "PNG", fxCx - uw / 2, drawTop + cabDepth * .05, uw, uh, undefined, "FAST");
-            if (s.panelCode) {
-                const panelPieza = CATALOGO.piezas.find(p => p.codigo === s.panelCode);
-                const panelAncho = panelPieza ? panelPieza.ancho : 150;
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(7);
-                doc.setTextColor(80, 80, 80);
-                doc.text(`${s.panelCode} · ${panelAncho} cm`, cx, drawTop + cabDepth * .8, {
-                    align: "center"
-                });
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(7);
-                doc.setTextColor(220, 50, 50);
-                doc.text(`${panelAncho.toFixed(1)}`, x + w - 2, drawTop + cabDepth * .55, {
-                    angle: 90,
-                    align: "center"
-                })
-            }
             doc.setFont("helvetica", "bold");
             doc.setFontSize(9);
             doc.setTextColor(10, 31, 61);
@@ -9124,24 +9082,10 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             })
         }
         if (s.tipo !== "muro" && s.tipo !== "mamparaCierreMingit") {
-            const dimY = Math.min(floorLugar + (esPmrLayPdf ? extraPmrPdf : swingEff), cotaClampY) + 8;
-            doc.setDrawColor(10, 31, 61);
-            doc.setLineWidth(.3);
-            doc.line(x, dimY, x + w, dimY);
-            doc.line(x, dimY - 1.5, x, dimY + 1.5);
-            doc.line(x + w, dimY - 1.5, x + w, dimY + 1.5);
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(7);
+            doc.setFontSize(6.5);
             doc.setTextColor(10, 31, 61);
-            doc.text(s.cuartoPmr ? "CUARTO PMR" : s.codigo, x + w / 2, dimY - 2, {
-                align: "center"
-            });
-            const esPilastra = s.tipo === "pilastra" || s.tipo === "pilastra-muro" || s.tipo === "pilastra-terminal" || s.tipo === "panelMingit" || s.tipo === "panelCompleto";
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(8);
-            doc.setTextColor(40, 40, 40);
-            const textoCota = esPilastra ? `${s.ancho.toFixed(1)}` : `${(s.ancho/100).toFixed(2)} m`;
-            doc.text(textoCota, x + w / 2, dimY + 5, {
+            doc.text(`${s.ancho.toFixed(0)}`, x + w / 2, drawTop + 6, {
                 align: "center"
             })
         }
