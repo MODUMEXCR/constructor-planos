@@ -8829,13 +8829,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             const fracPdf = Math.min(.8, Math.max(.35, mgAltoPdf / 150 * .6));
             pzRectV(px, drawTop, cabDepth * fracPdf);
             tBracket(px, drawTop);
-            doc.setLineWidth(.55);
-            if (s.panelDivCode) {
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(5.5);
-                doc.setTextColor(28, 40, 70);
-                doc.text(String(s.panelDivCode), px + 1.5, drawTop + 4)
-            }
+            doc.setLineWidth(.55)
         } else if (s.tipo === "mamparaCierreMingit") {
             const lineXP = s.lado === "izq" ? x + .5 : x + w - .5;
             const mgPzC = s.mgCode ? CATALOGO.piezas.find(p => p.codigo === s.mgCode) : null;
@@ -8843,67 +8837,21 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             const fracC = Math.min(.8, Math.max(.35, mgAltoC / 150 * .6));
             pzRectV(lineXP, drawTop, cabDepth * fracC);
             tBracket(lineXP, drawTop);
-            doc.setLineWidth(.55);
-            if (s.mgCode) {
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(5.5);
-                doc.setTextColor(28, 40, 70);
-                doc.text(String(s.mgCode), lineXP + (s.lado === "izq" ? 1.5 : -13), drawTop + 4)
-            }
+            doc.setLineWidth(.55)
         } else if (s.tipo === "panelCompleto") {
             const px = x + w / 2;
             const panelHpc = esPmrLayPdf && s.idxSlot === 0 ? cabDepth : panelLenMm(s.panelDivCode);
-            pzRectV(px, drawTop, panelHpc);
-            doc.setFillColor(10, 31, 61);
-            doc.rect(x, floorY - grosorPz, w, grosorPz, "F");
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(6);
-            doc.setTextColor(120, 120, 120);
-            doc.text("R15", px, drawTop - 4, {
-                align: "center"
-            })
+            pzRectV(px, drawTop, panelHpc)
         } else if (s.tipo === "pilastra") {
             const px = x + w / 2;
-            pzRectV(px, drawTop, panelLenMm(s.panelDivCode));
-            doc.setFillColor(10, 31, 61);
-            doc.rect(x, floorY - grosorPz, w, grosorPz, "F");
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(6);
-            doc.setTextColor(120, 120, 120);
-            doc.text("R15", px, drawTop - 4, {
-                align: "center"
-            })
+            pzRectV(px, drawTop, panelLenMm(s.panelDivCode))
         } else if (s.tipo === "pilastra-muro") {
             const px = x + w / 2;
-            doc.setFillColor(10, 31, 61);
-            doc.rect(px - 1.5, drawTop - 2, 3, 4, "F");
-            doc.rect(x, floorY - grosorPz, w, grosorPz, "F");
-            doc.setFillColor(245, 197, 66);
-            const dirSign = s.lado === "izq" ? 1 : -1;
-            doc.lines([
-                [3 * dirSign, 0],
-                [-3 * dirSign, 4],
-                [0, -4]
-            ], px, drawTop - 1, [1, 1], "F", true);
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(6);
-            doc.setTextColor(120, 120, 120);
-            doc.text("R15", px, drawTop - 4, {
-                align: "center"
-            })
+            pzRectV(px, drawTop, 4)
         } else if (s.tipo === "pilastra-terminal") {
             const panelX = s.lado === "izq" ? x : x + w - grosorPz;
-            const capX = s.lado === "izq" ? x + 2 : x + w - 5;
             const panelLenTermMm = panelLenMm(s.panelDivCode);
             pzRectV(panelX + grosorPz / 2, drawTop, panelLenTermMm);
-            doc.setFillColor(10, 31, 61);
-            doc.rect(x, floorY - grosorPz, w, grosorPz, "F");
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(6);
-            doc.setTextColor(120, 120, 120);
-            doc.text("R15", capX + 1.5, drawTop - 4, {
-                align: "center"
-            });
             doc.setFont("helvetica", "bold");
             doc.setFontSize(6);
             doc.setTextColor(10, 31, 61);
@@ -9001,23 +8949,17 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 doorRect(divXp, hyP, divXp + dirXp * doorMm * sinAng, hyP + dirYp * doorMm * cosAng);
                 doc.setLineWidth(.55);
                 doc.setFont("helvetica", "bold");
-                doc.setFontSize(6);
+                doc.setFontSize(6.5);
                 doc.setTextColor(10, 31, 61);
-                doc.text(`${s.codigo} (lateral)`, divXp + 8 * sgnDivP, (yDoorTop + yDoorBot) / 2 + 1, {
-                    align: areaInvertir ? "right" : "left"
-                });
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(6);
-                doc.setTextColor(220, 50, 50);
-                doc.text(`${profPanel}.0`, divXp + 4 * sgnDivP, (drawTop + yDoorTop) / 2, {
+                doc.text(`${profPanel}`, divXp + 4 * sgnDivP, (drawTop + yDoorTop) / 2, {
                     angle: 90,
                     align: "center"
                 });
-                doc.text(`${wDoor}.0`, divXp + 4 * sgnDivP, (yDoorTop + yDoorBot) / 2, {
+                doc.text(`${wDoor}`, divXp + 4 * sgnDivP, (yDoorTop + yDoorBot) / 2, {
                     angle: 90,
                     align: "center"
                 });
-                doc.text(`${wFrente}.0`, divXp + 4 * sgnDivP, yDoorBot + frenteMm / 2, {
+                doc.text(`${wFrente}`, divXp + 4 * sgnDivP, yDoorBot + frenteMm / 2, {
                     angle: 90,
                     align: "center"
                 });
@@ -9031,7 +8973,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 const cDescB = (areaCfg.centrosDescarga || [])[s.indiceCabina - 1];
                 const wcCx = cDescB !== "" && cDescB != null && !isNaN(cDescB) ? Math.max(x + 8, Math.min(x + w - 8, floorStartX + Number(cDescB) * scale)) : cx;
                 const sB = Math.min(w * .55, cabDepth * .45, 18);
-                doc.addImage(WC_IMG_B64, "PNG", wcCx - sB / 2, drawTop + cabDepth * .08, sB, sB, undefined, "FAST");
+                doc.addImage(WC_IMG_B64, "PNG", wcCx - sB / 2, drawTop + cabDepth * .14, sB, sB, undefined, "FAST");
                 if (s.esAccesible) {
                     doc.setFillColor(93, 176, 224);
                     doc.circle(cx, drawTop + cabDepth * .66, 3.6, "F");
@@ -9073,7 +9015,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             const cDescU = (areaCfg.centrosDescarga || [])[s.indiceCabina - 1];
             const uw = Math.min(w * .45, cabDepth * .28, 11);
             const fxCx = cDescU !== "" && cDescU != null && !isNaN(cDescU) ? Math.max(x + uw / 2 + 1, Math.min(x + w - uw / 2 - 1, floorStartX + Number(cDescU) * scale)) : cx;
-            doc.addImage(ORINAL_IMG_B64, "PNG", fxCx - uw / 2, drawTop + cabDepth * .06, uw, uw, undefined, "FAST");
+            doc.addImage(ORINAL_IMG_B64, "PNG", fxCx - uw / 2, drawTop + cabDepth * .1, uw, uw, undefined, "FAST");
             doc.setFont("helvetica", "bold");
             doc.setFontSize(9);
             doc.setTextColor(10, 31, 61);
@@ -9081,7 +9023,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 align: "center"
             })
         }
-        if (s.tipo !== "muro" && s.tipo !== "mamparaCierreMingit") {
+        if (s.tipo !== "muro" && s.tipo !== "mamparaCierreMingit" && s.ancho >= 1) {
             doc.setFont("helvetica", "bold");
             doc.setFontSize(6.5);
             doc.setTextColor(10, 31, 61);
@@ -9130,7 +9072,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         if (profCmPdf > 0) {
             // En PMR la cota de profundidad debe llegar al fondo real del cuarto (no a 150).
             const floorProfPmrPdf = esPmrLayPdf ? drawTop + profCmPdf * cabDepth / (pmrCabPanelCmPdf || 150) : floorLugar;
-            const pxx = drawX + (leftWallEff ? 15 * scale : 0) + 5,
+            const pxx = drawX - 4,
                 pmid = (drawTop + floorProfPmrPdf) / 2;
             doc.setDrawColor(10, 31, 61);
             doc.setLineWidth(.4);
@@ -9139,9 +9081,16 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             doc.line(pxx - 1.5, floorProfPmrPdf, pxx + 1.5, floorProfPmrPdf);
             if (sobraProfMm > 0) doc.line(pxx - 1.2, floorY, pxx + 1.2, floorY);
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(6.5);
+            doc.setFontSize(8);
             doc.setTextColor(10, 31, 61);
-            doc.text(`PROFUNDIDAD: ${profCmPdf} cm`, pxx + 3, pmid, {
+            doc.text(`${profCmPdf}`, pxx - 2, pmid, {
+                angle: 90,
+                align: "center"
+            });
+            doc.setFont("helvetica", "normal");
+            doc.setFontSize(5.5);
+            doc.setTextColor(90, 100, 114);
+            doc.text("PROFUNDIDAD (cm)", pxx - 6.5, pmid, {
                 angle: 90,
                 align: "center"
             })
