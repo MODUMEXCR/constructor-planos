@@ -5214,7 +5214,7 @@ function buildBathroomSvg() {
         const cx = x + w / 2;
         if (s.tipo === "muro") {
             const esMuroIzqExt = esPmrLay && x < padding + .1;
-            const hMuro = cabHeight + 10 + (esMuroIzqExt ? extraPmr : 0);
+            const hMuro = cabHeight + 10 + (esMuroIzqExt ? extraPmr : sobraProfPx);
             svg += `<rect x="${x}" y="10" width="${w}" height="${hMuro}" fill="white" stroke="#0a1f3d" stroke-width="1.2"/>`;
             svg += `<rect x="${x}" y="10" width="${w}" height="${hMuro}" fill="url(#wallHatch)" stroke="none"/>`;
             const esMuroIzq = x < padding + .1;
@@ -8696,7 +8696,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         if (s.tipo === "muro") {
             const wallTop = drawTop - 6;
             const esMuroIzqPmr = esPmrLayPdf && x < drawX + .1;
-            const wallHeight = cabDepth + 6 + (esMuroIzqPmr ? extraPmrPdf : 0);
+            const wallHeight = cabDepth + 6 + (esMuroIzqPmr ? extraPmrPdf : sobraProfMm);
             doc.setFillColor(255, 255, 255);
             doc.setDrawColor(10, 31, 61);
             doc.setLineWidth(.8);
