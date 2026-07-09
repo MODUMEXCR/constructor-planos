@@ -974,17 +974,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
               Espacio libre del cuarto accesible (mín. recomendado 150 cm para el giro Ø1.50 m).
               La puerta del cuarto (90 cm) va en el panel divisor, perpendicular a las cabinas.
             </div>
-            <label class="form-label" style="font-size:12px; font-weight:600; margin-top:10px;">Panel divisor del cuarto PMR (cm)</label>
-            <input class="form-input" id="cfg-panel-div-pmr" type="number" value="100" min="30" max="300" step="1" style="width:120px;">
-            <div class="form-help" style="margin-top:4px; font-size:11px;">
-              Largo del panel divisor (sobre la profundidad). Default 100 cm. El divisor = panel + puerta 90 + frente, y el frente completa la profundidad del lugar.
-            </div>
-            <label style="display:flex; align-items:center; gap:8px; margin-top:10px; font-size:12px; font-weight:600; cursor:pointer;">
-              <input type="checkbox" id="cfg-pil-central-pmr" style="width:auto;">
-              Pilastra entre el cuarto PMR y las cabinas/mingitorios
-            </label>
-            <div class="form-help" style="margin-top:4px; font-size:11px;">
-              Por defecto sin pilastra (el cuarto pega directo). Marcá esta casilla si querés una pilastra de separación.
+            <div class="form-help" style="margin-top:8px; font-size:11px;">
+              El <strong>panel divisor</strong> (default 100 cm), la <strong>puerta lateral</strong> (90/92) y la <strong>pilastra de separación</strong> se editan en el previsualizador (sección “Cuarto PMR”), y se dibujan al instante. El frente completa la profundidad del lugar.
             </div>
           </div>
           <div id="cfg-accesible-row" style="display:none; margin-top:10px; padding:10px 12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px;">
@@ -3943,21 +3934,6 @@ function initConfigurador() {
         renderPreview();
         recalcularSugerencia()
     };
-    const inpPanelDivPmr = document.getElementById("cfg-panel-div-pmr");
-    if (inpPanelDivPmr) inpPanelDivPmr.oninput = () => {
-        const a = activeAreaCfg();
-        const v = Math.max(30, parseInt(inpPanelDivPmr.value, 10) || 100);
-        if (a) a.anchoPanelDivisorPmr = v;
-        renderPreview();
-        recalcularSugerencia()
-    };
-    const chkPilCentral = document.getElementById("cfg-pil-central-pmr");
-    if (chkPilCentral) chkPilCentral.onchange = () => {
-        const a = activeAreaCfg();
-        if (a) a.pilCentralPmr = chkPilCentral.checked;
-        renderPreview();
-        recalcularSugerencia()
-    };
     const inpAcc = document.getElementById("cfg-ancho-accesible");
     if (inpAcc) inpAcc.oninput = () => {
         const a = activeAreaCfg();
@@ -3988,11 +3964,7 @@ function actualizarInputPmrCuarto() {
     row.style.display = visible ? "" : "none";
     if (visible) {
         const a = activeAreaCfg();
-        inp.value = a && a.anchoPmrCuarto || 162;
-        const inpPD = document.getElementById("cfg-panel-div-pmr");
-        if (inpPD) inpPD.value = a && a.anchoPanelDivisorPmr || 100;
-        const chkPC = document.getElementById("cfg-pil-central-pmr");
-        if (chkPC) chkPC.checked = !!(a && a.pilCentralPmr)
+        inp.value = a && a.anchoPmrCuarto || 162
     }
     if (typeof actualizarInputAccesible === "function") actualizarInputAccesible();
     if (typeof actualizarInputTouchless === "function") actualizarInputTouchless()
@@ -5659,12 +5631,19 @@ function renderPreviewControls(tab) {
     const piezasFamilia2 = CATALOGO.piezas.filter(p => p.familia === piezasFamilia && !p.sufijo).filter(p => piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual()));
     const piezasMG = CATALOGO.piezas.filter(p => p.familia === "MG");
     const tiposCabActiva = (activeAreaCfg() || {}).tiposCabina || [];
+    const _esPmrPC = !!_layoutPC.pmrCuarto;
+    const _cuartoIdxPC = cfg.invertir ? N - 1 : 0;
+    const _sepIdxPC = cfg.invertir ? N - 2 : 0;
     let html = "";
     for (let i = 0; i < N; i++) {
         const esMingitorio = tiposCabActiva[i] === "Mingitorio";
         const esRegaderaCab = tiposCabActiva[i] === "Regadera";
         const _areaPC = activeAreaCfg() || {};
         if ((tab === "puertas" || tab === "pilastras") && esMingitorio) continue;
+        // El divisor del cuarto PMR (panel + puerta lateral + pilastra de separación) se
+        // edita en su propia sección; se omiten los dropdowns por-cabina redundantes.
+        if (_esPmrPC && (tab === "paneles" || tab === "puertas") && i === _cuartoIdxPC) continue;
+        if (_esPmrPC && tab === "pilastras" && i === _sepIdxPC) continue;
         let dropdownHtml;
         if (tab === "paneles" && esMingitorio) {
             const optsMG = piezasMG.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("");
@@ -5712,6 +5691,9 @@ function renderPreviewControls(tab) {
             const ctrlIzq = `\n        <label>\n          <span>Panel de cierre IZQUIERDO (isla)</span>\n          <select data-tab="panelCierreIzq">\n            <option value="">— Elegir —</option>\n            ${optsPN}\n          </select>\n        </label>`;
             html = ctrlIzq + html
         }
+    }
+    if (_esPmrPC) {
+        html = renderPmrCuartoControls(activeAreaCfg() || {}) + html
     }
     cont.innerHTML = html;
     if (tab === "pilastras") {
@@ -5817,9 +5799,75 @@ function renderPreviewControls(tab) {
             }
         }
     });
+    if (_esPmrPC) {
+        const aPmr = a;
+        const pmrPanel = cont.querySelector('[data-pmr="panel"]');
+        const pmrDoor = cont.querySelector('[data-pmr="door"]');
+        const pmrPil = cont.querySelector('[data-pmr="pilastra"]');
+        const pmrFit = cont.querySelector('[data-pmr="fitmsg"]');
+        const cuartoIdxH = cfg.invertir ? N - 1 : 0;
+        const sepIdxH = cfg.invertir ? N - 2 : 0;
+        const pintarFit = r => {
+            if (!pmrFit || !r) return;
+            if (r.prof <= 0) {
+                pmrFit.textContent = "Definí la profundidad del lugar (paso 1) para validar el fondo.";
+                pmrFit.style.color = "#b45309"
+            } else if (r.frente >= 10) {
+                pmrFit.textContent = `✓ ${r.panel} (panel) + ${r.doorW} (puerta) + ${r.frente} (frente) = ${r.panel+r.doorW+r.frente} cm = fondo ${r.prof} cm`;
+                pmrFit.style.color = "#16a34a"
+            } else {
+                pmrFit.textContent = `✕ No calza: panel ${r.panel} + puerta ${r.doorW} necesitan ${r.panel+r.doorW+10} cm y el fondo mide ${r.prof} cm — reducí el panel`;
+                pmrFit.style.color = "#dc2626"
+            }
+        };
+        if (pmrPanel) pmrPanel.oninput = () => {
+            aPmr.anchoPanelDivisorPmr = Math.max(30, parseInt(pmrPanel.value, 10) || 100);
+            pintarFit(recomputarDivisorPmr(aPmr));
+            redrawCanvasOnly()
+        };
+        if (pmrDoor) pmrDoor.onchange = () => {
+            if (!aPmr.puertas) aPmr.puertas = [];
+            aPmr.puertas[cuartoIdxH] = pmrDoor.value;
+            pintarFit(recomputarDivisorPmr(aPmr));
+            redrawCanvasOnly()
+        };
+        if (pmrPil) pmrPil.onchange = () => {
+            const v = pmrPil.value;
+            aPmr.pilCentralPmr = v !== "";
+            if (!aPmr.pilastras) aPmr.pilastras = [];
+            aPmr.pilastras[sepIdxH] = v;
+            redrawCanvasOnly()
+        }
+    }
     if (tab === "pilastras") bindExtrasSection(cont, a);
     if (tab === "paneles") bindPanelesExtrasSection(cont, a);
     bindHighlights(cont)
+}
+
+function renderPmrCuartoControls(a) {
+    const N = a.cabinas || cfg.cabinas || 0;
+    const cuartoIdx = cfg.invertir ? N - 1 : 0;
+    const sepIdx = cfg.invertir ? N - 2 : 0;
+    const panel = Math.max(30, parseInt(a.anchoPanelDivisorPmr, 10) || 100);
+    const doorCode = (a.puertas || [])[cuartoIdx] || "PT90";
+    const doorW = anchoDePiezaCodigo(doorCode) || 90;
+    const prof = (typeof leerDimensionesLugar === "function" ? (leerDimensionesLugar() || {}).paredOpuesta : 0) || 0;
+    const frente = prof > 0 ? Math.max(0, Math.round(prof - panel - doorW)) : 45;
+    const sepActual = (a.pilastras || [])[sepIdx] || "";
+    const pilOpts = CATALOGO.piezas.filter(p => p.familia === "PI" && !p.sufijo && p.ancho <= 30 && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual())).map(p => `<option value="${p.codigo}"${sepActual===p.codigo?" selected":""}>${p.codigo} (${p.ancho} cm)</option>`).join("");
+    const doorOpts = ["PT90", "PT92"].map(c => `<option value="${c}"${doorCode===c?" selected":""}>${c} (${anchoDePiezaCodigo(c)||c.replace("PT","")} cm)</option>`).join("");
+    let fitTxt, fitColor;
+    if (prof <= 0) {
+        fitTxt = "Definí la profundidad del lugar (paso 1) para validar el fondo.";
+        fitColor = "#b45309"
+    } else if (frente >= 10) {
+        fitTxt = `✓ ${panel} (panel) + ${doorW} (puerta) + ${frente} (frente) = ${panel+doorW+frente} cm = fondo ${prof} cm`;
+        fitColor = "#16a34a"
+    } else {
+        fitTxt = `✕ No calza: panel ${panel} + puerta ${doorW} necesitan ${panel+doorW+10} cm y el fondo mide ${prof} cm — reducí el panel`;
+        fitColor = "#dc2626"
+    }
+    return `\n    <div class="pmr-cuarto-ctrl" style="grid-column:1/-1; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:10px 12px; margin-bottom:10px;">\n      <div style="font-weight:700; font-size:12px; color:var(--brand); margin-bottom:8px;">🚻 Cuarto PMR — divisor (editá acá, se dibuja al instante)</div>\n      <div style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">\n        <label style="display:flex; flex-direction:column; gap:4px;">\n          <span style="font-size:12px; color:var(--text-soft); font-weight:600;">Panel divisor (cm)</span>\n          <input type="number" data-pmr="panel" value="${panel}" min="30" max="300" step="1" style="width:110px;">\n        </label>\n        <label style="display:flex; flex-direction:column; gap:4px;">\n          <span style="font-size:12px; color:var(--text-soft); font-weight:600;">Puerta lateral</span>\n          <select data-pmr="door" style="width:140px;">${doorOpts}</select>\n        </label>\n        <label style="display:flex; flex-direction:column; gap:4px;">\n          <span style="font-size:12px; color:var(--text-soft); font-weight:600;">Pilastra de separación</span>\n          <select data-pmr="pilastra" style="min-width:210px;">\n            <option value=""${sepActual===""?" selected":""}>— Sin pilastra (pega directo) —</option>\n            ${pilOpts}\n          </select>\n        </label>\n      </div>\n      <div data-pmr="fitmsg" style="margin-top:8px; font-size:11px; font-weight:600; color:${fitColor};">${escapeHtml(fitTxt)}</div>\n    </div>`
 }
 
 function pieceSelectorFor(tab, idx) {
@@ -6475,6 +6523,50 @@ function anchoDePiezaCodigo(code) {
     if (pz && pz.ancho) return pz.ancho;
     const m = String(code).match(/(\d+(?:\.\d+)?)/);
     return m ? parseFloat(m[1]) : 0
+}
+
+// Índices del cuarto PMR y de su pilastra de separación (dependen de la inversión).
+function pmrCuartoIdx(a) {
+    const N = (a && a.cabinas) || cfg.cabinas || 0;
+    return cfg.invertir ? N - 1 : 0
+}
+function pmrSepIdx(a) {
+    const N = (a && a.cabinas) || cfg.cabinas || 0;
+    return cfg.invertir ? N - 2 : 0
+}
+// Recalcula las piezas del divisor del cuarto PMR desde el ancho editable del panel,
+// la puerta lateral y la profundidad del lugar. El frente completa la profundidad:
+// frente = profundidad − panel − puerta. Devuelve los valores para el mensaje de ajuste.
+function recomputarDivisorPmr(a) {
+    if (!a) return null;
+    const layout = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
+    if (!layout.pmrCuarto) return null;
+    const N = a.cabinas || cfg.cabinas || 0;
+    if (N < 1) return null;
+    const cuartoIdx = pmrCuartoIdx(a);
+    const panel = Math.max(30, parseInt(a.anchoPanelDivisorPmr, 10) || 100);
+    const sufR = cfg.modelo === "REFORZADO" ? "R" : "";
+    if (!a.puertas) a.puertas = [];
+    const doorCode = a.puertas[cuartoIdx] || "PT90";
+    const doorW = anchoDePiezaCodigo(doorCode) || 90;
+    const prof = (typeof leerDimensionesLugar === "function" ? (leerDimensionesLugar() || {}).paredOpuesta : 0) || 0;
+    const frente = prof > 0 ? Math.max(0, Math.round(prof - panel - doorW)) : 45;
+    if (!a.paneles) a.paneles = [];
+    a.paneles[cuartoIdx] = "PN" + panel;
+    if (!a.pilastrasExtras) a.pilastrasExtras = [];
+    const fCode = "PI" + frente + sufR;
+    const fx = a.pilastrasExtras.find(ex => (ex.descripcion || "").toLowerCase().includes("frente del cuarto pmr"));
+    if (fx) fx.codigo = fCode;
+    else a.pilastrasExtras.push({
+        codigo: fCode,
+        descripcion: "Pilastra frente del cuarto PMR (junto a la puerta lateral)"
+    });
+    return {
+        panel: panel,
+        doorW: doorW,
+        frente: frente,
+        prof: prof
+    }
 }
 
 function aplicarSugerencia(s) {
