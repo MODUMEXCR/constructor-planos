@@ -8947,13 +8947,13 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 const cDescPmrP = (areaCfg.centrosDescarga || [])[s.indiceCabina - 1];
                 if (cDescPmrP !== "" && cDescPmrP != null && !isNaN(cDescPmrP)) wcDy = Math.max(0, Math.min(floorCuarto - drawTop - 24, Number(cDescPmrP) * mmCm - 14));
                 {
-                    const iwP = 20, ihP = 24, wcCyP = drawTop + 14 + wcDy;
+                    const sP = Math.min(cabDepth * .4, w * .28, 17), wcCyP = drawTop + 14 + wcDy;
                     if (invF) {
                         // puerta a la IZQUIERDA -> WC mira a la izquierda (rot 270); tanque a la derecha
-                        doc.addImage(WC_IMG_B64, "PNG", x + w - 3 - ihP, wcCyP + iwP / 2, iwP, ihP, undefined, "FAST", 270);
+                        doc.addImage(WC_IMG_B64, "PNG", x + w - 3 - sP, wcCyP + sP / 2, sP, sP, undefined, "FAST", 270);
                     } else {
                         // puerta a la DERECHA -> WC mira a la derecha (rot 90); tanque a la izquierda
-                        doc.addImage(WC_IMG_B64, "PNG", x + 3 + ihP, wcCyP - iwP / 2, iwP, ihP, undefined, "FAST", 90);
+                        doc.addImage(WC_IMG_B64, "PNG", x + 3 + sP, wcCyP - sP / 2, sP, sP, undefined, "FAST", 90);
                     }
                 }
                 const ccx = x + w / 2,
@@ -9030,8 +9030,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             } else {
                 const cDescB = (areaCfg.centrosDescarga || [])[s.indiceCabina - 1];
                 const wcCx = cDescB !== "" && cDescB != null && !isNaN(cDescB) ? Math.max(x + 8, Math.min(x + w - 8, floorStartX + Number(cDescB) * scale)) : cx;
-                const iwB = Math.min(w * .62, 22), ihB = cabDepth * .62;
-                doc.addImage(WC_IMG_B64, "PNG", wcCx - iwB / 2, drawTop + cabDepth * .1, iwB, ihB, undefined, "FAST");
+                const sB = Math.min(w * .55, cabDepth * .45, 18);
+                doc.addImage(WC_IMG_B64, "PNG", wcCx - sB / 2, drawTop + cabDepth * .08, sB, sB, undefined, "FAST");
                 if (s.esAccesible) {
                     doc.setFillColor(93, 176, 224);
                     doc.circle(cx, drawTop + cabDepth * .66, 3.6, "F");
@@ -9071,9 +9071,9 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         } else if (s.tipo === "mingitorio") {
             const cx = x + w / 2;
             const cDescU = (areaCfg.centrosDescarga || [])[s.indiceCabina - 1];
-            const uw = Math.min(w * .42, 13), uh = cabDepth * .32;
+            const uw = Math.min(w * .45, cabDepth * .28, 11);
             const fxCx = cDescU !== "" && cDescU != null && !isNaN(cDescU) ? Math.max(x + uw / 2 + 1, Math.min(x + w - uw / 2 - 1, floorStartX + Number(cDescU) * scale)) : cx;
-            doc.addImage(ORINAL_IMG_B64, "PNG", fxCx - uw / 2, drawTop + cabDepth * .05, uw, uh, undefined, "FAST");
+            doc.addImage(ORINAL_IMG_B64, "PNG", fxCx - uw / 2, drawTop + cabDepth * .06, uw, uw, undefined, "FAST");
             doc.setFont("helvetica", "bold");
             doc.setFontSize(9);
             doc.setTextColor(10, 31, 61);
