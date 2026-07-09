@@ -5534,12 +5534,11 @@ function buildBathroomSvg() {
             const cosW = pieza.ancho * scale / 2;
             const barH = 4;
             const gapPx = Math.max(1.5, 1 * scale);
-            // En PMR la costilla refuerza el PANEL divisor → se dibuja pegada al panel
-            // (región superior, junto al muro de fondo), no cerca del piso.
-            const yBar = layout.pmrCuarto ? 20 + 12 + k * (gapPx + barH) : floor - 5 - (k + 1) * (gapPx + barH);
-            // En PMR la costilla va al lado del panel que da a las cabinas (derecha del panel
-            // de 100 si el cuarto está a la izquierda); en no-PMR queda como estaba.
-            const cosLeft = layout.pmrCuarto ? !panelALaDer : panelALaDer;
+            // En PMR la costilla refuerza el panel divisor: va a la IZQUIERDA (hacia el cuarto)
+            // y a mitad+1/4 del largo del panel (100/120/130 según medida).
+            const panelDivPxCos = (anchoDePiezaCodigo((areaCfg.paneles || [])[accCabinaIdx]) || 100) * (cabHeight / 150);
+            const yBar = layout.pmrCuarto ? 20 + panelDivPxCos * 0.75 + k * (gapPx + barH) : floor - 5 - (k + 1) * (gapPx + barH);
+            const cosLeft = panelALaDer;
             const x0 = cosLeft ? panelLineX - cosW : panelLineX;
             svg += `<g data-piece="extra-${idx}">`;
             svg += `<rect x="${x0}" y="${yBar}" width="${cosW}" height="${barH}" fill="#5db0e0" stroke="#0a1f3d" stroke-width="0.8"/>`;
@@ -5863,22 +5862,10 @@ function renderPreviewControls(tab) {
         if (pmrPil) pmrPil.onchange = () => {
             const v = pmrPil.value;
             aPmr.pilCentralPmr = v !== "";
-            // La separación NO es un divisor vertical que ocupe el claro: es una COSTILLA
-            // (línea horizontal) pegada al lado del panel de 100. Se maneja como pilastraExtra
-            // tipo costilla; el slot de pilastra queda vacío (no reasigna ni consume ancho).
-            if (aPmr.pilastras) aPmr.pilastras[sepIdxH] = "";
-            if (!aPmr.pilastrasExtras) aPmr.pilastrasExtras = [];
-            const iSep = aPmr.pilastrasExtras.findIndex(ex => (ex.descripcion || "").toLowerCase().includes("separación cuarto pmr"));
-            if (v === "") {
-                if (iSep >= 0) aPmr.pilastrasExtras.splice(iSep, 1)
-            } else if (iSep >= 0) {
-                aPmr.pilastrasExtras[iSep].codigo = v
-            } else {
-                aPmr.pilastrasExtras.push({
-                    codigo: v,
-                    descripcion: "Costilla separación cuarto PMR (lado del panel)"
-                })
-            }
+            // Pilastra de separación = pilastra NORMAL (vertical) en el slot a la derecha del
+            // panel; se usa cuando la cabina a la derecha lleva puerta. No es costilla.
+            if (!aPmr.pilastras) aPmr.pilastras = [];
+            aPmr.pilastras[sepIdxH] = v;
             redrawCanvasOnly()
         }
     }
@@ -5926,10 +5913,9 @@ function pmrCtrlHtml(kind, a) {
         const apOpt = (v, lbl) => `<option value="${v}"${apVal===v?" selected":""}>${lbl}</option>`;
         return `\n        <label>\n          <span>Cuarto PMR · puerta lateral</span>\n          <select data-pmr="door">${opts}</select>\n        </label>\n        <label>\n          <span>Apertura (cuarto PMR)</span>\n          <select data-tab="apertura" data-idx="${cuartoIdx}">\n            ${apOpt("IZQ_EXT","Izquierda · abre exterior")}\n            ${apOpt("IZQ_INT","Izquierda · abre interior")}\n            ${apOpt("DER_EXT","Derecha · abre exterior")}\n            ${apOpt("DER_INT","Derecha · abre interior")}\n          </select>\n          <div class="form-help" style="font-size:10px; margin-top:2px;">Puerta lateral perpendicular; el lado (izq/der del divisor) lo fija el layout.</div>\n        </label>\n        ${fitDiv}`
     }
-    const sepEx = (a.pilastrasExtras || []).find(ex => (ex.descripcion || "").toLowerCase().includes("separación cuarto pmr"));
-    const sepActual = sepEx ? sepEx.codigo : "";
-    const pilOpts = CATALOGO.piezas.filter(p => p.familia === "PI" && !p.sufijo && p.ancho <= 30 && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual())).map(p => `<option value="${p.codigo}"${sepActual===p.codigo?" selected":""}>${p.codigo} (${p.ancho} cm)</option>`).join("");
-    return `\n        <label>\n          <span>Cuarto PMR · costilla de separación</span>\n          <select data-pmr="pilastra">\n            <option value=""${sepActual===""?" selected":""}>— Sin costilla (pega directo) —</option>\n            ${pilOpts}\n          </select>\n          <div class="form-help" style="font-size:10px; margin-top:2px;">Costilla (línea horizontal) al lado derecho del panel de 100 — no ocupa ancho del claro.</div>\n        </label>`
+    const sepActual = (a.pilastras || [])[sepIdx] || "";
+    const pilOpts = CATALOGO.piezas.filter(p => p.familia === "PI" && !p.sufijo && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual())).map(p => `<option value="${p.codigo}"${sepActual===p.codigo?" selected":""}>${p.codigo} (${p.ancho} cm)</option>`).join("");
+    return `\n        <label>\n          <span>Cuarto PMR · pilastra de separación</span>\n          <select data-pmr="pilastra">\n            <option value=""${sepActual===""?" selected":""}>— Sin pilastra —</option>\n            ${pilOpts}\n          </select>\n          <div class="form-help" style="font-size:10px; margin-top:2px;">Pilastra normal, a la derecha del panel — solo cuando la cabina de al lado lleva puerta.</div>\n        </label>`
 }
 
 function pieceSelectorFor(tab, idx) {
@@ -5983,7 +5969,7 @@ function bindHighlights(cont) {
             const kind = el.dataset.pmr;
             if (kind === "panel") return `[data-piece="panel-${cuartoIdx}"]`;
             if (kind === "door") return `[data-piece="puerta-${cuartoIdx}"]`;
-            if (kind === "pilastra") return `[data-piece="panel-${cuartoIdx}"]`
+            if (kind === "pilastra") return `[data-piece="pilastra-${sepIdx}"]`
         }
         return null
     };
@@ -9286,9 +9272,10 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 const cosW = pieza.ancho * scale / 2;
                 const barH = 2;
                 const gapMm = Math.max(.8, 1 * scale);
-                // PMR: la costilla refuerza el panel divisor → pegada al panel (arriba).
-                const yBar = esPmrLayPdf ? drawTop + 5 + k * (barH + gapMm) : floorY - 2 - gapMm - barH - k * (barH + gapMm);
-                const cosLeft = esPmrLayPdf ? !panelALaDer : panelALaDer;
+                // PMR: costilla a la IZQUIERDA (hacia el cuarto) y a mitad+1/4 del panel divisor.
+                const panelDivMmCos = (anchoDePiezaCodigo((areaCfg.paneles || [])[areaInvertir ? N - 1 : 0]) || 100) * cabDepth / (pmrCabPanelCmPdf || 150);
+                const yBar = esPmrLayPdf ? drawTop + panelDivMmCos * 0.75 + k * (barH + gapMm) : floorY - 2 - gapMm - barH - k * (barH + gapMm);
+                const cosLeft = panelALaDer;
                 const x0 = cosLeft ? panelLineX - cosW : panelLineX;
                 doc.setFillColor(93, 176, 224);
                 doc.setDrawColor(10, 31, 61);
