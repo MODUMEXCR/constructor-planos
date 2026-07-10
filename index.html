@@ -5258,7 +5258,7 @@ function buildBathroomSvg() {
         const w = s.ancho * scale;
         const cx = x + w / 2;
         if (s.tipo === "muro") {
-            const esMuroIzqExt = esPmrLay && x < padding + .1;
+            const esMuroIzqExt = esPmrLay && (cfg.invertir ? x > padding + 1 : x < padding + .1);
             const hMuro = cabHeight + 10 + (esMuroIzqExt ? extraPmr : sobraProfPx);
             svg += `<rect x="${x}" y="10" width="${w}" height="${hMuro}" fill="white" stroke="#0a1f3d" stroke-width="1.2"/>`;
             svg += `<rect x="${x}" y="10" width="${w}" height="${hMuro}" fill="url(#wallHatch)" stroke="none"/>`;
@@ -6742,19 +6742,19 @@ function aplicarSugerencia(s) {
             a.pilastras[i] = i < N - 1 && !(esMingit && nextEsMingit) ? s.codPilInt : ""
         }
         if (s.esPmrCuarto && i === cierrePmrIdx && i !== accCabinaIdx) {
-            if (s.cierreMingit) {
-                // Cierre del run de mingitorios (mampara MG en el extremo externo). Sin invertir
-                // cae en paneles[N-1] (slot libre); invertido caería ANTES del índice 0 (no hay
-                // slot) y pisaría el divisor → se guarda en panelCierreIzq para contarlo en la OC.
-                if (cfg.invertir) a.panelCierreIzq = s.codMGCierre || a.mgTipo || "MG60120";
-                else a.paneles[i] = s.codMGCierre || a.mgTipo || "MG60120"
-            } else {
-                a.paneles[i] = s.esCierrePanel ? s.codPanelCierre || "PN150" : ""
+            // El cierre invertido se coloca POST-loop (slot del mingitorio interno); acá solo el
+            // caso normal (cierre en paneles[N-1], slot libre) y el cierre-panel.
+            if (!(cfg.invertir && s.cierreMingit)) {
+                a.paneles[i] = s.cierreMingit ? (s.codMGCierre || a.mgTipo || "MG60120") : (s.esCierrePanel ? s.codPanelCierre || "PN150" : "")
             }
         }
     }
     if (s.esPmrCuarto) {
-        if (!(cfg.invertir && s.cierreMingit)) a.panelCierreIzq = null;
+        a.panelCierreIzq = null;
+        // Invertido + cierre con mingitorios: la mampara de cierre va en el slot del mingitorio
+        // INTERNO (adyacente al cuarto, slot libre) → se cuenta en la OC y sale en su dropdown,
+        // igual que sin invertir (donde el cierre cae en el último mingitorio).
+        if (cfg.invertir && s.cierreMingit && (s.nMingit || 0) > 0) a.paneles[(s.nMingit || 0) - 1] = s.codMGCierre || a.mgTipo || "MG60120";
         a.anchoPmrCuarto = s.anchoPmrCuarto || a.anchoPmrCuarto || 162;
         a.paneles[accCabinaIdx] = s.codPanelDivisor || "PN150";
         a.puertas[accCabinaIdx] = s.codPuertaAcc || "PT90";
@@ -8840,7 +8840,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         const w = s.ancho * scale;
         if (s.tipo === "muro") {
             const wallTop = drawTop - 6;
-            const esMuroIzqPmr = esPmrLayPdf && x < drawX + .1;
+            const esMuroIzqPmr = esPmrLayPdf && (invertir ? x > drawX + 1 : x < drawX + .1);
             const wallHeight = cabDepth + 6 + (esMuroIzqPmr ? extraPmrPdf : sobraProfMm);
             doc.setFillColor(255, 255, 255);
             doc.setDrawColor(10, 31, 61);
