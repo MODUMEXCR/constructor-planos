@@ -4438,6 +4438,16 @@ function bindCfg() {
             const infoInv = typeof leerDimensionesLugar === "function" ? leerDimensionesLugar() : null;
             const esLeederInv = ["LEEDER", "SUPERIOR", "TOUCHLESS"].includes((cfg.linea || "").toUpperCase());
             if (infoInv && esLeederInv) {
+                const Ninv = cfg.cabinas;
+                // Espejo: preservar la puerta del cuarto y VOLTEAR su apertura de lado.
+                const prevAccIdx = e.target.checked ? 0 : Ninv - 1;
+                const prevDoor = (a.puertas || [])[prevAccIdx];
+                const prevApert = (a.aperturas || [])[prevAccIdx];
+                const flipLadoAp = ap => {
+                    if (!ap) return ap;
+                    const p = ap.split("_");
+                    return (p[0] === "IZQ" ? "DER" : "IZQ") + (p[1] ? "_" + p[1] : "")
+                };
                 const nMingitInv = (a.tiposCabina || []).filter(t => t === "Mingitorio").length;
                 const sInv = sugerirModulacion({
                     claro: infoInv.paredCabinas,
@@ -4445,7 +4455,12 @@ function bindCfg() {
                     layoutCodigo: cfg.layout,
                     nMingit: nMingitInv
                 });
-                if (sInv && !sInv.error) aplicarSugerencia(sInv)
+                if (sInv && !sInv.error) {
+                    aplicarSugerencia(sInv);
+                    const newAccIdx = e.target.checked ? Ninv - 1 : 0;
+                    if (prevDoor && a.puertas) a.puertas[newAccIdx] = prevDoor;
+                    if (prevApert && a.aperturas) a.aperturas[newAccIdx] = flipLadoAp(prevApert)
+                }
             }
         }
         sincronizarMurosConLayout();
