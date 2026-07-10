@@ -5081,15 +5081,17 @@ function buildBathroomSvg() {
         if (i < N - 1 && (pilCode || ambosMingit)) {
             const pilPieza = pilCode ? CATALOGO.piezas.find(p => p.codigo === pilCode) : null;
             const esBañoMixto = tipoCab !== tipoNext;
+            const esPmrDiv = layout.pmrCuarto && i === (cfg.invertir ? N - 2 : 0);
             let tipoDivisor = "pilastra";
             if (ambosMingit) tipoDivisor = "panelMingit";
-            else if (esBañoMixto) tipoDivisor = "panelCompleto";
-            if (layout.pmrCuarto && i === (cfg.invertir ? N - 2 : 0)) tipoDivisor = "panelCompleto";
+            else if (esBañoMixto || esPmrDiv) tipoDivisor = "panelCompleto";
             seq.push({
                 tipo: tipoDivisor,
                 codigo: pilCode || "",
                 ancho: pilPieza ? pilPieza.ancho : 0,
                 idxSlot: i,
+                latMingit: esBañoMixto && !esPmrDiv,
+                banoIzq: tipoCab === "Baño",
                 mgCode: ambosMingit ? (areaCfg.paneles || [])[i] || (areaCfg.paneles || [])[i + 1] || areaCfg.mgTipo || "MG60150" : null
             })
         }
@@ -5277,11 +5279,13 @@ function buildBathroomSvg() {
             if (s.mgCode) svg += `<text x="${lineXC+(s.lado==="izq"?4:-46)}" y="33" font-size="8" fill="#1c2846" font-weight="600">${s.mgCode}</text>`;
             svg += `</g>`
         } else if (s.tipo === "panelCompleto") {
+            const panelHpc = esPmrLay && s.idxSlot === 0 ? cabHeight : panelLenPx(s.idxSlot);
+            const panelXc = s.latMingit ? (s.banoIzq ? x + w : x) : cx;
             svg += `<g data-piece="panel-${s.idxSlot}">`;
-            svg += `<rect x="${cx-1.5}" y="20" width="3" height="${esPmrLay&&s.idxSlot===0?cabHeight:panelLenPx(s.idxSlot)}" fill="#0a1f3d"/>`;
+            svg += `<rect x="${panelXc-1.5}" y="20" width="3" height="${panelHpc}" fill="#0a1f3d"/>`;
             svg += `</g>`;
             svg += `<g data-piece="pilastra-${s.idxSlot}">`;
-            svg += `<rect x="${cx-5}" y="17" width="10" height="6" fill="#0a1f3d"/>`;
+            svg += `<rect x="${panelXc-5}" y="17" width="10" height="6" fill="#0a1f3d"/>`;
             svg += `<rect x="${x}" y="${floor-3}" width="${w}" height="3" fill="#0a1f3d"/>`;
             svg += `</g>`
         } else if (s.tipo === "pilastra") {
@@ -8537,15 +8541,17 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         const ambosMingit = tipoCab === "Mingitorio" && tipoNext === "Mingitorio";
         if (i < N - 1 && (pilCode || ambosMingit)) {
             const esBañoMixto = tipoCab !== tipoNext;
+            const esPmrDiv = (layoutCodigo === "P+" || layoutCodigo === "PP") && i === (areaInvertir ? N - 2 : 0);
             let tipoDivisor = "pilastra";
             if (ambosMingit) tipoDivisor = "panelMingit";
-            else if (esBañoMixto) tipoDivisor = "panelCompleto";
-            if ((layoutCodigo === "P+" || layoutCodigo === "PP") && i === (areaInvertir ? N - 2 : 0)) tipoDivisor = "panelCompleto";
+            else if (esBañoMixto || esPmrDiv) tipoDivisor = "panelCompleto";
             seq.push({
                 tipo: tipoDivisor,
                 codigo: pilCode || "",
                 panelDivCode: panelCode,
-                idxSlot: i
+                idxSlot: i,
+                latMingit: esBañoMixto && !esPmrDiv,
+                banoIzq: tipoCab === "Baño"
             })
         }
     }
@@ -8851,11 +8857,13 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             dimVpdf(lineXP + (s.lado === "izq" ? PZT / 2 + 2 : -PZT / 2 - 5), drawTop, drawTop + mgLenC, `${mgAnchoC}`);
             doc.setLineWidth(.55)
         } else if (s.tipo === "panelCompleto") {
-            const px = x + w / 2;
             const panelHpc = esPmrLayPdf && s.idxSlot === 0 ? cabDepth : panelLenMm(s.panelDivCode);
             const pzPc = s.panelDivCode ? CATALOGO.piezas.find(p => p.codigo === s.panelDivCode) : null;
+            const px = s.latMingit ? (s.banoIzq ? x + w : x) : x + w / 2;
             pzRectV(px, drawTop, panelHpc);
-            dimVpdf(px + PZT / 2 + 2, drawTop, drawTop + panelHpc, `${pzPc && pzPc.familia === "PN" ? pzPc.ancho : panelBaseCmPdf}`)
+            if (s.latMingit) pzRectH(x, floorY, w);
+            const dimXpc = s.latMingit && s.banoIzq ? px - PZT / 2 - 7 : px + PZT / 2 + 2;
+            dimVpdf(dimXpc, drawTop, drawTop + panelHpc, `${pzPc && pzPc.familia === "PN" ? pzPc.ancho : panelBaseCmPdf}`)
         } else if (s.tipo === "pilastra") {
             const px = x + w / 2;
             const panelLenPil = panelLenMm(s.panelDivCode);
