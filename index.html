@@ -9083,7 +9083,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         if (profCmPdf > 0) {
             // En PMR la cota de profundidad debe llegar al fondo real del cuarto (no a 150).
             const floorProfPmrPdf = esPmrLayPdf ? drawTop + profCmPdf * cabDepth / (pmrCabPanelCmPdf || 150) : floorLugar;
-            const pxx = drawX + (leftWallEff ? 15 * scale : 0) + 4,
+            const pxx = drawX + (leftWallEff ? 15 * scale : 0) + 2.2,
                 pmid = (drawTop + floorProfPmrPdf) / 2;
             doc.setDrawColor(10, 31, 61);
             doc.setLineWidth(.4);
