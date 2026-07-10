@@ -5520,8 +5520,15 @@ function buildBathroomSvg() {
                 if (profCm2 > 0) {
                     const yM = Math.max(20, Math.min(floorProfPmr, 20 + cn * cabHeight / 150));
                     svg += `<g data-piece="centro-pmr">`;
-                    svg += `<polygon points="24,${yM-5} 24,${yM+5} 32,${yM}" fill="#f5c542" stroke="#0a1f3d" stroke-width="0.8"/>`;
-                    svg += `<text x="34" y="${yM+3}" font-size="8" fill="#0a1f3d" font-weight="700">${cn} cm (fondo)</text>`;
+                    if (cfg.invertir) {
+                        // Cuarto a la DERECHA: el marcador va contra la pared derecha, medido de der a izq.
+                        const xR = floorEndX;
+                        svg += `<polygon points="${xR},${yM-5} ${xR},${yM+5} ${xR-8},${yM}" fill="#f5c542" stroke="#0a1f3d" stroke-width="0.8"/>`;
+                        svg += `<text x="${xR-10}" y="${yM+3}" font-size="8" fill="#0a1f3d" font-weight="700" text-anchor="end">${cn} cm (fondo)</text>`
+                    } else {
+                        svg += `<polygon points="24,${yM-5} 24,${yM+5} 32,${yM}" fill="#f5c542" stroke="#0a1f3d" stroke-width="0.8"/>`;
+                        svg += `<text x="34" y="${yM+3}" font-size="8" fill="#0a1f3d" font-weight="700">${cn} cm (fondo)</text>`
+                    }
                     svg += `</g>`
                 }
                 return
