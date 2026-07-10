@@ -4456,10 +4456,18 @@ function bindCfg() {
                     nMingit: nMingitInv
                 });
                 if (sInv && !sInv.error) {
+                    // El espejo reordena las cabinas (reverso); los centros de descarga siguen a
+                    // su cabina (se invierten con ella) y el dibujo los mide desde el otro lado.
+                    const cdPrev = Array.isArray(a.centrosDescarga) ? a.centrosDescarga.slice() : null;
                     aplicarSugerencia(sInv);
                     const newAccIdx = e.target.checked ? Ninv - 1 : 0;
                     if (prevDoor && a.puertas) a.puertas[newAccIdx] = prevDoor;
-                    if (prevApert && a.aperturas) a.aperturas[newAccIdx] = flipLadoAp(prevApert)
+                    if (prevApert && a.aperturas) a.aperturas[newAccIdx] = flipLadoAp(prevApert);
+                    if (cdPrev) {
+                        const cdRev = [];
+                        for (let j = 0; j < Ninv; j++) cdRev[j] = cdPrev[Ninv - 1 - j];
+                        a.centrosDescarga = cdRev
+                    }
                 }
             }
         }
@@ -5403,7 +5411,8 @@ function buildBathroomSvg() {
                 svg += `<g data-piece="cabina-${i}" data-cabina-idx="${i}">`;
                 svg += `<rect x="${x}" y="20" width="${w}" height="${cabHeight}" fill="transparent"/>`;
                 const cDescCl = (areaCfg.centrosDescarga || [])[i];
-                const fxCenter = cDescCl !== "" && cDescCl != null && !isNaN(cDescCl) ? Math.max(x + 16, Math.min(x + w - 16, floorStartX + Number(cDescCl) * scale)) : cx;
+                const cDescClX = esPmrLay && cfg.invertir ? floorEndX - Number(cDescCl) * scale : floorStartX + Number(cDescCl) * scale;
+                const fxCenter = cDescCl !== "" && cDescCl != null && !isNaN(cDescCl) ? Math.max(x + 16, Math.min(x + w - 16, cDescClX)) : cx;
                 if (esMingit) {
                     svg += `<g transform="translate(${fxCenter-14},36)">\n          <ellipse cx="14" cy="28" rx="14" ry="26" fill="#e3e6ec" stroke="#0a1f3d" stroke-width="2"/>\n          <ellipse cx="14" cy="28" rx="9" ry="20" fill="none" stroke="#0a1f3d" stroke-width="1.2"/>\n          <circle cx="14" cy="20" r="3" fill="#0a1f3d"/>\n        </g>`
                 } else {
@@ -5483,13 +5492,16 @@ function buildBathroomSvg() {
     const claroInterior = totalCm - (leftWall ? 15 : 0) - (rightWall ? 15 : 0);
     if (centrosCm.some(c => c !== "" && c != null && !isNaN(c))) {
         const xClaroIzq = padding + (leftWall ? 15 * scale : 0);
+        const xClaroDer = xClaroIzq + claroInterior * scale;
+        const espejoCentros = esPmrLay && cfg.invertir;
         let xRun = padding;
         const cabinaCentersX = [];
         seq.forEach(item => {
             const w = item.ancho * scale;
             if (item.tipo === "puerta" || item.tipo === "mingitorio") {
                 const cd = centrosCm[item.indiceCabina];
-                const xFx = cd !== "" && cd != null && !isNaN(cd) ? Math.max(xRun + 16, Math.min(xRun + w - 16, xClaroIzq + Number(cd) * scale)) : xRun + w / 2;
+                const cdX = espejoCentros ? xClaroDer - Number(cd) * scale : xClaroIzq + Number(cd) * scale;
+                const xFx = cd !== "" && cd != null && !isNaN(cd) ? Math.max(xRun + 16, Math.min(xRun + w - 16, cdX)) : xRun + w / 2;
                 cabinaCentersX[item.indiceCabina] = {
                     xCenter: xFx,
                     esMingit: item.tipo === "mingitorio"
@@ -5515,7 +5527,7 @@ function buildBathroomSvg() {
                 return
             }
             if (!cb) return;
-            const xMarker = xClaroIzq + cn * scale;
+            const xMarker = espejoCentros ? xClaroDer - cn * scale : xClaroIzq + cn * scale;
             svg += `<g data-piece="centro-${i}">`;
             svg += `<polygon points="${xMarker-5},${markerY+8} ${xMarker+5},${markerY+8} ${xMarker},${markerY}" fill="#f5c542" stroke="#0a1f3d" stroke-width="0.8"/>`;
             svg += `<text x="${xMarker}" y="${markerY+20}" font-size="9" fill="#0a1f3d" font-weight="700" text-anchor="middle">${cn} cm</text>`;
@@ -9029,7 +9041,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 })
             } else {
                 const cDescB = (areaCfg.centrosDescarga || [])[s.indiceCabina - 1];
-                const wcCx = cDescB !== "" && cDescB != null && !isNaN(cDescB) ? Math.max(x + 8, Math.min(x + w - 8, floorStartX + Number(cDescB) * scale)) : cx;
+                const wcBX = esPmrLayPdf && invertir ? floorEndX - Number(cDescB) * scale : floorStartX + Number(cDescB) * scale;
+                const wcCx = cDescB !== "" && cDescB != null && !isNaN(cDescB) ? Math.max(x + 8, Math.min(x + w - 8, wcBX)) : cx;
                 const ihB = Math.min(cabDepth * .5, 20, w * .6 / .67), iwB = ihB * .67;
                 doc.addImage(WC_IMG_B64, "PNG", wcCx - iwB / 2, drawTop + cabDepth * .12, iwB, ihB, undefined, "FAST");
                 if (s.esAccesible) {
@@ -9072,7 +9085,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             const cx = x + w / 2;
             const cDescU = (areaCfg.centrosDescarga || [])[s.indiceCabina - 1];
             const uw = Math.min(w * .5, 14), uh = uw / 4.49;
-            const fxCx = cDescU !== "" && cDescU != null && !isNaN(cDescU) ? Math.max(x + uw / 2 + 1, Math.min(x + w - uw / 2 - 1, floorStartX + Number(cDescU) * scale)) : cx;
+            const uX = esPmrLayPdf && invertir ? floorEndX - Number(cDescU) * scale : floorStartX + Number(cDescU) * scale;
+            const fxCx = cDescU !== "" && cDescU != null && !isNaN(cDescU) ? Math.max(x + uw / 2 + 1, Math.min(x + w - uw / 2 - 1, uX)) : cx;
             doc.addImage(ORINAL_IMG_B64, "PNG", fxCx - uw / 2, drawTop + 1.2, uw, uh, undefined, "FAST");
             doc.setFont("helvetica", "bold");
             doc.setFontSize(9);
