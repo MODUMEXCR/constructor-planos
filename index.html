@@ -7376,6 +7376,8 @@ function determinarSubTipoModumex(pieza, ctx) {
     }
     if (familia === "PI") {
         if (layoutCodigo === "LP" && indiceCabina === totalCabinas - 1) return "PLLAT";
+        const tiposCab = areaCfg.tiposCabina || [];
+        if (tiposCab[indiceCabina + 1] === "Mingitorio") return "PLLAT";
         return "PLCEN"
     }
     if (familia === "MG") return pieza.alto >= 150 ? "MG150" : "MG120";
