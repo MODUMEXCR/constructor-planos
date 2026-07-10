@@ -4896,7 +4896,7 @@ function actualizarValidacionModulacion() {
         faltantes = [];
     for (let i = 0; i < N; i++) {
         const esMingit = (a.tiposCabina || [])[i] === "Mingitorio";
-        if (esPmrCuartoVal && i === 0) {
+        if (esPmrCuartoVal && i === accCabinaIdxVal) {
             suma += a.anchoPmrCuarto || 162
         } else if (esAccInlineVal && i === accCabinaIdxVal) {
             suma += a.anchoAccesible || 150;
@@ -4934,7 +4934,7 @@ function actualizarValidacionModulacion() {
     } else if (!primeraEsMingit) {
         faltantes.push("Cierre izquierdo")
     }
-    if (a.muroDer && a.muroDer.codigo) {
+    if (esPmrCuartoVal) {} else if (a.muroDer && a.muroDer.codigo) {
         const pieza = CATALOGO.piezas.find(p => p.codigo === a.muroDer.codigo);
         if (pieza) suma += pieza.ancho
     } else if (!ultimaEsMingit) {
@@ -6742,10 +6742,19 @@ function aplicarSugerencia(s) {
             a.pilastras[i] = i < N - 1 && !(esMingit && nextEsMingit) ? s.codPilInt : ""
         }
         if (s.esPmrCuarto && i === cierrePmrIdx && i !== accCabinaIdx) {
-            a.paneles[i] = s.cierreMingit ? (s.codMGCierre || a.mgTipo || "MG60120") : (s.esCierrePanel ? s.codPanelCierre || "PN150" : "")
+            if (s.cierreMingit) {
+                // Cierre del run de mingitorios (mampara MG en el extremo externo). Sin invertir
+                // cae en paneles[N-1] (slot libre); invertido caería ANTES del índice 0 (no hay
+                // slot) y pisaría el divisor → se guarda en panelCierreIzq para contarlo en la OC.
+                if (cfg.invertir) a.panelCierreIzq = s.codMGCierre || a.mgTipo || "MG60120";
+                else a.paneles[i] = s.codMGCierre || a.mgTipo || "MG60120"
+            } else {
+                a.paneles[i] = s.esCierrePanel ? s.codPanelCierre || "PN150" : ""
+            }
         }
     }
     if (s.esPmrCuarto) {
+        if (!(cfg.invertir && s.cierreMingit)) a.panelCierreIzq = null;
         a.anchoPmrCuarto = s.anchoPmrCuarto || a.anchoPmrCuarto || 162;
         a.paneles[accCabinaIdx] = s.codPanelDivisor || "PN150";
         a.puertas[accCabinaIdx] = s.codPuertaAcc || "PT90";
@@ -7532,7 +7541,7 @@ function exportarCSV(proyecto) {
         }
         if (areaCfg.panelCierreIzq) {
             const p = CATALOGO.piezas.find(x => x.codigo === areaCfg.panelCierreIzq);
-            if (p) agregar(p, "PNLAT", areaName)
+            if (p) agregar(p, p.familia === "MG" ? (p.alto >= 150 ? "MG150" : "MG120") : "PNLAT", areaName)
         }(areaCfg.pilastrasExtras || []).forEach(ex => {
             if (!ex.codigo) return;
             const p = CATALOGO.piezas.find(x => x.codigo === ex.codigo);
