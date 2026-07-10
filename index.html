@@ -8715,19 +8715,6 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     })();
     const floorStartX = drawX + (leftWallEff ? 15 * scale : 0);
     const floorEndX = drawX + drawW - (rightWallEff ? 15 * scale : 0);
-    if (sobraProfMm > 0) {
-        doc.setDrawColor(148, 163, 184);
-        doc.setLineWidth(.3);
-        doc.setLineDashPattern([1.2, 1], 0);
-        doc.line(floorStartX, floorY, floorEndX, floorY);
-        doc.setLineDashPattern([], 0);
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(6.5);
-        doc.setTextColor(90, 100, 114);
-        doc.text(`Espacio libre: ${Math.round(sobraProfCmPdf)} cm`, (floorStartX + floorEndX) / 2, floorY + sobraProfMm / 2 + 2, {
-            align: "center"
-        })
-    }
     const grosorPz = 1;
     const PZT = Math.max(1.2, Math.min(2.4, 2.5 * scale));
     const dimVpdf = (xl, y1, y2, txt) => {
@@ -8739,9 +8726,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(6);
         doc.setTextColor(10, 31, 61);
-        doc.text(txt, xl + 2.6, (y1 + y2) / 2, {
-            angle: 90,
-            align: "center"
+        doc.text(txt, xl + 3.2, (y1 + y2) / 2 + doc.getTextWidth(txt) / 2, {
+            angle: 90
         })
     };
     const pzRectV = (cxp, yTop, len) => {
@@ -8785,6 +8771,19 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             }
         }
     });
+    if (sobraProfMm > 0) {
+        doc.setDrawColor(148, 163, 184);
+        doc.setLineWidth(.3);
+        doc.setLineDashPattern([1.2, 1], 0);
+        doc.line(floorStartX, floorY, floorEndX, floorY);
+        doc.setLineDashPattern([], 0);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(6.5);
+        doc.setTextColor(90, 100, 114);
+        doc.text(`Espacio libre: ${Math.round(sobraProfCmPdf)} cm`, (floorStartX + floorEndX) / 2, floorY + Math.max(sobraProfMm / 2 + 2, swingEff + 12), {
+            align: "center"
+        })
+    }
     let x = drawX;
     seq.forEach(s => {
         const w = s.ancho * scale;
@@ -9030,16 +9029,16 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             })
         }
         if (s.tipo !== "muro" && s.tipo !== "mamparaCierreMingit" && s.ancho >= 1) {
-            const dimYt = drawTop - 9.5;
+            const dimYb = Math.min(esPmrLayPdf ? floorLugar + extraPmrPdf : floorY + swingEff, cotaClampY) + 5;
             doc.setDrawColor(10, 31, 61);
             doc.setLineWidth(.3);
-            doc.line(x, dimYt, x + w, dimYt);
-            doc.line(x, dimYt - 1.2, x, dimYt + 1.2);
-            doc.line(x + w, dimYt - 1.2, x + w, dimYt + 1.2);
+            doc.line(x, dimYb, x + w, dimYb);
+            doc.line(x, dimYb - 1.2, x, dimYb + 1.2);
+            doc.line(x + w, dimYb - 1.2, x + w, dimYb + 1.2);
             doc.setFont("helvetica", "bold");
             doc.setFontSize(6);
             doc.setTextColor(10, 31, 61);
-            doc.text(`${s.ancho.toFixed(0)}`, x + w / 2, dimYt - 1.4, {
+            doc.text(`${s.ancho.toFixed(0)}`, x + w / 2, dimYb - 1.4, {
                 align: "center"
             })
         }
@@ -9084,7 +9083,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         if (profCmPdf > 0) {
             // En PMR la cota de profundidad debe llegar al fondo real del cuarto (no a 150).
             const floorProfPmrPdf = esPmrLayPdf ? drawTop + profCmPdf * cabDepth / (pmrCabPanelCmPdf || 150) : floorLugar;
-            const pxx = Math.max(rx + 8, drawX - 4),
+            const pxx = drawX + (leftWallEff ? 15 * scale : 0) + 4,
                 pmid = (drawTop + floorProfPmrPdf) / 2;
             doc.setDrawColor(10, 31, 61);
             doc.setLineWidth(.4);
@@ -9095,9 +9094,9 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             doc.setFont("helvetica", "bold");
             doc.setFontSize(6.5);
             doc.setTextColor(10, 31, 61);
-            doc.text(`PROFUNDIDAD: ${profCmPdf} cm`, pxx - 1.6, pmid, {
-                angle: 90,
-                align: "center"
+            const txtProf = `PROFUNDIDAD: ${profCmPdf} cm`;
+            doc.text(txtProf, pxx + 3.7, pmid + doc.getTextWidth(txtProf) / 2, {
+                angle: 90
             })
         }
     }
@@ -9145,9 +9144,9 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         doc.setFont("helvetica", "bold");
         doc.setFontSize(9);
         doc.setTextColor(10, 31, 61);
-        doc.text(`${panelAncho} cm`, dimRightX + 3, (drawTop + floorY) / 2, {
-            angle: 90,
-            align: "center"
+        const txtDer = `${panelAncho} cm`;
+        doc.text(txtDer, dimRightX + 4.6, (drawTop + floorY) / 2 + doc.getTextWidth(txtDer) / 2, {
+            angle: 90
         })
     }
     const extras = areaCfg.pilastrasExtras || [];
