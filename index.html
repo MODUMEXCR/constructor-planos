@@ -8747,6 +8747,12 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         doc.setLineWidth(.5);
         doc.rect(cxp - PZT / 2, yTop, PZT, Math.max(.5, len), "FD")
     };
+    const pzRectH = (xLeft, cyp, len) => {
+        doc.setFillColor(217, 217, 217);
+        doc.setDrawColor(10, 31, 61);
+        doc.setLineWidth(.5);
+        doc.rect(xLeft, cyp - PZT / 2, Math.max(.5, len), PZT, "FD")
+    };
     const tBracket = (cxp, yTop) => {
         doc.setFillColor(10, 31, 61);
         doc.rect(cxp - PZT / 2 - 1.4, yTop - .9, PZT + 2.8, 1.1, "F");
@@ -8844,14 +8850,17 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             pzRectV(px, drawTop, panelHpc)
         } else if (s.tipo === "pilastra") {
             const px = x + w / 2;
-            pzRectV(px, drawTop, panelLenMm(s.panelDivCode))
+            // panel divisor (vertical, del muro al frente) + PILASTRA como pieza en la linea del frente
+            pzRectV(px, drawTop, panelLenMm(s.panelDivCode));
+            pzRectH(x, floorY, w)
         } else if (s.tipo === "pilastra-muro") {
-            const px = x + w / 2;
-            pzRectV(px, drawTop, 4)
+            // pilastra pegada al muro: pieza horizontal en la linea del frente
+            pzRectH(x, floorY, w)
         } else if (s.tipo === "pilastra-terminal") {
             const panelX = s.lado === "izq" ? x : x + w - grosorPz;
             const panelLenTermMm = panelLenMm(s.panelDivCode);
             pzRectV(panelX + grosorPz / 2, drawTop, panelLenTermMm);
+            pzRectH(x, floorY, w);
             doc.setFont("helvetica", "bold");
             doc.setFontSize(6);
             doc.setTextColor(10, 31, 61);
@@ -9081,16 +9090,9 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             doc.line(pxx - 1.5, floorProfPmrPdf, pxx + 1.5, floorProfPmrPdf);
             if (sobraProfMm > 0) doc.line(pxx - 1.2, floorY, pxx + 1.2, floorY);
             doc.setFont("helvetica", "bold");
-            doc.setFontSize(8);
+            doc.setFontSize(6.5);
             doc.setTextColor(10, 31, 61);
-            doc.text(`${profCmPdf}`, pxx - 2, pmid, {
-                angle: 90,
-                align: "center"
-            });
-            doc.setFont("helvetica", "normal");
-            doc.setFontSize(5.5);
-            doc.setTextColor(90, 100, 114);
-            doc.text("PROFUNDIDAD (cm)", pxx - 6.5, pmid, {
+            doc.text(`PROFUNDIDAD: ${profCmPdf} cm`, pxx - 2, pmid, {
                 angle: 90,
                 align: "center"
             })
