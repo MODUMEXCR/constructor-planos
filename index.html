@@ -4431,6 +4431,23 @@ function bindCfg() {
         const a = activeAreaCfg();
         if (a) a.invertir = e.target.checked;
         cfg.invertir = e.target.checked;
+        // En PMR el cuarto cambia de extremo (con su pared) al invertir: hay que recolocar
+        // cabinas + piezas del cuarto; si no, el cuarto y el ♿ quedan en lados distintos.
+        const layoutInv = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
+        if (layoutInv.pmrCuarto && a && cfg.areaActivaIdx >= 0) {
+            const infoInv = typeof leerDimensionesLugar === "function" ? leerDimensionesLugar() : null;
+            const esLeederInv = ["LEEDER", "SUPERIOR", "TOUCHLESS"].includes((cfg.linea || "").toUpperCase());
+            if (infoInv && esLeederInv) {
+                const nMingitInv = (a.tiposCabina || []).filter(t => t === "Mingitorio").length;
+                const sInv = sugerirModulacion({
+                    claro: infoInv.paredCabinas,
+                    N: cfg.cabinas,
+                    layoutCodigo: cfg.layout,
+                    nMingit: nMingitInv
+                });
+                if (sInv && !sInv.error) aplicarSugerencia(sInv)
+            }
+        }
         sincronizarMurosConLayout();
         renderPreview()
     };
