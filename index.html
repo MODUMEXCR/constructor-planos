@@ -3881,7 +3881,7 @@ const cfg = {
 };
 
 function initConfigurador() {
-    fillSelect("cfg-linea", CATALOGO.lineas);
+    fillSelect("cfg-linea", opcionesLineaUI());
     fillModelosPorLinea(cfg.linea);
     fillSelect("cfg-terminacion", CATALOGO.terminaciones.map(t => ({
         value: t.codigo,
@@ -4001,6 +4001,17 @@ function fillSelect(id, items) {
         if (typeof it === "string") return `<option value="${it}">${it}</option>`;
         return `<option value="${it.value}">${it.label}</option>`
     }).join("")
+}
+// Nombre comercial de la línea para MOSTRAR (el valor interno sigue siendo "Superior" para no
+// romper datos guardados: colores/tarifas/proyectos y los checks de línea).
+function nombreLinea(l) {
+    return l === "Superior" ? "Superior 2.0" : (l || "")
+}
+function opcionesLineaUI() {
+    return (CATALOGO.lineas || []).map(l => ({
+        value: l,
+        label: nombreLinea(l)
+    }))
 }
 
 function etiquetaTier(tier) {
@@ -7787,7 +7798,7 @@ function exportarPDF(proyecto) {
     doc.setTextColor(60, 60, 60);
     doc.text(proyecto.nombre.toUpperCase(), m + 6, m + 82);
     const modeloNombreTxt = ((CATALOGO.modelos.find(mm => mm.codigo === proyecto.modelo) || {}).nombre || "").toUpperCase();
-    const lineaTxt = (proyecto.linea || "").toUpperCase();
+    const lineaTxt = nombreLinea(proyecto.linea).toUpperCase();
     const modeloNombrePortada = (lineaTxt ? lineaTxt + " " : "") + modeloNombreTxt;
     doc.setFillColor(245, 197, 66);
     doc.rect(m + 6, m + 88, rotX - m - 12, 11, "F");
@@ -7819,7 +7830,7 @@ function exportarPDF(proyecto) {
         ["CREADO POR:", proyecto.creadoPor || currentUser()?.nombre || "—"],
         ["DISTRIBUIDOR:", proyecto.distribuidor || "—"],
         ["PAÍS (DISTRIB.):", (distribuidorDeProyecto(proyecto) || {}).pais || "—"],
-        ["LÍNEA:", proyecto.linea],
+        ["LÍNEA:", nombreLinea(proyecto.linea)],
         ["MODELO:", proyecto.modelo],
         ["REMATE INFERIOR:", proyecto.terminacion],
         ["COLOR:", proyecto.color],
@@ -8238,7 +8249,7 @@ function drawCuadroCantidades(doc, proyecto) {
     doc.setFontSize(10);
     doc.setTextColor(60, 60, 60);
     doc.text(`Proyecto ${proyecto.codigo} — ${proyecto.nombre}`, m + 6, m + 19);
-    const modeloNombre = ((proyecto.linea || "").toUpperCase() + " " + ((CATALOGO.modelos.find(mm => mm.codigo === proyecto.modelo) || {}).nombre || "").toUpperCase()).trim();
+    const modeloNombre = (nombreLinea(proyecto.linea).toUpperCase() + " " + ((CATALOGO.modelos.find(mm => mm.codigo === proyecto.modelo) || {}).nombre || "").toUpperCase()).trim();
     doc.setFillColor(245, 197, 66);
     doc.rect(m + 6, m + 24, W - 2 * m - 12, 10, "F");
     doc.setTextColor(10, 31, 61);
@@ -8490,7 +8501,7 @@ function drawCajetinEsen(doc, proyecto, opts) {
         ["Fecha:", fecha]
     ], x0 + 26, cx1 - 2);
     drawPairs([
-        ["Línea:", proyecto.linea || "—"],
+        ["Línea:", nombreLinea(proyecto.linea) || "—"],
         ["Modelo:", modeloNom],
         ["Acabado:", acabado],
         ["Color:", color],
@@ -8565,7 +8576,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     const altPuerta = alturaPiezaSegunModelo("PT", proyecto.modelo, proyecto.terminacion, altTL);
     const altPanel = alturaPiezaSegunModelo("PN", proyecto.modelo, proyecto.terminacion, altTL);
     const altMingit = alturaPiezaSegunModelo("MG", proyecto.modelo, proyecto.terminacion);
-    const modeloNombreArea = ((proyecto.linea || "").toUpperCase() + " " + ((CATALOGO.modelos.find(mm => mm.codigo === proyecto.modelo) || {}).nombre || "").toUpperCase()).trim();
+    const modeloNombreArea = (nombreLinea(proyecto.linea).toUpperCase() + " " + ((CATALOGO.modelos.find(mm => mm.codigo === proyecto.modelo) || {}).nombre || "").toUpperCase()).trim();
     doc.setFillColor(245, 197, 66);
     doc.rect(rx + 6, hBanY, rw - 12, hBanH, "F");
     doc.setTextColor(10, 31, 61);
@@ -9628,7 +9639,7 @@ function cotizar(proyecto, opts) {
         proyectoNombre: proyecto.nombre,
         creadoPor: opts.creadoPor || proyecto.creadoPor || "",
         producto: opts.producto,
-        productoNombre: ((proyecto.linea || "").toUpperCase() + " " + ((CATALOGO.modelos.find(m => m.codigo === opts.producto) || {}).nombre || "").toUpperCase()).trim(),
+        productoNombre: (nombreLinea(proyecto.linea).toUpperCase() + " " + ((CATALOGO.modelos.find(m => m.codigo === opts.producto) || {}).nombre || "").toUpperCase()).trim(),
         distribuidor: opts.distribuidor,
         pais: opts.pais,
         tiempoEntrega: opts.tiempoEntrega,
@@ -10773,7 +10784,7 @@ function refrescarSelectsCatalogo() {
         acabado: document.getElementById("cfg-acabado").value,
         color: document.getElementById("cfg-color").value
     };
-    fillSelect("cfg-linea", CATALOGO.lineas);
+    fillSelect("cfg-linea", opcionesLineaUI());
     fillSelect("cfg-modelo", CATALOGO.modelos.map(m => ({
         value: m.codigo,
         label: m.nombre
