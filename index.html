@@ -8902,7 +8902,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         const w = s.ancho * scale;
         if (s.tipo === "muro") {
             const wallTop = drawTop - 6;
-            const esMuroIzqPmr = esPmrLayPdf && (invertir ? x > drawX + 1 : x < drawX + .1);
+            const esMuroIzqPmr = esPmrLayPdf && (areaInvertir ? x > drawX + 1 : x < drawX + .1);
             const wallHeight = cabDepth + 6 + (esMuroIzqPmr ? extraPmrPdf : sobraProfMm);
             doc.setFillColor(255, 255, 255);
             doc.setDrawColor(10, 31, 61);
@@ -9091,7 +9091,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 })
             } else {
                 const cDescB = (areaCfg.centrosDescarga || [])[s.indiceCabina - 1];
-                const wcBX = esPmrLayPdf && invertir ? floorEndX - Number(cDescB) * scale : floorStartX + Number(cDescB) * scale;
+                const wcBX = esPmrLayPdf && areaInvertir ? floorEndX - Number(cDescB) * scale : floorStartX + Number(cDescB) * scale;
                 const wcCx = cDescB !== "" && cDescB != null && !isNaN(cDescB) ? Math.max(x + 8, Math.min(x + w - 8, wcBX)) : cx;
                 const ihB = Math.min(cabDepth * .5, 20, w * .6 / .67), iwB = ihB * .67;
                 doc.addImage(WC_IMG_B64, "PNG", wcCx - iwB / 2, drawTop + cabDepth * .12, iwB, ihB, undefined, "FAST");
@@ -9135,7 +9135,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             const cx = x + w / 2;
             const cDescU = (areaCfg.centrosDescarga || [])[s.indiceCabina - 1];
             const uw = Math.min(w * .5, 14), uh = uw / 4.49;
-            const uX = esPmrLayPdf && invertir ? floorEndX - Number(cDescU) * scale : floorStartX + Number(cDescU) * scale;
+            const uX = esPmrLayPdf && areaInvertir ? floorEndX - Number(cDescU) * scale : floorStartX + Number(cDescU) * scale;
             const fxCx = cDescU !== "" && cDescU != null && !isNaN(cDescU) ? Math.max(x + uw / 2 + 1, Math.min(x + w - uw / 2 - 1, uX)) : cx;
             doc.addImage(ORINAL_IMG_B64, "PNG", fxCx - uw / 2, drawTop + 1.2, uw, uh, undefined, "FAST");
             doc.setFont("helvetica", "bold");
