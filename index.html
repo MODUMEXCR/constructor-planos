@@ -7786,7 +7786,9 @@ function exportarPDF(proyecto) {
     doc.setFontSize(14);
     doc.setTextColor(60, 60, 60);
     doc.text(proyecto.nombre.toUpperCase(), m + 6, m + 82);
-    const modeloNombrePortada = "LEEDER " + ((CATALOGO.modelos.find(mm => mm.codigo === proyecto.modelo) || {}).nombre || "").toUpperCase();
+    const modeloNombreTxt = ((CATALOGO.modelos.find(mm => mm.codigo === proyecto.modelo) || {}).nombre || "").toUpperCase();
+    const lineaTxt = (proyecto.linea || "").toUpperCase();
+    const modeloNombrePortada = (lineaTxt ? lineaTxt + " " : "") + modeloNombreTxt;
     doc.setFillColor(245, 197, 66);
     doc.rect(m + 6, m + 88, rotX - m - 12, 11, "F");
     doc.setTextColor(10, 31, 61);
@@ -7798,7 +7800,7 @@ function exportarPDF(proyecto) {
     doc.setFontSize(10);
     doc.setTextColor(40, 40, 40);
     let yd = m + 108;
-    const desc = [`DESCRIPCIÓN DEL MODELO A INSTALAR:`, `Suministro e instalación de mamparas sanitarias de laminado compacto.`, `Puertas y pilastras de 12.7mm de espesor y paneles laterales de 12mm.`, `Línea ${proyecto.linea} ${proyecto.modelo==="ESTANDAR"?"ESTÁNDAR":"REFORZADO"},`, `fijación a piso con ${proyecto.terminacion==="ZOCLO"?"zoclo de acero inoxidable":"patas"};`, `herrajes, bisagras y cerrojos de acero inoxidable.`, altura ? `Pilastras de ${altura/100}m, puertas y paneles laterales de 1.50m de altura.` : "", proyecto.colorSecundarioActivo && proyecto.colorSecundario ? `COLOR PRINCIPAL: ${proyecto.color}` : `COLOR DE DIVISIONES: ${proyecto.color}`, proyecto.colorSecundarioActivo && proyecto.colorSecundario ? `COLOR SECUNDARIO: ${proyecto.colorSecundario} (${etiquetaPiezasColorSecundario(proyecto)})` : ""].filter(Boolean);
+    const desc = [`DESCRIPCIÓN DEL MODELO A INSTALAR:`, `Suministro e instalación de mamparas sanitarias de laminado compacto.`, `Puertas y pilastras de 12.7mm de espesor y paneles laterales de 12mm.`, `Línea ${lineaTxt || proyecto.linea}, modelo ${modeloNombreTxt},`, `fijación a piso con ${proyecto.terminacion==="ZOCLO"?"zoclo de acero inoxidable":"patas"};`, `herrajes, bisagras y cerrojos de acero inoxidable.`, altura ? `Pilastras de ${altura/100}m, puertas y paneles laterales de 1.50m de altura.` : "", proyecto.colorSecundarioActivo && proyecto.colorSecundario ? `COLOR PRINCIPAL: ${proyecto.color}` : `COLOR DE DIVISIONES: ${proyecto.color}`, proyecto.colorSecundarioActivo && proyecto.colorSecundario ? `COLOR SECUNDARIO: ${proyecto.colorSecundario} (${etiquetaPiezasColorSecundario(proyecto)})` : ""].filter(Boolean);
     desc.forEach(line => {
         doc.text(line, m + 6, yd);
         yd += 5
@@ -8236,7 +8238,7 @@ function drawCuadroCantidades(doc, proyecto) {
     doc.setFontSize(10);
     doc.setTextColor(60, 60, 60);
     doc.text(`Proyecto ${proyecto.codigo} — ${proyecto.nombre}`, m + 6, m + 19);
-    const modeloNombre = "LEEDER " + ((CATALOGO.modelos.find(mm => mm.codigo === proyecto.modelo) || {}).nombre || "").toUpperCase();
+    const modeloNombre = ((proyecto.linea || "").toUpperCase() + " " + ((CATALOGO.modelos.find(mm => mm.codigo === proyecto.modelo) || {}).nombre || "").toUpperCase()).trim();
     doc.setFillColor(245, 197, 66);
     doc.rect(m + 6, m + 24, W - 2 * m - 12, 10, "F");
     doc.setTextColor(10, 31, 61);
@@ -8563,7 +8565,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     const altPuerta = alturaPiezaSegunModelo("PT", proyecto.modelo, proyecto.terminacion, altTL);
     const altPanel = alturaPiezaSegunModelo("PN", proyecto.modelo, proyecto.terminacion, altTL);
     const altMingit = alturaPiezaSegunModelo("MG", proyecto.modelo, proyecto.terminacion);
-    const modeloNombreArea = "LEEDER " + ((CATALOGO.modelos.find(mm => mm.codigo === proyecto.modelo) || {}).nombre || "").toUpperCase();
+    const modeloNombreArea = ((proyecto.linea || "").toUpperCase() + " " + ((CATALOGO.modelos.find(mm => mm.codigo === proyecto.modelo) || {}).nombre || "").toUpperCase()).trim();
     doc.setFillColor(245, 197, 66);
     doc.rect(rx + 6, hBanY, rw - 12, hBanH, "F");
     doc.setTextColor(10, 31, 61);
@@ -9626,7 +9628,7 @@ function cotizar(proyecto, opts) {
         proyectoNombre: proyecto.nombre,
         creadoPor: opts.creadoPor || proyecto.creadoPor || "",
         producto: opts.producto,
-        productoNombre: "LEEDER " + ((CATALOGO.modelos.find(m => m.codigo === opts.producto) || {}).nombre || "").toUpperCase(),
+        productoNombre: ((proyecto.linea || "").toUpperCase() + " " + ((CATALOGO.modelos.find(m => m.codigo === opts.producto) || {}).nombre || "").toUpperCase()).trim(),
         distribuidor: opts.distribuidor,
         pais: opts.pais,
         tiempoEntrega: opts.tiempoEntrega,
