@@ -7210,6 +7210,29 @@ async function generarPlanos() {
 async function guardarSinDescargar() {
     return guardarProyectoActual(false)
 }
+// Firma de lo que define "el plano" (geometría + materiales). Sirve para detectar si hubo
+// un cambio real respecto de la versión emitida y decidir si se crea una revisión nueva.
+function firmaPlan(o) {
+    if (!o) return "";
+    try {
+        return JSON.stringify({
+            areas: o.areas || [],
+            cfg: o.configByArea || {},
+            mo: o.modelo || "",
+            te: o.terminacion || "",
+            li: o.linea || "",
+            co: o.color || "",
+            cs: !!o.colorSecundarioActivo,
+            c2: o.colorSecundario || "",
+            pcs: o.piezasColorSecundario || {},
+            mg: o.mingitorios || 0,
+            rg: o.regaderas || 0,
+            kp: o.kap || 0
+        })
+    } catch (e) {
+        return ""
+    }
+}
 
 function proximaAreaEnBlanco() {
     const configurada = a => {
@@ -7239,9 +7262,14 @@ async function guardarProyectoActual(descargar) {
     }
     const conectado = !!(SB && sesionSupabase);
     const editando = conectado ? !!cfg.editandoId : !!(cfg.editandoId && db.proyectos.some(p => p.id === cfg.editandoId));
-    const crearRevision = descargar && !!cfg.yaEmitido;
+    // ¿Cambió el plano respecto de la versión emitida que se cargó?
+    const hayCambios = !cfg.yaEmitido || cfg.snapshotEmitido == null || firmaPlan(cfg) !== cfg.snapshotEmitido;
+    // Se crea una revisión nueva (A,B,C…) SOLO al obtener planos de un proyecto YA emitido y CON cambios.
+    const crearRevision = descargar && !!cfg.yaEmitido && hayCambios;
+    // Emitido + sin cambios + descargar: solo se re-descarga la misma versión, no se guarda de nuevo.
+    const soloDescarga = descargar && !!cfg.yaEmitido && !hayCambios;
     let codigoFinal = cfg.codigo;
-    let revisionFinal = "00";
+    let revisionFinal = cfg.yaEmitido ? cfg.revisionActual || "00" : "00";
     if (crearRevision) {
         const rev = await siguienteCodigoRevision(cfg.codigo);
         codigoFinal = rev.codigo;
@@ -7298,27 +7326,33 @@ async function guardarProyectoActual(descargar) {
         piezas: piezas
     };
     if (crearRevision) cfg.editandoId = null;
-    if (conectado) {
-        try {
-            await guardarProyectoSupabase(proyecto)
-        } catch (e) {
-            toast("No se pudo guardar en la nube: " + (e.message || e), "danger");
-            return
-        }
-    } else {
-        if (editando && !crearRevision) {
-            proyecto.id = cfg.editandoId;
-            const idx = db.proyectos.findIndex(p => p.id === cfg.editandoId);
-            if (idx >= 0) db.proyectos[idx] = proyecto;
-            else db.proyectos.push(proyecto)
+    let guardadoOk = true;
+    if (!soloDescarga) {
+        if (conectado) {
+            try {
+                await guardarProyectoSupabase(proyecto)
+            } catch (e) {
+                guardadoOk = false;
+                toast("No se pudo guardar en la nube: " + (e.message || e), "danger");
+                // Si es "Obtener Planos" igual se descarga el PDF aunque el guardado falle.
+                if (!descargar) return
+            }
         } else {
-            db.proyectos.push(proyecto)
+            if (editando && !crearRevision) {
+                proyecto.id = cfg.editandoId;
+                const idx = db.proyectos.findIndex(p => p.id === cfg.editandoId);
+                if (idx >= 0) db.proyectos[idx] = proyecto;
+                else db.proyectos.push(proyecto)
+            } else {
+                db.proyectos.push(proyecto)
+            }
+            persist()
         }
-        persist()
     }
-    const accion = crearRevision ? `guardado como revisión ${revisionFinal} (${codigoFinal})` : editando ? "actualizado" : "guardado";
+    const accion = crearRevision ? `guardado como revisión ${revisionFinal} (${codigoFinal})` : soloDescarga ? "sin cambios (misma versión)" : editando ? "actualizado" : "guardado";
     if (!descargar) {
         cfg.editandoId = proyecto.id;
+        cfg.snapshotEmitido = firmaPlan(cfg);
         const idxBlank = proximaAreaEnBlanco();
         if (idxBlank >= 0 && idxBlank !== cfg.areaActivaIdx) {
             activarArea(idxBlank);
@@ -7329,8 +7363,16 @@ async function guardarProyectoActual(descargar) {
         return
     }
     cfg.editandoId = null;
-    exportarPDF(proyecto);
-    toast(`Proyecto ${accion} · planos (PDF) descargados. Los archivos CIP/SICLICK se descargan desde Mis Proyectos.`, "ok");
+    // OBTENER PLANOS descarga SIEMPRE el PDF (haya o no revisión nueva, y aun si el guardado falló).
+    try {
+        exportarPDF(proyecto)
+    } catch (e) {
+        console.warn("exportarPDF", e);
+        toast("Error al generar el PDF: " + (e.message || e), "danger");
+        return
+    }
+    const sufijo = guardadoOk ? " · planos (PDF) descargados. Los archivos CIP/SICLICK se descargan desde Mis Proyectos." : " · PDF descargado (revisá el guardado en la nube).";
+    toast(`Proyecto ${accion}${sufijo}`, guardadoOk ? "ok" : "danger");
     resetConfiguradorNuevo();
     nav("proyectos")
 }
@@ -7341,6 +7383,7 @@ function resetConfiguradorNuevo() {
     cfg.revisionActual = "00";
     cfg.yaEmitido = false;
     cfg.editandoId = null;
+    cfg.snapshotEmitido = null;
     cfg.areas = [];
     cfg.areaActivaIdx = -1;
     cfg.configByArea = {};
@@ -10329,8 +10372,9 @@ function cargarProyectoEnConfigurador(p) {
     if (typeof actualizarInputPmrCuarto === "function") actualizarInputPmrCuarto();
     renderAreaList();
     activarArea(cfg.areaActivaIdx);
+    cfg.snapshotEmitido = firmaPlan(cfg);
     nav("configurador");
-    toast(`Editando "${p.codigo}" — con Guardar se actualiza; al Obtener Planos se crea una nueva revisión (${separarBaseRevision(p.codigo).base}A, B…)`, "ok")
+    toast(`Editando "${p.codigo}" — con Guardar se actualiza; al Obtener Planos se descarga (y se crea revisión ${separarBaseRevision(p.codigo).base}A, B… solo si cambiás el plano)`, "ok")
 }
 const FAMILIA_LABELS = {
     PT: "Puerta",
