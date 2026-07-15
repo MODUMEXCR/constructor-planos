@@ -7479,7 +7479,8 @@ function determinarSubTipoModumex(pieza, ctx) {
     if (familia === "PT") {
         const aperturaVal = (areaCfg.aperturas || [])[indiceCabina] || ((areaCfg.bisagras || [])[indiceCabina] ? areaCfg.bisagras[indiceCabina] + "_EXT" : "") || (invertir ? "DER_EXT" : "IZQ_EXT");
         const [bisagra, dirAp] = aperturaVal.split("_");
-        const base = bisagra === "DER" ? "PTADER" : "PTAIZQ";
+        const bisagraCip = dirAp === "INT" ? (bisagra === "DER" ? "IZQ" : "DER") : bisagra;
+        const base = bisagraCip === "DER" ? "PTADER" : "PTAIZQ";
         const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layoutCodigo);
         const hasRightWall = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
         const leftWallEff = invertir ? hasRightWall : hasLeftWall;
