@@ -6755,7 +6755,8 @@ function aplicarSugerencia(s) {
         a.tiposCabina[i] = esMingit ? "Mingitorio" : esRegadera ? "Regadera" : "Baño";
         if (esMingit) {
             a.puertas[i] = "";
-            a.paneles[i] = nextEsMingit ? (a.mgTipo || "MG60120") : "";
+            const cierreMingitDer = i === N - 1 && !rightWallEff;
+            a.paneles[i] = nextEsMingit || cierreMingitDer ? (a.mgTipo || "MG60120") : "";
             a.aperturas[i] = ""
         } else {
             a.puertas[i] = esRegadera ? puertaRegaderaDe(esAcc ? s.codPuertaAcc : s.codPuerta) : (esAcc ? s.codPuertaAcc : s.codPuerta);
@@ -6826,7 +6827,7 @@ function aplicarSugerencia(s) {
             codigo: codMuroDer,
             esMuro: rightWallEff
         };
-        a.panelCierreIzq = leftWallEff || primeraEsMingit ? null : panelCodeDefault
+        a.panelCierreIzq = leftWallEff ? null : primeraEsMingit ? (a.mgTipo || "MG60120") : panelCodeDefault
     }
     a.ajusteInstalacionCm = s.ajuste && s.ajuste.ajusteInstalacionCm || 0;
     {
@@ -7589,7 +7590,12 @@ function exportarCSV(proyecto) {
                     familia: cp.slice(0, 2),
                     ancho: anchoDePiezaCodigo(cp)
                 } : null);
-                if (p) agregar(p, determinarSubTipoModumex(p, ctx), areaName, altoDeCabina(p.familia, areaCfg, i))
+                if (p) {
+                    const esPmrCsv = areaLayout === "P+" || areaLayout === "PP";
+                    const cuartoIdxCsv = areaInvertir ? N - 1 : 0;
+                    const subPanel = esPmrCsv && p.familia === "PI" && i === cuartoIdxCsv ? "PLLAT" : determinarSubTipoModumex(p, ctx);
+                    agregar(p, subPanel, areaName, altoDeCabina(p.familia, areaCfg, i))
+                }
             }
             if (tipoCab !== "Mingitorio") {
                 const cpi = (areaCfg.pilastras || [])[i];
@@ -7624,6 +7630,8 @@ function exportarCSV(proyecto) {
             let subTipo = "PLCOS";
             if (desc.includes("keml")) {
                 subTipo = desc.includes("central") ? "PLCENKEML" : "PLLATKEML"
+            } else if (desc.includes("frente")) {
+                subTipo = "PLLAT"
             } else if (desc.includes("entrada") || desc.includes("anclaje") || desc.includes("tope")) {
                 subTipo = "PLLATMUR"
             } else if (desc.includes("muro")) {
