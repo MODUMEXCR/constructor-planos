@@ -7179,6 +7179,7 @@ function piezasAgregadas() {
     };
     for (const areaName of cfg.areas) {
         const a = cfg.configByArea[areaName] || {};
+        asegurarCierreMingit(a, a.layout || cfg.layout || "L", a.invertir !== undefined ? a.invertir : !!cfg.invertir);
         const altoDe = (fam, i) => {
             const r = altoDeCabina(fam, a, i);
             return r != null ? r : alturaPiezaSegunModelo(fam, cfg.modelo, cfg.terminacion, a.altoTouchless != null ? a.altoTouchless : altoTouchlessActual())
@@ -7457,10 +7458,30 @@ function etiquetaPiezasColorSecundario(proyecto) {
 
 function generarSkuLargo(pieza, proyecto, altoOverride) {
     const familiaSku = familiaSkuModumex(pieza.familia);
-    const altoEfectivo = altoOverride != null ? altoOverride : alturaPiezaSegunModelo(pieza.familia, proyecto.modelo, proyecto.terminacion, proyecto.altoTouchless);
+    const altoEfectivo = altoOverride != null ? altoOverride : pieza.familia === "MG" && pieza.alto != null ? pieza.alto : alturaPiezaSegunModelo(pieza.familia, proyecto.modelo, proyecto.terminacion, proyecto.altoTouchless);
     const colorShort = colorAbreviadoModumex(colorDePieza(pieza.familia, proyecto));
     const sistemaCode = proyecto.terminacion === "PATAS" ? "P" : "Z";
     return `LM1LCRF${familiaSku}${pieza.ancho}${altoEfectivo}${colorShort}${sistemaCode}`
+}
+
+// Asegura que la mampara de cierre de un run que TERMINA en mingitorio sin muro quede en los
+// datos (N mamparas para N urinales). Robusto para proyectos guardados que no se re-modularon:
+// rellena el slot solo si está vacío (idempotente, no duplica). PMR maneja su cierre aparte.
+function asegurarCierreMingit(areaCfg, layoutCodigo, invertir) {
+    if (!areaCfg) return;
+    const layout = CATALOGO.layouts.find(l => l.codigo === layoutCodigo) || {};
+    if (layout.pmrCuarto) return;
+    const tc = areaCfg.tiposCabina || [];
+    const N = areaCfg.cabinas != null ? areaCfg.cabinas : tc.length;
+    if (!N) return;
+    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP"].includes(layoutCodigo);
+    const hasRight = ["U", "U+", "C", "I", "K"].includes(layoutCodigo);
+    const leftWallEff = invertir ? hasRight : hasLeft;
+    const rightWallEff = invertir ? hasLeft : hasRight;
+    const mg = areaCfg.mgTipo || "MG60120";
+    if (!areaCfg.paneles) areaCfg.paneles = [];
+    if (tc[N - 1] === "Mingitorio" && !rightWallEff && !areaCfg.paneles[N - 1]) areaCfg.paneles[N - 1] = mg;
+    if (tc[0] === "Mingitorio" && !leftWallEff && !areaCfg.panelCierreIzq) areaCfg.panelCierreIzq = mg
 }
 
 function determinarSubTipoModumex(pieza, ctx) {
@@ -7492,6 +7513,8 @@ function determinarSubTipoModumex(pieza, ctx) {
         return barreContraMuro ? base + "-AM" : base
     }
     if (familia === "PN") {
+        const tiposCabPN = areaCfg.tiposCabina || [];
+        if (tiposCabPN[indiceCabina + 1] === "Mingitorio") return "PNLAT";
         const esTerminalAbiertoDer = layoutCodigo === "E" && indiceCabina === totalCabinas - 1 && !rightWallEff;
         return esEndMuro || esTerminalAbiertoDer ? "PNLAT" : "PNCEN"
     }
@@ -7562,6 +7585,7 @@ function exportarCSV(proyecto) {
         const areaLayout = areaCfg.layout || proyecto.layout || "L";
         const areaInvertir = areaCfg.invertir !== undefined ? areaCfg.invertir : !!proyecto.invertir;
         const N = areaCabinas;
+        asegurarCierreMingit(areaCfg, areaLayout, areaInvertir);
         const ctxBase = {
             areaCfg: areaCfg,
             layoutCodigo: areaLayout,
@@ -8268,6 +8292,7 @@ function drawCuadroCantidades(doc, proyecto) {
     const filas = [];
     (proyecto.areas || []).forEach(areaName => {
         const a = (proyecto.configByArea || {})[areaName] || {};
+        asegurarCierreMingit(a, a.layout || proyecto.layout || "L", a.invertir !== undefined ? a.invertir : !!proyecto.invertir);
         const N = a.cabinas !== undefined ? a.cabinas : proyecto.cabinas || 0;
         const buf = {};
         const acc = (codigo, i) => {
