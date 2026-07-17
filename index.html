@@ -7617,7 +7617,7 @@ function exportarCSV(proyecto) {
                 if (p) {
                     const esPmrCsv = areaLayout === "P+" || areaLayout === "PP";
                     const cuartoIdxCsv = areaInvertir ? N - 1 : 0;
-                    const subPanel = esPmrCsv && p.familia === "PI" && i === cuartoIdxCsv ? "PLLAT" : determinarSubTipoModumex(p, ctx);
+                    const subPanel = esPmrCsv && p.familia === "PI" && i === cuartoIdxCsv ? "PLLATMUR" : determinarSubTipoModumex(p, ctx);
                     agregar(p, subPanel, areaName, altoDeCabina(p.familia, areaCfg, i))
                 }
             }
@@ -7655,7 +7655,7 @@ function exportarCSV(proyecto) {
             if (desc.includes("keml")) {
                 subTipo = desc.includes("central") ? "PLCENKEML" : "PLLATKEML"
             } else if (desc.includes("frente")) {
-                subTipo = "PLLAT"
+                subTipo = "PLLATMUR"
             } else if (desc.includes("entrada") || desc.includes("anclaje") || desc.includes("tope")) {
                 subTipo = "PLLATMUR"
             } else if (desc.includes("muro")) {
