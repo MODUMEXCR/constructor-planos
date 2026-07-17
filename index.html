@@ -5820,7 +5820,7 @@ function renderPreviewControls(tab) {
         if (t === "pilastras") s.value = a.pilastras[idx] || "";
         if (t === "apertura") {
             const apertura = a.aperturas[idx] || ((a.bisagras || [])[idx] ? a.bisagras[idx] + "_EXT" : "");
-            s.value = aperturaFlipInterior(apertura)
+            s.value = s.dataset.pmrdoor ? aperturaFlipPmr(apertura, cfg.invertir) : aperturaFlipInterior(apertura)
         }
         if (t === "tipo") { const tc = a.tiposCabina[idx] || ""; s.value = tc === "Mingitorio" ? "Mingitorio" : tc === "Regadera" ? "Regadera" : "Baño"; }
         if (t === "muroIzq") s.value = a.muroIzq && a.muroIzq.codigo || "";
@@ -5834,7 +5834,7 @@ function renderPreviewControls(tab) {
             if (tt === "paneles") a.paneles[i] = v;
             if (tt === "puertas") a.puertas[i] = v;
             if (tt === "pilastras") a.pilastras[i] = v;
-            if (tt === "apertura") a.aperturas[i] = aperturaFlipInterior(v);
+            if (tt === "apertura") a.aperturas[i] = e.target.dataset.pmrdoor ? aperturaFlipPmr(v, cfg.invertir) : aperturaFlipInterior(v);
             if (tt === "tipo") a.tiposCabina[i] = v;
             if (tt === "muroIzq") a.muroIzq = v ? {
                 codigo: v,
@@ -5957,6 +5957,13 @@ function aperturaFlipInterior(ap) {
     return p[1] === "INT" ? (p[0] === "IZQ" ? "DER" : "IZQ") + "_INT" : ap
 }
 
+function aperturaFlipPmr(ap, invertir) {
+    if (!ap) return ap;
+    const p = ap.split("_");
+    const flip = !!invertir !== (p[1] === "INT");
+    return flip ? (p[0] === "IZQ" ? "DER" : "IZQ") + "_" + p[1] : ap
+}
+
 function pmrCtrlHtml(kind, a) {
     const N = a.cabinas || cfg.cabinas || 0;
     const cuartoIdx = cfg.invertir ? N - 1 : 0;
@@ -5988,9 +5995,9 @@ function pmrCtrlHtml(kind, a) {
     if (kind === "door") {
         const doorPz = CATALOGO.piezas.filter(p => p.familia === "PT" && !p.sufijo && (p.ancho === 90 || p.ancho === 92) && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual()));
         const opts = doorPz.map(p => `<option value="${p.codigo}"${doorCode===p.codigo?" selected":""}>${p.codigo} (${p.ancho} cm)</option>`).join("") || `<option value="PT90" selected>PT90 (90 cm)</option>`;
-        const apVal = aperturaFlipInterior((a.aperturas || [])[cuartoIdx] || (cfg.invertir ? "IZQ_EXT" : "DER_EXT"));
+        const apVal = aperturaFlipPmr((a.aperturas || [])[cuartoIdx] || (cfg.invertir ? "IZQ_EXT" : "DER_EXT"), cfg.invertir);
         const apOpt = (v, lbl) => `<option value="${v}"${apVal===v?" selected":""}>${lbl}</option>`;
-        return `\n        <label>\n          <span>Cuarto PMR · puerta lateral</span>\n          <select data-pmr="door">${opts}</select>\n        </label>\n        <label>\n          <span>Apertura (cuarto PMR)</span>\n          <select data-tab="apertura" data-idx="${cuartoIdx}">\n            ${apOpt("IZQ_EXT","Abre afuera · izquierda")}\n            ${apOpt("DER_EXT","Abre afuera · derecha")}\n            ${apOpt("IZQ_INT","Abre adentro · izquierda")}\n            ${apOpt("DER_INT","Abre adentro · derecha")}\n          </select>\n        </label>\n        ${fitDiv}`
+        return `\n        <label>\n          <span>Cuarto PMR · puerta lateral</span>\n          <select data-pmr="door">${opts}</select>\n        </label>\n        <label>\n          <span>Apertura (cuarto PMR)</span>\n          <select data-tab="apertura" data-idx="${cuartoIdx}" data-pmrdoor="1">\n            ${apOpt("IZQ_EXT","Abre afuera · izquierda")}\n            ${apOpt("DER_EXT","Abre afuera · derecha")}\n            ${apOpt("IZQ_INT","Abre adentro · izquierda")}\n            ${apOpt("DER_INT","Abre adentro · derecha")}\n          </select>\n        </label>\n        ${fitDiv}`
     }
     const sepActual = (a.pilastras || [])[sepIdx] || "";
     const pilOpts = CATALOGO.piezas.filter(p => p.familia === "PI" && !p.sufijo && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual())).map(p => `<option value="${p.codigo}"${sepActual===p.codigo?" selected":""}>${p.codigo} (${p.ancho} cm)</option>`).join("");
@@ -7507,9 +7514,10 @@ function determinarSubTipoModumex(pieza, ctx) {
     if (familia === "PT") {
         const aperturaVal = (areaCfg.aperturas || [])[indiceCabina] || ((areaCfg.bisagras || [])[indiceCabina] ? areaCfg.bisagras[indiceCabina] + "_EXT" : "") || (invertir ? "DER_EXT" : "IZQ_EXT");
         const [bisagra, dirAp] = aperturaVal.split("_");
-        const bisagraCip = dirAp === "INT" ? (bisagra === "DER" ? "IZQ" : "DER") : bisagra;
-        const base = bisagraCip === "DER" ? "PTADER" : "PTAIZQ";
         const esPmrCuartoPT = (layoutCodigo === "P+" || layoutCodigo === "PP") && indiceCabina === (invertir ? totalCabinas - 1 : 0);
+        const flipMano = esPmrCuartoPT ? (!!invertir !== (dirAp === "INT")) : (dirAp === "INT");
+        const bisagraCip = flipMano ? (bisagra === "DER" ? "IZQ" : "DER") : bisagra;
+        const base = bisagraCip === "DER" ? "PTADER" : "PTAIZQ";
         if (esPmrCuartoPT && dirAp === "INT") return base + "-AM";
         const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layoutCodigo);
         const hasRightWall = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
