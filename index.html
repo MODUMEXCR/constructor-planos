@@ -5750,7 +5750,7 @@ function renderPreviewControls(tab) {
         }
         let dropdownHtml;
         if (tab === "paneles" && esMingitorio) {
-            const optsMG = piezasMG.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("");
+            const optsMG = piezasMG.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${p.alto})</option>`).join("");
             const optsPN = piezasFamilia2.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("");
             dropdownHtml = `\n        <label>\n          <span>Cabina ${i+1} · panel/mingitorio</span>\n          <select data-tab="${tab}" data-idx="${i}">\n            <option value="">— Elegir —</option>\n            <optgroup label="Panel mingitorio (entre 2 mingitorios)">${optsMG}</optgroup>\n            <optgroup label="Panel lateral (entre baño y mingitorio, o contra muro)">${optsPN}</optgroup>\n          </select>\n        </label>`
         } else {
@@ -8302,7 +8302,7 @@ function drawCuadroCantidades(doc, proyecto) {
             const p = CATALOGO.piezas.find(x => x.codigo === codigo);
             if (!p) return;
             const altoR = altoDeCabina(p.familia, a, i);
-            const alto = altoR != null ? altoR : alturaPiezaSegunModelo(p.familia, proyecto.modelo, proyecto.terminacion, a.altoTouchless || proyecto.altoTouchless);
+            const alto = altoR != null ? altoR : p.familia === "MG" ? p.alto : alturaPiezaSegunModelo(p.familia, proyecto.modelo, proyecto.terminacion, a.altoTouchless || proyecto.altoTouchless);
             const k = p.codigo + "|" + alto;
             buf[k] = buf[k] || {
                 familia: p.familia,
