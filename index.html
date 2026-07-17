@@ -5782,7 +5782,7 @@ function renderPreviewControls(tab) {
             const bloqInt = aperturaInteriorBloqueada(activeAreaCfg(), i);
             const dis = bloqInt ? " disabled" : "";
             const sufijo = bloqInt ? " (panel <135: no permitido)" : "";
-            html += `\n        <label>\n          <span>Apertura C${i+1}</span>\n          <select data-tab="apertura" data-idx="${i}">\n            <option value="">— Elegir —</option>\n            <option value="IZQ_EXT">Izquierda · abre exterior</option>\n            <option value="IZQ_INT"${dis}>Izquierda · abre interior${sufijo}</option>\n            <option value="DER_EXT">Derecha · abre exterior</option>\n            <option value="DER_INT"${dis}>Derecha · abre interior${sufijo}</option>\n          </select>\n          ${bloqInt?'<div class="form-help" style="font-size:10px; color:#b45309; margin-top:2px;">Panel &lt;135 cm: la puerta solo abre hacia afuera.</div>':""}\n        </label>`
+            html += `\n        <label>\n          <span>Apertura C${i+1}</span>\n          <select data-tab="apertura" data-idx="${i}">\n            <option value="">— Elegir —</option>\n            <option value="IZQ_EXT">Abre afuera · izquierda</option>\n            <option value="DER_EXT">Abre afuera · derecha</option>\n            <option value="IZQ_INT"${dis}>Abre adentro · izquierda${sufijo}</option>\n            <option value="DER_INT"${dis}>Abre adentro · derecha${sufijo}</option>\n          </select>\n          <div class="form-help" style="font-size:10px; color:#64748b; margin-top:2px;">Afuera: mirás desde afuera. Adentro: mirás desde adentro. Izq/der = dónde queda la bisagra.</div>\n          ${bloqInt?'<div class="form-help" style="font-size:10px; color:#b45309; margin-top:2px;">Panel &lt;135 cm: la puerta solo abre hacia afuera.</div>':""}\n        </label>`
         }
         if (tab === "paneles" && +cfg.regaderas === 1 && !esMingitorio) {
             html += `\n        <label>\n          <span>Tipo C${i+1}</span>\n          <select data-tab="tipo" data-idx="${i}">\n            <option value="Baño">Baño</option>\n            <option value="Regadera">Regadera</option>\n          </select>\n        </label>`
@@ -5820,7 +5820,7 @@ function renderPreviewControls(tab) {
         if (t === "pilastras") s.value = a.pilastras[idx] || "";
         if (t === "apertura") {
             const apertura = a.aperturas[idx] || ((a.bisagras || [])[idx] ? a.bisagras[idx] + "_EXT" : "");
-            s.value = apertura
+            s.value = aperturaFlipInterior(apertura)
         }
         if (t === "tipo") { const tc = a.tiposCabina[idx] || ""; s.value = tc === "Mingitorio" ? "Mingitorio" : tc === "Regadera" ? "Regadera" : "Baño"; }
         if (t === "muroIzq") s.value = a.muroIzq && a.muroIzq.codigo || "";
@@ -5834,7 +5834,7 @@ function renderPreviewControls(tab) {
             if (tt === "paneles") a.paneles[i] = v;
             if (tt === "puertas") a.puertas[i] = v;
             if (tt === "pilastras") a.pilastras[i] = v;
-            if (tt === "apertura") a.aperturas[i] = v;
+            if (tt === "apertura") a.aperturas[i] = aperturaFlipInterior(v);
             if (tt === "tipo") a.tiposCabina[i] = v;
             if (tt === "muroIzq") a.muroIzq = v ? {
                 codigo: v,
@@ -5951,6 +5951,12 @@ function renderPreviewControls(tab) {
 // "panel" (dropdown de anchos, pestaña Paneles), "door" (puerta lateral, pestaña Puertas,
 // sin selector de lado) y "pilastra" (separación, pestaña Pilastras). El frente se recalcula
 // solo (recomputarDivisorPmr) y el mensaje de ajuste sale bajo el panel/puerta.
+function aperturaFlipInterior(ap) {
+    if (!ap) return ap;
+    const p = ap.split("_");
+    return p[1] === "INT" ? (p[0] === "IZQ" ? "DER" : "IZQ") + "_INT" : ap
+}
+
 function pmrCtrlHtml(kind, a) {
     const N = a.cabinas || cfg.cabinas || 0;
     const cuartoIdx = cfg.invertir ? N - 1 : 0;
@@ -5982,9 +5988,9 @@ function pmrCtrlHtml(kind, a) {
     if (kind === "door") {
         const doorPz = CATALOGO.piezas.filter(p => p.familia === "PT" && !p.sufijo && (p.ancho === 90 || p.ancho === 92) && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual()));
         const opts = doorPz.map(p => `<option value="${p.codigo}"${doorCode===p.codigo?" selected":""}>${p.codigo} (${p.ancho} cm)</option>`).join("") || `<option value="PT90" selected>PT90 (90 cm)</option>`;
-        const apVal = (a.aperturas || [])[cuartoIdx] || (cfg.invertir ? "IZQ_EXT" : "DER_EXT");
+        const apVal = aperturaFlipInterior((a.aperturas || [])[cuartoIdx] || (cfg.invertir ? "IZQ_EXT" : "DER_EXT"));
         const apOpt = (v, lbl) => `<option value="${v}"${apVal===v?" selected":""}>${lbl}</option>`;
-        return `\n        <label>\n          <span>Cuarto PMR · puerta lateral</span>\n          <select data-pmr="door">${opts}</select>\n        </label>\n        <label>\n          <span>Apertura (cuarto PMR)</span>\n          <select data-tab="apertura" data-idx="${cuartoIdx}">\n            ${apOpt("IZQ_EXT","Izquierda · abre exterior")}\n            ${apOpt("IZQ_INT","Izquierda · abre interior")}\n            ${apOpt("DER_EXT","Derecha · abre exterior")}\n            ${apOpt("DER_INT","Derecha · abre interior")}\n          </select>\n          <div class="form-help" style="font-size:10px; margin-top:2px;">Puerta lateral perpendicular; el lado (izq/der del divisor) lo fija el layout.</div>\n        </label>\n        ${fitDiv}`
+        return `\n        <label>\n          <span>Cuarto PMR · puerta lateral</span>\n          <select data-pmr="door">${opts}</select>\n        </label>\n        <label>\n          <span>Apertura (cuarto PMR)</span>\n          <select data-tab="apertura" data-idx="${cuartoIdx}">\n            ${apOpt("IZQ_EXT","Abre afuera · izquierda")}\n            ${apOpt("DER_EXT","Abre afuera · derecha")}\n            ${apOpt("IZQ_INT","Abre adentro · izquierda")}\n            ${apOpt("DER_INT","Abre adentro · derecha")}\n          </select>\n          <div class="form-help" style="font-size:10px; margin-top:2px;">Afuera: te ubicás afuera del cuarto. Adentro: te ubicás adentro. Izq/der = dónde queda la bisagra.</div>\n        </label>\n        ${fitDiv}`
     }
     const sepActual = (a.pilastras || [])[sepIdx] || "";
     const pilOpts = CATALOGO.piezas.filter(p => p.familia === "PI" && !p.sufijo && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual())).map(p => `<option value="${p.codigo}"${sepActual===p.codigo?" selected":""}>${p.codigo} (${p.ancho} cm)</option>`).join("");
