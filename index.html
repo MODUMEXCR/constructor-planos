@@ -7503,6 +7503,8 @@ function determinarSubTipoModumex(pieza, ctx) {
         const [bisagra, dirAp] = aperturaVal.split("_");
         const bisagraCip = dirAp === "INT" ? (bisagra === "DER" ? "IZQ" : "DER") : bisagra;
         const base = bisagraCip === "DER" ? "PTADER" : "PTAIZQ";
+        const esPmrCuartoPT = (layoutCodigo === "P+" || layoutCodigo === "PP") && indiceCabina === (invertir ? totalCabinas - 1 : 0);
+        if (esPmrCuartoPT && dirAp === "INT") return base + "-AM";
         const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layoutCodigo);
         const hasRightWall = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
         const leftWallEff = invertir ? hasRightWall : hasLeftWall;
