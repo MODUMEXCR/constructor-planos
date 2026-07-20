@@ -8253,16 +8253,19 @@ function perfilUDeArea(proyecto, areaName) {
         add(p, subTipo, altoDe(p.familia, null))
     });
     const cortesArr = [];
+    const r5 = v => Math.ceil(v / 5) * 5;
     let corrida = 0;
     piezas.forEach(p => {
         if (p.familia === "PT" || p.familia === "PI") corrida += p.ancho
     });
-    if (corrida > 0) cortesArr.push(Math.round(corrida) + 10);
+    if (corrida > 0) cortesArr.push(r5(Math.round(corrida) + 10));
     piezas.forEach(p => {
-        if (p.familia === "PN" && p.subTipo === "PNLAT") cortesArr.push(Math.round(p.ancho) + 10)
+        if (p.familia === "PN" && p.subTipo === "PNLAT") cortesArr.push(r5(Math.round(p.ancho) + 10))
     });
     piezas.forEach(p => {
-        if (p.familia === "PN" || p.familia === "PI") cortesArr.push(Math.round(p.alto))
+        if (p.familia !== "PN" && p.familia !== "PI") return;
+        const veces = p.familia === "PN" && p.subTipo === "PNLAT" ? 2 : 1;
+        for (let i = 0; i < veces; i++) cortesArr.push(r5(Math.round(p.alto)))
     });
     if (!cortesArr.length) return null;
     const cortes = {};
