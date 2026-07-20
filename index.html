@@ -8160,39 +8160,111 @@ function perfilUDeArea(proyecto, areaName) {
     const a = (proyecto.configByArea || {})[areaName] || {};
     const N = a.cabinas !== undefined ? a.cabinas : proyecto.cabinas || 0;
     if (!N) return null;
-    const layoutCodigo = a.layout || proyecto.layout || "L";
+    const layout = a.layout || proyecto.layout || "L";
     const invertir = a.invertir !== undefined ? !!a.invertir : !!proyecto.invertir;
-    const anchoDe = c => {
-        const p = c ? CATALOGO.piezas.find(x => x.codigo === c) : null;
-        return p ? p.ancho : 0
+    const altoTL = proyecto.altoTouchless || 180;
+    const altoDe = (fam, i) => {
+        const r = i != null && typeof altoDeCabina === "function" ? altoDeCabina(fam, a, i) : null;
+        return r != null ? r : alturaPiezaSegunModelo(fam, proyecto.modelo, proyecto.terminacion, altoTL)
     };
-    let prof = 0;
-    {
-        const lA = parseFloat(a.largo),
-            aA = parseFloat(a.ancho);
-        if (!isNaN(lA) && !isNaN(aA) && lA > 0 && aA > 0) {
-            prof = a.preferCorta ? Math.max(lA, aA) : Math.min(lA, aA)
+    const ctxBase = {
+        areaCfg: a,
+        layoutCodigo: layout,
+        invertir: invertir,
+        totalCabinas: N
+    };
+    const piezas = [];
+    const add = (p, subTipo, alto) => {
+        if (!p) return;
+        piezas.push({
+            familia: p.familia,
+            subTipo: subTipo,
+            ancho: p.ancho || 0,
+            alto: alto != null ? alto : p.alto || 0
+        })
+    };
+    for (let i = 0; i < N; i++) {
+        const tipoCab = (a.tiposCabina || [])[i] || "Baño";
+        const ctx = {
+            ...ctxBase,
+            indiceCabina: i
+        };
+        if (tipoCab !== "Mingitorio") {
+            const c = (a.puertas || [])[i];
+            if (c) {
+                const p = CATALOGO.piezas.find(x => x.codigo === c);
+                if (p) add(p, determinarSubTipoModumex(p, ctx), altoDe(p.familia, i))
+            }
+        }
+        const cp = (a.paneles || [])[i];
+        if (cp) {
+            const p = CATALOGO.piezas.find(x => x.codigo === cp) || (/^P[NI]\d/.test(cp) ? {
+                codigo: cp,
+                familia: cp.slice(0, 2),
+                ancho: anchoDePiezaCodigo(cp)
+            } : null);
+            if (p) {
+                const esPmr = layout === "P+" || layout === "PP";
+                const cuartoIdx = invertir ? N - 1 : 0;
+                const sub = esPmr && p.familia === "PI" && i === cuartoIdx ? "PLLATMUR" : determinarSubTipoModumex(p, ctx);
+                add(p, sub, altoDe(p.familia, i))
+            }
+        }
+        if (tipoCab !== "Mingitorio") {
+            const cpi = (a.pilastras || [])[i];
+            if (cpi) {
+                const p = CATALOGO.piezas.find(x => x.codigo === cpi);
+                if (p) add(p, determinarSubTipoModumex(p, ctx), altoDe(p.familia, i))
+            }
         }
     }
-    let claro = a.claroCliente && a.claroCliente > 0 ? +a.claroCliente : 0;
-    if (!claro) {
-        let sum = 0;
-        for (let i = 0; i < N; i++) {
-            sum += anchoDe((a.puertas || [])[i]);
-            if (i < N - 1) sum += anchoDe((a.pilastras || [])[i])
-        }
-        if (a.muroIzq && a.muroIzq.codigo) sum += anchoDe(a.muroIzq.codigo);
-        if (a.muroDer && a.muroDer.codigo) sum += anchoDe(a.muroDer.codigo);
-        claro = Math.round(sum)
+    if (a.muroIzq && a.muroIzq.codigo) {
+        const p = CATALOGO.piezas.find(x => x.codigo === a.muroIzq.codigo);
+        if (p) add(p, a.muroIzq.esMuro !== false ? "PLLATMUR" : "PLLAT", altoDe(p.familia, null))
     }
-    if (!claro) return null;
-    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layoutCodigo);
-    const hasRight = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
-    const leftWallEff = invertir ? hasRight : hasLeft;
-    const rightWallEff = invertir ? hasLeft : hasRight;
-    const cortesArr = [Math.round(claro)];
-    if (leftWallEff && prof > 0) cortesArr.push(Math.round(prof));
-    if (rightWallEff && prof > 0) cortesArr.push(Math.round(prof));
+    if (a.muroDer && a.muroDer.codigo) {
+        const p = CATALOGO.piezas.find(x => x.codigo === a.muroDer.codigo);
+        if (p) add(p, a.muroDer.esMuro !== false ? "PLLATMUR" : "PLLAT", altoDe(p.familia, null))
+    }
+    if (a.panelCierreIzq) {
+        const p = CATALOGO.piezas.find(x => x.codigo === a.panelCierreIzq);
+        if (p) add(p, p.familia === "MG" ? p.alto >= 150 ? "MG150" : "MG120" : "PNLAT", altoDe(p.familia, null))
+    }
+    (a.pilastrasExtras || []).forEach(ex => {
+        if (!ex.codigo) return;
+        const p = CATALOGO.piezas.find(x => x.codigo === ex.codigo);
+        if (!p) return;
+        const desc = (ex.descripcion || "").toLowerCase();
+        let subTipo = "PLCOS";
+        if (desc.includes("keml")) subTipo = desc.includes("central") ? "PLCENKEML" : "PLLATKEML";
+        else if (desc.includes("frente")) subTipo = "PLLATMUR";
+        else if (desc.includes("entrada") || desc.includes("anclaje") || desc.includes("tope")) subTipo = "PLLATMUR";
+        else if (desc.includes("muro")) subTipo = "PLCOSMUR";
+        add(p, subTipo, altoDe(p.familia, null))
+    });
+    (a.panelesExtras || []).forEach(ex => {
+        if (!ex.codigo) return;
+        const p = CATALOGO.piezas.find(x => x.codigo === ex.codigo);
+        if (!p) return;
+        const desc = (ex.descripcion || "").toLowerCase();
+        let subTipo = "PNUNI";
+        if (desc.includes("relleno") || desc.includes("fin") || desc.includes("muro") || desc.includes("pared")) subTipo = "PNLAT";
+        else if (desc.includes("central")) subTipo = "PNCEN";
+        add(p, subTipo, altoDe(p.familia, null))
+    });
+    const cortesArr = [];
+    let corrida = 0;
+    piezas.forEach(p => {
+        if (p.familia === "PT" || p.familia === "PI") corrida += p.ancho
+    });
+    if (corrida > 0) cortesArr.push(Math.round(corrida) + 10);
+    piezas.forEach(p => {
+        if (p.familia === "PN" && p.subTipo === "PNLAT") cortesArr.push(Math.round(p.ancho) + 10)
+    });
+    piezas.forEach(p => {
+        if (p.familia === "PN" || p.familia === "PI") cortesArr.push(Math.round(p.alto))
+    });
+    if (!cortesArr.length) return null;
     const cortes = {};
     cortesArr.forEach(t => {
         cortes[t] = (cortes[t] || 0) + 1
