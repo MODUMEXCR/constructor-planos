@@ -7519,14 +7519,7 @@ function determinarSubTipoModumex(pieza, ctx) {
         const bisagraCip = flipMano ? (bisagra === "DER" ? "IZQ" : "DER") : bisagra;
         const base = bisagraCip === "DER" ? "PTADER" : "PTAIZQ";
         if (esPmrCuartoPT && dirAp === "INT") return base + "-AM";
-        const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layoutCodigo);
-        const hasRightWall = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
-        const leftWallEff = invertir ? hasRightWall : hasLeftWall;
-        const rightWallEff = invertir ? hasLeftWall : hasRightWall;
-        const muroALaDerCabina = indiceCabina === totalCabinas - 1 && rightWallEff;
-        const muroALaIzqCabina = indiceCabina === 0 && leftWallEff;
-        const barreContraMuro = dirAp === "INT" && (bisagra === "IZQ" && muroALaDerCabina || bisagra === "DER" && muroALaIzqCabina);
-        return barreContraMuro ? base + "-AM" : base
+        return dirAp === "INT" && esEndMuro ? base + "-AM" : base
     }
     if (familia === "PN") {
         const tiposCabPN = areaCfg.tiposCabina || [];
