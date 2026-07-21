@@ -6489,6 +6489,7 @@ function sugerirModulacion({
     const anchoAccesible = Math.max(90, aCfgAcc.anchoAccesible || 150);
     const esAccInline = accLayout && !esPmrCuarto;
     const anchoPuertaAccPieza = opcionesPuertaAcc.length ? Math.max.apply(null, opcionesPuertaAcc) : 100;
+    const accSolaSug = N === 1 && esAccInline;
     const accAnchos = nAcc > 0 ? esAccInline ? [anchoAccesible] : opcionesPuertaAcc : [0];
     const inv = cfg.invertir;
     const mingitEnIzq = inv && (nMingit || 0) > 0;
@@ -6502,7 +6503,7 @@ function sugerirModulacion({
             const opcIzq = opcionesPilEsq.filter(e => puertaIzqExtrema > 90 ? e >= 24 : true);
             const opcDer = opcionesPilEsq.filter(e => puertaDerExtrema > 90 ? e >= 24 : true);
             const combos = [];
-            if (nEsquinas === 0) combos.push([0, 0]);
+            if (accSolaSug || nEsquinas === 0) combos.push([0, 0]);
             else if (nEsquinas === 1) {
                 const usaIzq = leftWallEff;
                 (usaIzq ? opcIzq : opcDer).forEach(e => combos.push(usaIzq ? [e, 0] : [0, e]))
@@ -6586,7 +6587,7 @@ function sugerirModulacion({
     }
     const lblIzq = leftWallEff ? "a muro izq" : "terminal izq";
     const lblDer = rightWallEff ? "a muro der" : "terminal der";
-    const pilEsqTxt = best.anchoPilEsq === best.anchoPilEsq2 ? `1 × PI${best.anchoPilEsq} (${lblIzq}) + 1 × PI${best.anchoPilEsq2} (${lblDer})` : `1 × PI${best.anchoPilEsq} (${lblIzq}) + 1 × PI${best.anchoPilEsq2} (${lblDer})`;
+    const pilEsqTxt = accSolaSug ? "la cabina PMR ocupa el claro (piezas de cierre según variante)" : `1 × PI${best.anchoPilEsq} (${lblIzq}) + 1 × PI${best.anchoPilEsq2} (${lblDer})`;
     const sumPuertas = nEstandar * best.anchoPuerta + nAcc * best.anchoPuertaAcc;
     const puertasTxt = [nEstandar > 0 ? `${nEstandar}×PT${best.anchoPuerta}` : "", nAcc > 0 ? `1×PT${esAccInline ? anchoPuertaAccPieza : best.anchoPuertaAcc} (PMR${esAccInline ? ", cabina " + anchoAccesible + " cm" : ""})` : ""].filter(Boolean).join(" + ");
     const pasos = [`Claro del vano: ${claro} cm`, nPilastrasAMuro > 0 ? `− 1 cm × ${nPilastrasAMuro} pilastra(s) a muro (herraje) = ${(claro-nPilastrasAMuro).toFixed(1)} cm` : null, nPuertas > 0 ? `+ 1.5 cm × ${nPuertas} puerta(s) (clearance bisagra) = ${claroAjustado.toFixed(1)} cm` : null, nPuertas > 0 ? `− ${puertasTxt} = ${(claroAjustado-sumPuertas).toFixed(1)} cm para pilastras` : null, `Pilastras de cierre: ${pilEsqTxt}${nInternas>0?" + "+nInternas+"×PI"+best.anchoPilInt+" (central)":""}`, esPmrCuarto ? `Cuarto PMR: PI${best.anchoPilRelleno} de relleno junto a la puerta + panel divisor profundo (no consume ancho)` : null, margenHerraje > 0 ? `Tolerancia herraje: ±${tolExacto.toFixed(1)} cm (0.5 cm por muro × ${nPilastrasAMuro}); fuera de eso, revisar canaleta` : null].filter(Boolean);
@@ -6595,7 +6596,7 @@ function sugerirModulacion({
         nEstandar: nEstandar,
         nAccesible: nAcc,
         nPilInternas: nInternas,
-        nPilEsquinas: nEsquinas,
+        nPilEsquinas: accSolaSug ? 0 : nEsquinas,
         nMingit: nMingit || 0,
         nPuertas: nPuertas,
         layout: layoutCodigo,
@@ -6606,8 +6607,8 @@ function sugerirModulacion({
         codPuertaAcc: nAcc ? `PT${esAccInline ? anchoPuertaAccPieza : best.anchoPuertaAcc}` : null,
         anchoCabinaAcc: nAcc && esAccInline ? anchoAccesible : null,
         codPilInt: `PI${best.anchoPilInt}${sufR}`,
-        codPilEsq: `PI${best.anchoPilEsq}${sufR}`,
-        codPilEsq2: nEsquinas === 2 ? `PI${best.anchoPilEsq2}${sufR}` : null,
+        codPilEsq: accSolaSug ? null : `PI${best.anchoPilEsq}${sufR}`,
+        codPilEsq2: accSolaSug ? null : nEsquinas === 2 ? `PI${best.anchoPilEsq2}${sufR}` : null,
         codPilRelleno: esPmrCuarto ? `PI${best.anchoPilRelleno}${sufR}` : null,
         codMG: (nMingit || 0) > 0 ? "MG60" : null,
         anchoPuerta: best.anchoPuerta,
