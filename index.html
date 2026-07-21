@@ -4873,6 +4873,10 @@ function aperturaInteriorBloqueada(a, i) {
     return !!(pz && pz.familia === "PN" && pz.ancho < 135)
 }
 
+function accCabinaLlenaArea(a, N, layout) {
+    return N === 1 && !!layout && !!layout.acc && !layout.pmrCuarto
+}
+
 function actualizarValidacionModulacion() {
     const el = document.getElementById("preview-validacion");
     if (!el) return;
@@ -4906,6 +4910,7 @@ function actualizarValidacionModulacion() {
     };
     const esPmrCuartoVal = !!layout.pmrCuarto;
     const esAccInlineVal = !!layout.acc && !esPmrCuartoVal;
+    const accSola = accCabinaLlenaArea(a, N, layout);
     const accCabinaIdxVal = cfg.invertir ? N - 1 : 0;
     const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layout.codigo);
     const hasRight = ["U", "U+", "C", "I", "K", "P+"].includes(layout.codigo);
@@ -4951,13 +4956,13 @@ function actualizarValidacionModulacion() {
             }
         }
     }
-    if (esPmrCuartoVal) {} else if (a.muroIzq && a.muroIzq.codigo) {
+    if (esPmrCuartoVal || accSola) {} else if (a.muroIzq && a.muroIzq.codigo) {
         const pieza = CATALOGO.piezas.find(p => p.codigo === a.muroIzq.codigo);
         if (pieza) suma += pieza.ancho
     } else if (!primeraEsMingit) {
         faltantes.push("Cierre izquierdo")
     }
-    if (esPmrCuartoVal) {} else if (a.muroDer && a.muroDer.codigo) {
+    if (esPmrCuartoVal || accSola) {} else if (a.muroDer && a.muroDer.codigo) {
         const pieza = CATALOGO.piezas.find(p => p.codigo === a.muroDer.codigo);
         if (pieza) suma += pieza.ancho
     } else if (!ultimaEsMingit) {
@@ -5059,6 +5064,7 @@ function buildBathroomSvg() {
     const isAcc = layout.acc;
     const accCabinaIdx = cfg.invertir ? N - 1 : 0;
     const areaCfg = activeAreaCfg() || {};
+    const accSola = accCabinaLlenaArea(areaCfg, N, layout);
     const aperturas = areaCfg.aperturas || [];
     const bisagrasOld = areaCfg.bisagras || [];
     const tiposCabina = areaCfg.tiposCabina || [];
@@ -5069,7 +5075,7 @@ function buildBathroomSvg() {
     const esLayoutK = layout.codigo === "K";
     const seq = [];
     const muroIzqData = areaCfg.muroIzq;
-    if (muroIzqData && muroIzqData.codigo) {
+    if (accSola) {} else if (muroIzqData && muroIzqData.codigo) {
         const esMuroIzq = leftWall;
         if (esMuroIzq) seq.push({
             tipo: "muro",
@@ -5165,7 +5171,7 @@ function buildBathroomSvg() {
         }
     }
     const muroDerData = areaCfg.muroDer;
-    if (muroDerData && muroDerData.codigo) {
+    if (accSola) {} else if (muroDerData && muroDerData.codigo) {
         let esMuroDer = rightWall;
         if (layout.pmrCuarto) esMuroDer = !layout.cierrePanel;
         const pi = CATALOGO.piezas.find(p => p.codigo === muroDerData.codigo);
@@ -7993,8 +7999,9 @@ function refuerzosDeArea(proyecto, areaName) {
             }
             if (i < N - 1) sum += anchoDe((a.pilastras || [])[i])
         }
-        if (a.muroIzq && a.muroIzq.codigo) sum += anchoDe(a.muroIzq.codigo);
-        if (a.muroDer && a.muroDer.codigo) sum += anchoDe(a.muroDer.codigo);
+        const accSolaClaro = N === 1 && accLayoutClaro;
+        if (!accSolaClaro && a.muroIzq && a.muroIzq.codigo) sum += anchoDe(a.muroIzq.codigo);
+        if (!accSolaClaro && a.muroDer && a.muroDer.codigo) sum += anchoDe(a.muroDer.codigo);
         claro = Math.round(sum)
     }
     if (!claro) return null;
@@ -8725,9 +8732,10 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     const leftWallEff = areaInvertir ? hasRight : hasLeft;
     const rightWallEff = areaInvertir ? hasLeft : hasRight;
     const N = areaCabinas;
+    const accSolaPdf = N === 1 && ["L+", "U+", "E+", "C"].includes(layoutCodigo);
     const seq = [];
     const muroIzqDataPdf = areaCfg.muroIzq;
-    if (muroIzqDataPdf && muroIzqDataPdf.codigo) {
+    if (accSolaPdf) {} else if (muroIzqDataPdf && muroIzqDataPdf.codigo) {
         const esMuroIzq = leftWallEff;
         if (esMuroIzq) seq.push({
             tipo: "muro"
@@ -8809,7 +8817,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         })
     }
     const muroDerDataPdf = areaCfg.muroDer;
-    if (muroDerDataPdf && muroDerDataPdf.codigo) {
+    if (accSolaPdf) {} else if (muroDerDataPdf && muroDerDataPdf.codigo) {
         let esMuroDer = rightWallEff;
         if (layoutCodigo === "P+") esMuroDer = true;
         else if (layoutCodigo === "PP") esMuroDer = false;
