@@ -4863,6 +4863,8 @@ function buildEspecialSvg() {
     };
     const R = v => ({ x: -v.y, y: v.x });
     const L = v => ({ x: v.y, y: -v.x });
+    const neg = v => ({ x: -v.x, y: -v.y });
+    const add = (v, k, d) => ({ x: v.x + d.x * k, y: v.y + d.y * k });
     const f = n => Math.round(n * 100) / 100;
     let head = dir[tramos[0].heading0 || "E"] || dir.E;
     let cur = { x: 0, y: 0 };
@@ -4882,40 +4884,66 @@ function buildEspecialSvg() {
         mark(x, y);
         el.push(`<text x="${f(x)}" y="${f(y)}" font-size="${size||6}" fill="${col||NAVY}" font-weight="700" text-anchor="middle" transform="rotate(${f(ang)} ${f(x)} ${f(y)})">${txt}</text>`)
     };
+    const muro = (from, to, outward, thick) => {
+        poly([from, to, add(to, thick, outward), add(from, thick, outward)], "url(#espHatch)", NAVY, 1.2)
+    };
+    const puertaArco = (H, along, swing, r) => {
+        const tip = add(H, r, swing);
+        line(H.x, H.y, tip.x, tip.y, NAVY, 1.6);
+        let a1 = Math.atan2(swing.y, swing.x),
+            a2 = Math.atan2(along.y, along.x),
+            d = a2 - a1;
+        while (d > Math.PI) d -= 2 * Math.PI;
+        while (d < -Math.PI) d += 2 * Math.PI;
+        const seg = [];
+        for (let k = 0; k <= 8; k++) {
+            const an = a1 + d * k / 8,
+                px = H.x + Math.cos(an) * r,
+                py = H.y + Math.sin(an) * r;
+            seg.push(f(px) + "," + f(py));
+            mark(px, py)
+        }
+        el.push(`<polyline points="${seg.join(" ")}" fill="none" stroke="${GREY}" stroke-width="0.7"/>`)
+    };
+    const inodoro = (mid, into, hd, w, prof) => {
+        const horiz = Math.abs(hd.x) > 0.5;
+        const tc = add(mid, prof * 0.1, into),
+            ha = Math.min(w * 0.42, 22);
+        const A = add(tc, ha, hd),
+            B = add(tc, -ha, hd);
+        poly([A, B, add(B, 6, into), add(A, 6, into)], NAVY, "none", 0);
+        const bc = add(mid, prof * 0.32, into),
+            rB = Math.min(Math.min(w, prof) * 0.2, 15),
+            rS = rB * 0.72;
+        el.push(`<ellipse cx="${f(bc.x)}" cy="${f(bc.y)}" rx="${f(horiz?rS:rB)}" ry="${f(horiz?rB:rS)}" fill="none" stroke="${NAVY}" stroke-width="1.2"/>`)
+    };
     for (let ti = 0; ti < tramos.length; ti++) {
         const t = tramos[ti];
         const prof = t.prof || 150;
         const into = R(head);
+        const out = neg(into);
         const ang = Math.atan2(head.y, head.x) * 180 / Math.PI;
         const cells = t.celdas || [];
         const len = cells.reduce((s, c) => s + (c.ancho || 0), 0) || 1;
         const end = { x: cur.x + head.x * len, y: cur.y + head.y * len };
-        poly([cur, end, { x: end.x + into.x * prof, y: end.y + into.y * prof }, { x: cur.x + into.x * prof, y: cur.y + into.y * prof }], LIGHT, "none", 0);
-        line(cur.x, cur.y, end.x, end.y, NAVY, 3);
-        line(cur.x + into.x * prof, cur.y + into.y * prof, end.x + into.x * prof, end.y + into.y * prof, GREY, 0.8, "3,2");
+        poly([cur, end, add(end, prof, into), add(cur, prof, into)], LIGHT, "none", 0);
+        muro(cur, end, out, 7);
+        line(add(cur, prof, into).x, add(cur, prof, into).y, add(end, prof, into).x, add(end, prof, into).y, GREY, 0.5, "4,3");
         let off = 0;
         for (const c of cells) {
             const w = c.ancho || 0;
-            const a0 = { x: cur.x + head.x * off, y: cur.y + head.y * off };
-            const mid = { x: a0.x + head.x * (w / 2), y: a0.y + head.y * (w / 2) };
+            const a0 = add(cur, off, head);
+            const mid = add(a0, w / 2, head);
             if (c.t === "cab") {
-                const wcx = mid.x + into.x * (prof * 0.32),
-                    wcy = mid.y + into.y * (prof * 0.32);
-                const rr = Math.min(Math.min(w, prof) * 0.26, 20);
-                el.push(`<ellipse cx="${f(wcx)}" cy="${f(wcy)}" rx="${f(rr*0.8)}" ry="${f(rr)}" fill="none" stroke="${NAVY}" stroke-width="1.4"/>`);
-                const hx = a0.x + into.x * prof,
-                    hy = a0.y + into.y * prof;
-                const sw = Math.min(w, prof) * 0.72;
-                const sx = hx + head.x * sw - into.x * sw,
-                    sy = hy + head.y * sw - into.y * sw;
-                line(hx, hy, sx, sy, NAVY, 2.4)
+                inodoro(mid, into, head, w, prof);
+                const H = add(a0, prof, into);
+                puertaArco(H, head, out, Math.min(w, prof * 0.9))
             } else {
-                line(a0.x, a0.y, a0.x + into.x * prof, a0.y + into.y * prof, NAVY, c.t === "mg" ? 1.8 : 2.4)
+                line(a0.x, a0.y, add(a0, prof, into).x, add(a0, prof, into).y, NAVY, c.t === "mg" ? 1.5 : 2)
             }
             if (c.label) {
-                const lx = mid.x - into.x * 11,
-                    ly = mid.y - into.y * 11;
-                label(lx, ly, c.label, ang, 6)
+                const lp = add(mid, -13, into);
+                label(lp.x, lp.y, c.label, ang, 6)
             }
             off += w
         }
@@ -4924,18 +4952,13 @@ function buildEspecialSvg() {
         if (j && j.tipo === "codo") {
             const cs = j.pilastraEsquina && j.pilastraEsquina.ancho != null ? j.pilastraEsquina.ancho : 10;
             const into2 = R(head);
-            poly([cur, { x: cur.x + head.x * cs, y: cur.y + head.y * cs }, { x: cur.x + head.x * cs + into2.x * cs, y: cur.y + head.y * cs + into2.y * cs }, { x: cur.x + into2.x * cs, y: cur.y + into2.y * cs }], NAVY, "none", 0);
-            if (j.label) {
-                label(cur.x + into2.x * (cs + 11), cur.y + into2.y * (cs + 11), j.label, ang, 5.5, GREY)
-            }
+            if (cs > 0) poly([cur, add(cur, cs, head), add(add(cur, cs, head), cs, into2), add(cur, cs, into2)], NAVY, "none", 0);
             head = j.giro < 0 ? R(head) : L(head);
-            cur = { x: cur.x + head.x * prof, y: cur.y + head.y * prof }
+            cur = add(cur, prof, head)
         } else if (j && j.tipo === "recto") {
             const w = j.relleno && j.relleno.largo || 10;
-            const into2 = R(head);
-            line(cur.x, cur.y, cur.x + into2.x * prof, cur.y + into2.y * prof, NAVY, 2.4);
-            if (j.label) label(cur.x + head.x * (w / 2) - into2.x * 11, cur.y + head.y * (w / 2) - into2.y * 11, j.label, ang, 6);
-            cur = { x: cur.x + head.x * w, y: cur.y + head.y * w }
+            line(cur.x, cur.y, add(cur, prof, R(head)).x, add(cur, prof, R(head)).y, NAVY, 2);
+            cur = add(cur, w, head)
         }
     }
     if (!pts.length) return '<div class="preview-empty">Modo Especial: sin piezas.</div>';
@@ -4953,7 +4976,8 @@ function buildEspecialSvg() {
         s = 1.6;
     const w = maxx - minx + pad * 2,
         h = maxy - miny + pad * 2;
-    return `<svg viewBox="${f(minx-pad)} ${f(miny-pad)} ${f(w)} ${f(h)}" width="${f(w*s)}" height="${f(h*s)}">${el.join("")}</svg>`
+    const defs = '<defs><pattern id="espHatch" patternUnits="userSpaceOnUse" width="4" height="4" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="4" stroke="#0a1f3d" stroke-width="0.6"/></pattern></defs>';
+    return `<svg viewBox="${f(minx-pad)} ${f(miny-pad)} ${f(w)} ${f(h)}" width="${f(w*s)}" height="${f(h*s)}">${defs}${el.join("")}</svg>`
 }
 
 function especialSeedDefault(a) {
