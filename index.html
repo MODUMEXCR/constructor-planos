@@ -4920,7 +4920,8 @@ function actualizarValidacionModulacion() {
         if (esPmrCuartoVal && i === accCabinaIdxVal) {
             suma += a.anchoPmrCuarto || 162
         } else if (esAccInlineVal && i === accCabinaIdxVal) {
-            suma += a.anchoAccesible || 150;
+            const ptAcc = CATALOGO.piezas.find(p => p.codigo === (a.puertas || [])[i]);
+            suma += ptAcc ? ptAcc.ancho : 100;
             nPuertas++
         } else if (esMingit) {
             const mg = (a.paneles || [])[i];
@@ -5142,7 +5143,7 @@ function buildBathroomSvg() {
             seq.push({
                 tipo: "puerta",
                 codigo: puertaCode || "—",
-                ancho: esAccInlineSvg ? areaCfg.anchoAccesible || 150 : ptPieza ? ptPieza.ancho : 60,
+                ancho: ptPieza ? ptPieza.ancho : 60,
                 indiceCabina: i,
                 panelCode: panelCode
             })
@@ -6527,7 +6528,7 @@ function sugerirModulacion({
     const anchoAccesible = Math.max(90, aCfgAcc.anchoAccesible || 150);
     const esAccInline = accLayout && !esPmrCuarto;
     const anchoPuertaAccPieza = opcionesPuertaAcc.length ? Math.max.apply(null, opcionesPuertaAcc) : 100;
-    const accAnchos = nAcc > 0 ? esAccInline ? [anchoAccesible] : opcionesPuertaAcc : [0];
+    const accAnchos = nAcc > 0 ? esAccInline ? [anchoPuertaAccPieza] : opcionesPuertaAcc : [0];
     const inv = cfg.invertir;
     const mingitEnIzq = inv && (nMingit || 0) > 0;
     const mingitEnDer = !inv && (nMingit || 0) > 0;
@@ -6626,7 +6627,7 @@ function sugerirModulacion({
     const lblDer = rightWallEff ? "a muro der" : "terminal der";
     const pilEsqTxt = best.anchoPilEsq === best.anchoPilEsq2 ? `1 × PI${best.anchoPilEsq} (${lblIzq}) + 1 × PI${best.anchoPilEsq2} (${lblDer})` : `1 × PI${best.anchoPilEsq} (${lblIzq}) + 1 × PI${best.anchoPilEsq2} (${lblDer})`;
     const sumPuertas = nEstandar * best.anchoPuerta + nAcc * best.anchoPuertaAcc;
-    const puertasTxt = [nEstandar > 0 ? `${nEstandar}×PT${best.anchoPuerta}` : "", nAcc > 0 ? `1×PT${esAccInline ? anchoPuertaAccPieza : best.anchoPuertaAcc} (PMR${esAccInline ? ", cabina " + anchoAccesible + " cm" : ""})` : ""].filter(Boolean).join(" + ");
+    const puertasTxt = [nEstandar > 0 ? `${nEstandar}×PT${best.anchoPuerta}` : "", nAcc > 0 ? `1×PT${esAccInline ? anchoPuertaAccPieza : best.anchoPuertaAcc} (PMR${esAccInline ? ", cuarto ref " + anchoAccesible + " cm — no se suma" : ""})` : ""].filter(Boolean).join(" + ");
     const pasos = [`Claro del vano: ${claro} cm`, nPilastrasAMuro > 0 ? `− 1 cm × ${nPilastrasAMuro} pilastra(s) a muro (herraje) = ${(claro-nPilastrasAMuro).toFixed(1)} cm` : null, nPuertas > 0 ? `+ 1.5 cm × ${nPuertas} puerta(s) (clearance bisagra) = ${claroAjustado.toFixed(1)} cm` : null, nPuertas > 0 ? `− ${puertasTxt} = ${(claroAjustado-sumPuertas).toFixed(1)} cm para pilastras` : null, `Pilastras de cierre: ${pilEsqTxt}${nInternas>0?" + "+nInternas+"×PI"+best.anchoPilInt+" (central)":""}`, esPmrCuarto ? `Cuarto PMR: PI${best.anchoPilRelleno} de relleno junto a la puerta + panel divisor profundo (no consume ancho)` : null, margenHerraje > 0 ? `Tolerancia herraje: ±${tolExacto.toFixed(1)} cm (0.5 cm por muro × ${nPilastrasAMuro}); fuera de eso, revisar canaleta` : null].filter(Boolean);
     return {
         nCabinas: N,
@@ -8032,8 +8033,6 @@ function refuerzosDeArea(proyecto, areaName) {
                 sum += anchoSlotMingit()
             } else if (esPmrClaro && i === 0) {
                 sum += a.anchoPmrCuarto || 162
-            } else if (accLayoutClaro && i === accIdxClaro) {
-                sum += a.anchoAccesible || 150
             } else {
                 sum += anchoDe((a.puertas || [])[i])
             }
@@ -8176,7 +8175,6 @@ function antepechosDeArea(proyecto, areaName) {
         if (tipoCab === "Mingitorio") continue;
         let ancho;
         if (esPmr && i === 0) ancho = a.anchoPmrCuarto || 162;
-        else if (accLayout && i === accIdx) ancho = a.anchoAccesible || 150;
         else ancho = anchoDe((a.puertas || [])[i]);
         if (!ancho) continue;
         porAncho[ancho] = (porAncho[ancho] || 0) + 1;
@@ -8903,10 +8901,6 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         }
         if (s.cuartoPmr) {
             s.ancho = areaCfg.anchoPmrCuarto || 162;
-            return
-        }
-        if (accLayoutW && s.tipo === "puerta" && cabIdxW === accCabinaIdxW) {
-            s.ancho = areaCfg.anchoAccesible || 150;
             return
         }
         if (!s.codigo && s.tipo === "panelMingit") {
