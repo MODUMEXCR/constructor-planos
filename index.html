@@ -4970,7 +4970,7 @@ function actualizarValidacionModulacion() {
             faltantes.push("Cierre derecho")
         }
     }
-    (a.panelesExtras || []).forEach(ex => {
+    if (esPmrCuartoVal)(a.panelesExtras || []).forEach(ex => {
         if (!ex.codigo) return;
         const p = CATALOGO.piezas.find(x => x.codigo === ex.codigo);
         const w = p ? p.ancho : /^PN\d/.test(ex.codigo) ? anchoDePiezaCodigo(ex.codigo) : 0;
