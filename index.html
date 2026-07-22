@@ -3905,7 +3905,9 @@ function initConfigurador() {
         opt.addEventListener("click", () => {
             const a = activeAreaCfg();
             const nuevoCodigo = opt.dataset.layout;
+            const cambioLayout = cfg.layout !== nuevoCodigo;
             if (a) a.layout = nuevoCodigo;
+            if (cambioLayout && a && Array.isArray(a.panelesExtras)) a.panelesExtras = a.panelesExtras.filter(ex => !(ex.descripcion || "").toLowerCase().includes("relleno fin de pared"));
             cfg.layout = nuevoCodigo;
             const layoutObj = CATALOGO.layouts.find(l => l.codigo === nuevoCodigo);
             if (layoutObj && layoutObj.fixedCabinas) {
