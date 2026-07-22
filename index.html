@@ -6534,12 +6534,18 @@ function sugerirModulacion({
     const mingitEnDer = !inv && (nMingit || 0) > 0;
     const pmrEnIzq = nAcc > 0 && !inv;
     const pmrEnDer = nAcc > 0 && inv;
+    const usarAccDivisor = esAccInline && nInternas >= 1;
+    const nInternasNoAcc = usarAccDivisor ? nInternas - 1 : nInternas;
+    const opcionesAccDiv = usarAccDivisor ? opcionesPilInt : [0];
+    const ACC_BLOCK_PREF = 3;
+    const esSoloAcc = esAccInline && nEstandar === 0 && (nMingit || 0) === 0 && !usarAccDivisor && (leftWallEff || rightWallEff);
+    const opcAccFlank = anchosPilastraModelo.slice();
     for (const accAncho of accAnchos) {
         for (const ap of opcionesPuerta) {
             const puertaIzqExtrema = pmrEnIzq ? accAncho : mingitEnIzq ? 0 : ap;
             const puertaDerExtrema = pmrEnDer ? accAncho : mingitEnDer ? 0 : ap;
-            const opcIzq = opcionesPilEsq.filter(e => puertaIzqExtrema > 90 ? e >= 24 : true);
-            const opcDer = opcionesPilEsq.filter(e => puertaDerExtrema > 90 ? e >= 24 : true);
+            const opcIzq = esSoloAcc ? opcAccFlank : opcionesPilEsq.filter(e => puertaIzqExtrema > 90 ? e >= 24 : true);
+            const opcDer = esSoloAcc ? opcAccFlank : opcionesPilEsq.filter(e => puertaDerExtrema > 90 ? e >= 24 : true);
             const combos = [];
             if (nEsquinas === 0) combos.push([0, 0]);
             else if (nEsquinas === 1) {
@@ -6552,25 +6558,31 @@ function sugerirModulacion({
             const opcionesRelleno = esPmrCuarto ? opcionesPilInt : [0];
             for (const apRelleno of opcionesRelleno) {
                 for (const apI of opcionesPilInt) {
-                    for (const [apE1, apE2] of combos) {
-                        const total = nEstandar * ap + nAcc * accAncho + (nMingit || 0) * anchoMG + grosorDivisoresMG + nInternas * apI + apRelleno + apE1 + apE2;
-                        const diff = claroAjustado - total;
-                        const PT_PREF = 60;
-                        const PT_PENALTY = .05;
-                        const RELLENO_PREF = 45;
-                        const RELLENO_PENALTY = .03;
-                        const score = Math.abs(diff) + (nAcc > 0 ? Math.abs(accAncho - PMR_PREF) * PMR_PENALTY : 0) + (nEstandar > 0 ? Math.abs(ap - PT_PREF) * PT_PENALTY : 0) + (esPmrCuarto ? Math.abs(apRelleno - RELLENO_PREF) * RELLENO_PENALTY : 0) + (esDosMuros && total > claro ? (total - claro) * 100 : 0);
-                        if (!best || score < best.score) {
-                            best = {
-                                anchoPuerta: ap,
-                                anchoPilInt: apI,
-                                anchoPilEsq: apE1,
-                                anchoPilEsq2: apE2,
-                                anchoPuertaAcc: accAncho,
-                                anchoPilRelleno: apRelleno,
-                                total: total,
-                                diff: diff,
-                                score: score
+                    for (const apAcc of opcionesAccDiv) {
+                        for (const [apE1, apE2] of combos) {
+                            const total = nEstandar * ap + nAcc * accAncho + (nMingit || 0) * anchoMG + grosorDivisoresMG + nInternasNoAcc * apI + apAcc + apRelleno + apE1 + apE2;
+                            const diff = claroAjustado - total;
+                            const PT_PREF = 60;
+                            const PT_PENALTY = .05;
+                            const RELLENO_PREF = 45;
+                            const RELLENO_PENALTY = .03;
+                            const cierreAccBlk = pmrEnDer ? apE2 : apE1;
+                            const blkErr = Math.abs(cierreAccBlk + accAncho + apAcc - anchoAccesible);
+                            const scoreAcc = usarAccDivisor ? (blkErr <= 5 ? blkErr * .1 : .5 + (blkErr - 5) * ACC_BLOCK_PREF) : esSoloAcc ? Math.abs(apE1 - apE2) * .02 : 0;
+                            const score = Math.abs(diff) + (nAcc > 0 ? Math.abs(accAncho - PMR_PREF) * PMR_PENALTY : 0) + (nEstandar > 0 ? Math.abs(ap - PT_PREF) * PT_PENALTY : 0) + (esPmrCuarto ? Math.abs(apRelleno - RELLENO_PREF) * RELLENO_PENALTY : 0) + (esDosMuros && total > claro ? (total - claro) * 100 : 0) + scoreAcc;
+                            if (!best || score < best.score) {
+                                best = {
+                                    anchoPuerta: ap,
+                                    anchoPilInt: apI,
+                                    anchoPilAccDiv: apAcc,
+                                    anchoPilEsq: apE1,
+                                    anchoPilEsq2: apE2,
+                                    anchoPuertaAcc: accAncho,
+                                    anchoPilRelleno: apRelleno,
+                                    total: total,
+                                    diff: diff,
+                                    score: score
+                                }
                             }
                         }
                     }
@@ -6629,11 +6641,13 @@ function sugerirModulacion({
     const sumPuertas = nEstandar * best.anchoPuerta + nAcc * best.anchoPuertaAcc;
     const puertasTxt = [nEstandar > 0 ? `${nEstandar}×PT${best.anchoPuerta}` : "", nAcc > 0 ? `1×PT${esAccInline ? anchoPuertaAccPieza : best.anchoPuertaAcc} (PMR${esAccInline ? ", cuarto ref " + anchoAccesible + " cm — no se suma" : ""})` : ""].filter(Boolean).join(" + ");
     const pasos = [`Claro del vano: ${claro} cm`, nPilastrasAMuro > 0 ? `− 1 cm × ${nPilastrasAMuro} pilastra(s) a muro (herraje) = ${(claro-nPilastrasAMuro).toFixed(1)} cm` : null, nPuertas > 0 ? `+ 1.5 cm × ${nPuertas} puerta(s) (clearance bisagra) = ${claroAjustado.toFixed(1)} cm` : null, nPuertas > 0 ? `− ${puertasTxt} = ${(claroAjustado-sumPuertas).toFixed(1)} cm para pilastras` : null, `Pilastras de cierre: ${pilEsqTxt}${nInternas>0?" + "+nInternas+"×PI"+best.anchoPilInt+" (central)":""}`, esPmrCuarto ? `Cuarto PMR: PI${best.anchoPilRelleno} de relleno junto a la puerta + panel divisor profundo (no consume ancho)` : null, margenHerraje > 0 ? `Tolerancia herraje: ±${tolExacto.toFixed(1)} cm (0.5 cm por muro × ${nPilastrasAMuro}); fuera de eso, revisar canaleta` : null].filter(Boolean);
+    const cierreAccFinal = pmrEnDer ? best.anchoPilEsq2 : best.anchoPilEsq;
+    const anchoBloqueAcc = esAccInline && nAcc > 0 ? usarAccDivisor ? cierreAccFinal + best.anchoPuertaAcc + best.anchoPilAccDiv : best.anchoPilEsq + best.anchoPuertaAcc + best.anchoPilEsq2 : 0;
     return {
         nCabinas: N,
         nEstandar: nEstandar,
         nAccesible: nAcc,
-        nPilInternas: nInternas,
+        nPilInternas: nInternasNoAcc,
         nPilEsquinas: nEsquinas,
         nMingit: nMingit || 0,
         nPuertas: nPuertas,
@@ -6643,7 +6657,10 @@ function sugerirModulacion({
         esPmrCuarto: esPmrCuarto,
         codPuerta: `PT${best.anchoPuerta}`,
         codPuertaAcc: nAcc ? `PT${esAccInline ? anchoPuertaAccPieza : best.anchoPuertaAcc}` : null,
-        anchoCabinaAcc: nAcc && esAccInline ? anchoAccesible : null,
+        anchoCabinaAcc: nAcc && esAccInline ? anchoBloqueAcc : null,
+        anchoAccesibleRef: nAcc && esAccInline ? anchoAccesible : null,
+        codPilAccDiv: usarAccDivisor ? `PI${best.anchoPilAccDiv}${sufR}` : null,
+        anchoPilAccDiv: usarAccDivisor ? best.anchoPilAccDiv : null,
         codPilInt: `PI${best.anchoPilInt}${sufR}`,
         codPilEsq: `PI${best.anchoPilEsq}${sufR}`,
         codPilEsq2: nEsquinas === 2 ? `PI${best.anchoPilEsq2}${sufR}` : null,
@@ -6677,7 +6694,12 @@ function mostrarSugerencia(s) {
     }
     const items = [];
     if (s.nEstandar > 0) items.push(`<strong>${s.nEstandar}</strong> × ${s.codPuerta} <span class="dim">— puertas estándar de ${s.anchoPuerta} cm</span>`);
-    if (s.nAccesible > 0) items.push(`<strong>1</strong> × ${s.codPuertaAcc} <span class="dim">— puerta PMR de ${s.anchoPuertaAcc} cm (cabina más grande)</span>`);
+    if (s.nAccesible > 0 && s.esPmrCuarto) items.push(`<strong>1</strong> × ${s.codPuertaAcc} <span class="dim">— puerta PMR de ${s.anchoPuertaAcc} cm (cabina más grande)</span>`);
+    else if (s.nAccesible > 0) {
+        items.push(`<strong>1</strong> × ${s.codPuertaAcc} <span class="dim">— puerta de la cabina accesible (${s.anchoPuertaAcc} cm)</span>`);
+        if (s.codPilAccDiv) items.push(`<strong>1</strong> × ${s.codPilAccDiv} <span class="dim">— pilastra interna de la cabina accesible (${s.anchoPilAccDiv} cm) → puerta + pilastras ≈ <b>${s.anchoCabinaAcc} cm</b>${s.anchoAccesibleRef ? ` (objetivo ${s.anchoAccesibleRef} cm)` : ""}</span>`);
+        else if (s.anchoCabinaAcc) items.push(`<span class="dim">Cabina accesible ≈ <b>${s.anchoCabinaAcc} cm</b> (puerta + pilastras de cierre)${s.anchoAccesibleRef ? ` — objetivo ${s.anchoAccesibleRef} cm` : ""}</span>`);
+    }
     if (s.nMingit > 0) items.push(`<strong>${s.nMingit}</strong> × ${s.codMG} <span class="dim">— mingitorios de ${s.anchoMG} cm</span>`);
     if (s.nPilInternas > 0) items.push(`<strong>${s.nPilInternas}</strong> × ${s.codPilInt} <span class="dim">— pilastras centrales de ${s.anchoPilInt} cm (entre cabinas, 2 patas → mín PI24)</span>`);
     if (s.esPmrCuarto) {
@@ -6832,6 +6854,8 @@ function aplicarSugerencia(s) {
             a.pilastras[i] = cfg.invertir ? "" : s.codPilEsq
         } else if (s.esPmrCuarto && cfg.invertir && i === N - 2) {
             a.pilastras[i] = s.codPilEsq
+        } else if (layout.acc && !s.esPmrCuarto && s.codPilAccDiv && i === (cfg.invertir ? accCabinaIdx - 1 : accCabinaIdx)) {
+            a.pilastras[i] = s.codPilAccDiv
         } else {
             a.pilastras[i] = i < N - 1 && !(esMingit && nextEsMingit) ? s.codPilInt : ""
         }
