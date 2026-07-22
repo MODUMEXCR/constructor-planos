@@ -5179,6 +5179,15 @@ function buildBathroomSvg() {
             })
         }
     }
+    if (layout.pmrCuarto && !cfg.invertir) {
+        const rellSvg = (areaCfg.panelesExtras || []).find(ex => ex.codigo && (ex.descripcion || "").toLowerCase().includes("relleno fin de pared"));
+        const wRellSvg = rellSvg ? anchoDePiezaCodigo(rellSvg.codigo) || 0 : 0;
+        if (wRellSvg > 0) seq.push({
+            tipo: "panelRelleno",
+            codigo: rellSvg.codigo,
+            ancho: wRellSvg
+        })
+    }
     const muroDerData = areaCfg.muroDer;
     if (muroDerData && muroDerData.codigo) {
         let esMuroDer = rightWall;
@@ -5365,6 +5374,11 @@ function buildBathroomSvg() {
             svg += `<g data-piece="pilastra-${s.idxSlot}">`;
             svg += `<rect x="${cx-4}" y="17" width="8" height="6" fill="#0a1f3d"/>`;
             svg += `<rect x="${x}" y="${floor-3}" width="${w}" height="3" fill="#0a1f3d"/>`;
+            svg += `</g>`
+        } else if (s.tipo === "panelRelleno") {
+            svg += `<g data-piece="relleno">`;
+            svg += `<rect x="${x+1}" y="20" width="${Math.max(2,w-2)}" height="${cabHeight}" fill="#e7eef7" stroke="#0a1f3d" stroke-width="1" stroke-dasharray="4,3"/>`;
+            svg += `<text x="${cx}" y="${20+cabHeight/2+3}" font-size="7" fill="#5a6472" font-weight="600" text-anchor="middle" transform="rotate(-90 ${cx} ${20+cabHeight/2+3})">relleno</text>`;
             svg += `</g>`
         } else if (s.tipo === "puerta" || s.tipo === "mingitorio") {
             const i = s.indiceCabina;
@@ -8840,6 +8854,13 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             codigo: lastPilCode
         })
     }
+    if ((layoutCodigo === "P+" || layoutCodigo === "PP") && !areaInvertir) {
+        const rellPdf = (areaCfg.panelesExtras || []).find(ex => ex.codigo && (ex.descripcion || "").toLowerCase().includes("relleno fin de pared"));
+        if (rellPdf && (anchoDePiezaCodigo(rellPdf.codigo) || 0) > 0) seq.push({
+            tipo: "panelRelleno",
+            codigo: rellPdf.codigo
+        })
+    }
     const muroDerDataPdf = areaCfg.muroDer;
     if (muroDerDataPdf && muroDerDataPdf.codigo) {
         let esMuroDer = rightWallEff;
@@ -8894,6 +8915,10 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         }
         if (s.tipo === "mingitorio" && s.anchoSlot) {
             s.ancho = s.anchoSlot;
+            return
+        }
+        if (s.tipo === "panelRelleno") {
+            s.ancho = anchoDePiezaCodigo(s.codigo) || 0;
             return
         }
         const pieza = CATALOGO.piezas.find(p => p.codigo === s.codigo);
@@ -9149,6 +9174,20 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             pzRectV(px, drawTop, panelLenPil);
             pzRectH(x, floorY, w);
             dimVpdf(px + PZT / 2 + 2, drawTop, drawTop + panelLenPil, `${pzPil && pzPil.familia === "PN" ? pzPil.ancho : panelBaseCmPdf}`)
+        } else if (s.tipo === "panelRelleno") {
+            doc.setFillColor(231, 238, 247);
+            doc.setDrawColor(10, 31, 61);
+            doc.setLineWidth(.4);
+            doc.setLineDashPattern([1, .8], 0);
+            doc.rect(x + .5, drawTop, Math.max(1, w - 1), cabDepth, "FD");
+            doc.setLineDashPattern([], 0);
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(5.5);
+            doc.setTextColor(90, 100, 114);
+            doc.text("relleno " + (anchoDePiezaCodigo(s.codigo) || "") + " cm", x + w / 2, drawTop + cabDepth / 2, {
+                align: "center",
+                angle: 90
+            })
         } else if (s.tipo === "pilastra-muro") {
             pzRectH(x, floorY, w)
         } else if (s.tipo === "pilastra-terminal") {
