@@ -4488,12 +4488,13 @@ function bindCfg() {
     $("btn-add-area").onclick = () => {
         const v = $("cfg-area-input").value.trim();
         if (!v) return;
-        let key = v;
-        while (cfg.areas.includes(key)) key += "​";
+        if (cfg.areas.includes(v)) {
+            toast("Esa área ya existe", "danger");
+            return
+        }
         const newArea = makeDefaultAreaCfg();
-        newArea.nombre = v;
-        cfg.areas.push(key);
-        cfg.configByArea[key] = newArea;
+        cfg.areas.push(v);
+        cfg.configByArea[v] = newArea;
         cfg.areaActivaIdx = cfg.areas.length - 1;
         $("cfg-area-input").value = "";
         activarArea(cfg.areaActivaIdx)
@@ -4630,7 +4631,7 @@ function aplicarNMingitorios(n) {
 
 function renderAreaList() {
     const cont = document.getElementById("cfg-area-list");
-    cont.innerHTML = cfg.areas.map((a, i) => `\n    <span class="area-chip ${i===cfg.areaActivaIdx?"active":""}" data-i="${i}">\n      ${escapeHtml(nombreDeArea(a))}\n      <button data-del="${i}" title="Eliminar">✕</button>\n    </span>`).join("");
+    cont.innerHTML = cfg.areas.map((a, i) => `\n    <span class="area-chip ${i===cfg.areaActivaIdx?"active":""}" data-i="${i}">\n      ${escapeHtml(a)}\n      <button data-del="${i}" title="Eliminar">✕</button>\n    </span>`).join("");
     cont.querySelectorAll(".area-chip").forEach(ch => {
         ch.addEventListener("click", e => {
             if (e.target.dataset.del !== undefined) {
@@ -4732,11 +4733,6 @@ function propagarCabinaUltima(desde, hasta) {
             if (!arr[i]) arr[i] = ultimoValor
         }
     })
-}
-
-function nombreDeArea(key, proyecto) {
-    const map = (proyecto || cfg).configByArea || {};
-    return (map[key] || {}).nombre || key
 }
 
 function activeAreaName() {
@@ -4873,10 +4869,6 @@ function aperturaInteriorBloqueada(a, i) {
     return !!(pz && pz.familia === "PN" && pz.ancho < 135)
 }
 
-function accCabinaLlenaArea(a, N, layout) {
-    return N === 1 && !!layout && !!layout.acc && !layout.pmrCuarto
-}
-
 function actualizarValidacionModulacion() {
     const el = document.getElementById("preview-validacion");
     if (!el) return;
@@ -4910,7 +4902,6 @@ function actualizarValidacionModulacion() {
     };
     const esPmrCuartoVal = !!layout.pmrCuarto;
     const esAccInlineVal = !!layout.acc && !esPmrCuartoVal;
-    const accSola = accCabinaLlenaArea(a, N, layout);
     const accCabinaIdxVal = cfg.invertir ? N - 1 : 0;
     const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layout.codigo);
     const hasRight = ["U", "U+", "C", "I", "K", "P+"].includes(layout.codigo);
@@ -4956,13 +4947,13 @@ function actualizarValidacionModulacion() {
             }
         }
     }
-    if (esPmrCuartoVal || accSola) {} else if (a.muroIzq && a.muroIzq.codigo) {
+    if (esPmrCuartoVal) {} else if (a.muroIzq && a.muroIzq.codigo) {
         const pieza = CATALOGO.piezas.find(p => p.codigo === a.muroIzq.codigo);
         if (pieza) suma += pieza.ancho
     } else if (!primeraEsMingit) {
         faltantes.push("Cierre izquierdo")
     }
-    if (esPmrCuartoVal || accSola) {} else if (a.muroDer && a.muroDer.codigo) {
+    if (esPmrCuartoVal) {} else if (a.muroDer && a.muroDer.codigo) {
         const pieza = CATALOGO.piezas.find(p => p.codigo === a.muroDer.codigo);
         if (pieza) suma += pieza.ancho
     } else if (!ultimaEsMingit) {
@@ -5064,7 +5055,6 @@ function buildBathroomSvg() {
     const isAcc = layout.acc;
     const accCabinaIdx = cfg.invertir ? N - 1 : 0;
     const areaCfg = activeAreaCfg() || {};
-    const accSola = accCabinaLlenaArea(areaCfg, N, layout);
     const aperturas = areaCfg.aperturas || [];
     const bisagrasOld = areaCfg.bisagras || [];
     const tiposCabina = areaCfg.tiposCabina || [];
@@ -5075,7 +5065,7 @@ function buildBathroomSvg() {
     const esLayoutK = layout.codigo === "K";
     const seq = [];
     const muroIzqData = areaCfg.muroIzq;
-    if (accSola) {} else if (muroIzqData && muroIzqData.codigo) {
+    if (muroIzqData && muroIzqData.codigo) {
         const esMuroIzq = leftWall;
         if (esMuroIzq) seq.push({
             tipo: "muro",
@@ -5171,7 +5161,7 @@ function buildBathroomSvg() {
         }
     }
     const muroDerData = areaCfg.muroDer;
-    if (accSola) {} else if (muroDerData && muroDerData.codigo) {
+    if (muroDerData && muroDerData.codigo) {
         let esMuroDer = rightWall;
         if (layout.pmrCuarto) esMuroDer = !layout.cierrePanel;
         const pi = CATALOGO.piezas.find(p => p.codigo === muroDerData.codigo);
@@ -6489,7 +6479,6 @@ function sugerirModulacion({
     const anchoAccesible = Math.max(90, aCfgAcc.anchoAccesible || 150);
     const esAccInline = accLayout && !esPmrCuarto;
     const anchoPuertaAccPieza = opcionesPuertaAcc.length ? Math.max.apply(null, opcionesPuertaAcc) : 100;
-    const accSolaSug = N === 1 && esAccInline;
     const accAnchos = nAcc > 0 ? esAccInline ? [anchoAccesible] : opcionesPuertaAcc : [0];
     const inv = cfg.invertir;
     const mingitEnIzq = inv && (nMingit || 0) > 0;
@@ -6503,7 +6492,7 @@ function sugerirModulacion({
             const opcIzq = opcionesPilEsq.filter(e => puertaIzqExtrema > 90 ? e >= 24 : true);
             const opcDer = opcionesPilEsq.filter(e => puertaDerExtrema > 90 ? e >= 24 : true);
             const combos = [];
-            if (accSolaSug || nEsquinas === 0) combos.push([0, 0]);
+            if (nEsquinas === 0) combos.push([0, 0]);
             else if (nEsquinas === 1) {
                 const usaIzq = leftWallEff;
                 (usaIzq ? opcIzq : opcDer).forEach(e => combos.push(usaIzq ? [e, 0] : [0, e]))
@@ -6587,7 +6576,7 @@ function sugerirModulacion({
     }
     const lblIzq = leftWallEff ? "a muro izq" : "terminal izq";
     const lblDer = rightWallEff ? "a muro der" : "terminal der";
-    const pilEsqTxt = accSolaSug ? "la cabina PMR ocupa el claro (piezas de cierre según variante)" : `1 × PI${best.anchoPilEsq} (${lblIzq}) + 1 × PI${best.anchoPilEsq2} (${lblDer})`;
+    const pilEsqTxt = best.anchoPilEsq === best.anchoPilEsq2 ? `1 × PI${best.anchoPilEsq} (${lblIzq}) + 1 × PI${best.anchoPilEsq2} (${lblDer})` : `1 × PI${best.anchoPilEsq} (${lblIzq}) + 1 × PI${best.anchoPilEsq2} (${lblDer})`;
     const sumPuertas = nEstandar * best.anchoPuerta + nAcc * best.anchoPuertaAcc;
     const puertasTxt = [nEstandar > 0 ? `${nEstandar}×PT${best.anchoPuerta}` : "", nAcc > 0 ? `1×PT${esAccInline ? anchoPuertaAccPieza : best.anchoPuertaAcc} (PMR${esAccInline ? ", cabina " + anchoAccesible + " cm" : ""})` : ""].filter(Boolean).join(" + ");
     const pasos = [`Claro del vano: ${claro} cm`, nPilastrasAMuro > 0 ? `− 1 cm × ${nPilastrasAMuro} pilastra(s) a muro (herraje) = ${(claro-nPilastrasAMuro).toFixed(1)} cm` : null, nPuertas > 0 ? `+ 1.5 cm × ${nPuertas} puerta(s) (clearance bisagra) = ${claroAjustado.toFixed(1)} cm` : null, nPuertas > 0 ? `− ${puertasTxt} = ${(claroAjustado-sumPuertas).toFixed(1)} cm para pilastras` : null, `Pilastras de cierre: ${pilEsqTxt}${nInternas>0?" + "+nInternas+"×PI"+best.anchoPilInt+" (central)":""}`, esPmrCuarto ? `Cuarto PMR: PI${best.anchoPilRelleno} de relleno junto a la puerta + panel divisor profundo (no consume ancho)` : null, margenHerraje > 0 ? `Tolerancia herraje: ±${tolExacto.toFixed(1)} cm (0.5 cm por muro × ${nPilastrasAMuro}); fuera de eso, revisar canaleta` : null].filter(Boolean);
@@ -6596,7 +6585,7 @@ function sugerirModulacion({
         nEstandar: nEstandar,
         nAccesible: nAcc,
         nPilInternas: nInternas,
-        nPilEsquinas: accSolaSug ? 0 : nEsquinas,
+        nPilEsquinas: nEsquinas,
         nMingit: nMingit || 0,
         nPuertas: nPuertas,
         layout: layoutCodigo,
@@ -6607,8 +6596,8 @@ function sugerirModulacion({
         codPuertaAcc: nAcc ? `PT${esAccInline ? anchoPuertaAccPieza : best.anchoPuertaAcc}` : null,
         anchoCabinaAcc: nAcc && esAccInline ? anchoAccesible : null,
         codPilInt: `PI${best.anchoPilInt}${sufR}`,
-        codPilEsq: accSolaSug ? null : `PI${best.anchoPilEsq}${sufR}`,
-        codPilEsq2: accSolaSug ? null : nEsquinas === 2 ? `PI${best.anchoPilEsq2}${sufR}` : null,
+        codPilEsq: `PI${best.anchoPilEsq}${sufR}`,
+        codPilEsq2: nEsquinas === 2 ? `PI${best.anchoPilEsq2}${sufR}` : null,
         codPilRelleno: esPmrCuarto ? `PI${best.anchoPilRelleno}${sufR}` : null,
         codMG: (nMingit || 0) > 0 ? "MG60" : null,
         anchoPuerta: best.anchoPuerta,
@@ -7588,13 +7577,12 @@ function exportarCSV(proyecto) {
     const color = proyecto.color || "Fashion White";
     const grupos = {};
     const agregar = (pieza, subTipo, areaName, altoOverride) => {
-        const areaLbl = nombreDeArea(areaName, proyecto);
         const sku = generarSkuLargo(pieza, proyecto, altoOverride);
-        const key = `${sku}|${subTipo}|${areaLbl}`;
+        const key = `${sku}|${subTipo}|${areaName}`;
         grupos[key] = grupos[key] || {
             sku: sku,
             subTipo: subTipo,
-            area: areaLbl,
+            area: areaName,
             color: colorDePieza(pieza.familia, proyecto),
             cantidad: 0
         };
@@ -7723,10 +7711,10 @@ function exportarCSV(proyecto) {
     if (refz) {
         refz.porArea.forEach(r => {
             Object.keys(r.cortes).sort((x, y) => +y - +x).forEach(t => {
-                lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("RF" + t), r.cortes[t], csvCell("REFUERZO"), "", csvCell(nombreDeArea(r.area, proyecto)), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
+                lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("RF" + t), r.cortes[t], csvCell("REFUERZO"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
             });
-            if (r.k62 > 0) lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("KE62"), r.k62, csvCell("REFUERZO-KIT"), "", csvCell(nombreDeArea(r.area, proyecto)), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","));
-            if (r.k65 > 0) lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("KE65"), r.k65, csvCell("REFUERZO-KIT"), "", csvCell(nombreDeArea(r.area, proyecto)), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
+            if (r.k62 > 0) lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("KE62"), r.k62, csvCell("REFUERZO-KIT"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","));
+            if (r.k65 > 0) lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("KE65"), r.k65, csvCell("REFUERZO-KIT"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
         })
     }
     const antep = typeof antepechosDeProyecto === "function" ? antepechosDeProyecto(proyecto) : null;
@@ -7734,7 +7722,7 @@ function exportarCSV(proyecto) {
         const colorAntep = colorDePieza("AN", proyecto);
         antep.porArea.forEach(r => {
             r.items.forEach(it => {
-                lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("AN" + it.ancho + "X" + it.alto), it.cantidad, csvCell("ANTEPECHO"), "", csvCell(nombreDeArea(r.area, proyecto)), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(colorAntep), kap].join(","))
+                lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("AN" + it.ancho + "X" + it.alto), it.cantidad, csvCell("ANTEPECHO"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(colorAntep), kap].join(","))
             })
         })
     }
@@ -7742,15 +7730,15 @@ function exportarCSV(proyecto) {
     if (perfU) {
         perfU.porArea.forEach(r => {
             Object.keys(r.cortes).sort((x, y) => +y - +x).forEach(t => {
-                lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("PU" + t), r.cortes[t], csvCell("PERFILU"), "", csvCell(nombreDeArea(r.area, proyecto)), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
+                lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("PU" + t), r.cortes[t], csvCell("PERFILU"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
             })
         })
     }
     const tub = typeof tubingDeProyecto === "function" ? tubingDeProyecto(proyecto) : null;
     if (tub) {
         tub.porArea.forEach(r => {
-            lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("TB" + r.corte), 1, csvCell("TUBING"), "", csvCell(nombreDeArea(r.area, proyecto)), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","));
-            if (r.kchl > 0) lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("KCHL"), r.kchl, csvCell("TUBING-KIT"), "", csvCell(nombreDeArea(r.area, proyecto)), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
+            lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("TB" + r.corte), 1, csvCell("TUBING"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","));
+            if (r.kchl > 0) lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("KCHL"), r.kchl, csvCell("TUBING-KIT"), "", csvCell(r.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
         })
     }
     const csv = lines.join("\n");
@@ -7915,25 +7903,20 @@ function exportarPDF(proyecto) {
         cantidad: 1,
         pageLabel: "Portada"
     });
-    const orden = [],
-        porNom = {};
-    (proyecto.areas || []).forEach((key, areaIdx) => {
-        const nom = nombreDeArea(key, proyecto);
-        if (!porNom[nom]) {
-            porNom[nom] = { label: nom, idxs: [] };
-            orden.push(nom)
+    const hojas = (proyecto.areas || []).map((areaName, areaIdx) => {
+        const etq = (((proyecto.configByArea || {})[areaName] || {}).hoja || "").toString().trim();
+        return {
+            label: etq || null,
+            idxs: [areaIdx]
         }
-        porNom[nom].idxs.push(areaIdx)
     });
-    const hojas = orden.map(n => porNom[n]);
     const totalHojas = hojas.length;
     hojas.forEach((hoja, hi) => {
         const pageInfo = {
             pageNum: hi + 1,
             totalPages: totalHojas
         };
-        if (hoja.idxs.length > 1) drawSheet(doc, proyecto, hoja.idxs, pageInfo, hoja.label);
-        else drawAreaPlanView(doc, proyecto, hoja.idxs[0], pageInfo)
+        drawAreaPlanView(doc, proyecto, hoja.idxs[0], pageInfo)
     });
     drawCuadroCantidades(doc, proyecto);
     doc.save(`PLANOS_${proyecto.codigo}.pdf`)
@@ -8000,9 +7983,8 @@ function refuerzosDeArea(proyecto, areaName) {
             }
             if (i < N - 1) sum += anchoDe((a.pilastras || [])[i])
         }
-        const accSolaClaro = N === 1 && accLayoutClaro;
-        if (!accSolaClaro && a.muroIzq && a.muroIzq.codigo) sum += anchoDe(a.muroIzq.codigo);
-        if (!accSolaClaro && a.muroDer && a.muroDer.codigo) sum += anchoDe(a.muroDer.codigo);
+        if (a.muroIzq && a.muroIzq.codigo) sum += anchoDe(a.muroIzq.codigo);
+        if (a.muroDer && a.muroDer.codigo) sum += anchoDe(a.muroDer.codigo);
         claro = Math.round(sum)
     }
     if (!claro) return null;
@@ -8702,7 +8684,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(banded ? 8 : narrow ? 12 : 18);
     doc.setTextColor(10, 31, 61);
-    doc.text(`ÁREA: ${nombreDeArea(areaName, proyecto).toUpperCase()}`, rx + 6, hAreaY);
+    doc.text(`ÁREA: ${areaName.toUpperCase()}`, rx + 6, hAreaY);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(banded ? 6.5 : narrow ? 8 : 11);
     doc.setTextColor(60, 60, 60);
@@ -8733,10 +8715,9 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     const leftWallEff = areaInvertir ? hasRight : hasLeft;
     const rightWallEff = areaInvertir ? hasLeft : hasRight;
     const N = areaCabinas;
-    const accSolaPdf = N === 1 && ["L+", "U+", "E+", "C"].includes(layoutCodigo);
     const seq = [];
     const muroIzqDataPdf = areaCfg.muroIzq;
-    if (accSolaPdf) {} else if (muroIzqDataPdf && muroIzqDataPdf.codigo) {
+    if (muroIzqDataPdf && muroIzqDataPdf.codigo) {
         const esMuroIzq = leftWallEff;
         if (esMuroIzq) seq.push({
             tipo: "muro"
@@ -8818,7 +8799,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         })
     }
     const muroDerDataPdf = areaCfg.muroDer;
-    if (accSolaPdf) {} else if (muroDerDataPdf && muroDerDataPdf.codigo) {
+    if (muroDerDataPdf && muroDerDataPdf.codigo) {
         let esMuroDer = rightWallEff;
         if (layoutCodigo === "P+") esMuroDer = true;
         else if (layoutCodigo === "PP") esMuroDer = false;
@@ -9560,7 +9541,7 @@ function drawAreaPlanView(doc, proyecto, areaIdx, pageInfo) {
     const areaName = proyecto.areas[areaIdx];
     const areaCfg = (proyecto.configByArea || {})[areaName] || {};
     drawCajetinEsen(doc, proyecto, {
-        area: nombreDeArea(areaName, proyecto),
+        area: areaName,
         plano: areaCfg.planoCodigo || `${proyecto.codigo}-${String(areaIdx+1).padStart(2,"0")}`,
         cantidad: areaCfg.cantidad || 1,
         pageNum: pageInfo ? pageInfo.pageNum : areaIdx + 1,
