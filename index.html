@@ -4947,18 +4947,35 @@ function actualizarValidacionModulacion() {
             }
         }
     }
-    if (esPmrCuartoVal) {} else if (a.muroIzq && a.muroIzq.codigo) {
-        const pieza = CATALOGO.piezas.find(p => p.codigo === a.muroIzq.codigo);
-        if (pieza) suma += pieza.ancho
-    } else if (!primeraEsMingit) {
-        faltantes.push("Cierre izquierdo")
+    if (esPmrCuartoVal) {
+        if (a.muroIzq && a.muroIzq.codigo) {
+            const pieza = CATALOGO.piezas.find(p => p.codigo === a.muroIzq.codigo);
+            if (pieza) suma += pieza.ancho
+        }
+        if (a.muroDer && a.muroDer.codigo) {
+            const pieza = CATALOGO.piezas.find(p => p.codigo === a.muroDer.codigo);
+            if (pieza) suma += pieza.ancho
+        }
+    } else {
+        if (a.muroIzq && a.muroIzq.codigo) {
+            const pieza = CATALOGO.piezas.find(p => p.codigo === a.muroIzq.codigo);
+            if (pieza) suma += pieza.ancho
+        } else if (!primeraEsMingit) {
+            faltantes.push("Cierre izquierdo")
+        }
+        if (a.muroDer && a.muroDer.codigo) {
+            const pieza = CATALOGO.piezas.find(p => p.codigo === a.muroDer.codigo);
+            if (pieza) suma += pieza.ancho
+        } else if (!ultimaEsMingit) {
+            faltantes.push("Cierre derecho")
+        }
     }
-    if (esPmrCuartoVal) {} else if (a.muroDer && a.muroDer.codigo) {
-        const pieza = CATALOGO.piezas.find(p => p.codigo === a.muroDer.codigo);
-        if (pieza) suma += pieza.ancho
-    } else if (!ultimaEsMingit) {
-        faltantes.push("Cierre derecho")
-    }
+    (a.panelesExtras || []).forEach(ex => {
+        if (!ex.codigo) return;
+        const p = CATALOGO.piezas.find(x => x.codigo === ex.codigo);
+        const w = p ? p.ancho : /^PN\d/.test(ex.codigo) ? anchoDePiezaCodigo(ex.codigo) : 0;
+        if (w) suma += w
+    });
     if (layout.codigo === "E") {
         if (!primeraEsMingit && !a.panelCierreIzq) faltantes.push("Panel de cierre izquierdo");
         if (!ultimaEsMingit && !(a.paneles || [])[N - 1]) faltantes.push("Panel de cierre derecho")
@@ -6360,6 +6377,14 @@ function sugerirModulacion({
             bestP.total = claroAjustadoH;
             bestP.diff = 0
         }
+        let codPanelRellenoP = null,
+            anchoPanelRellenoP = 0;
+        if ((nMingit || 0) === 0 && bestP.diff > 5) {
+            anchoPanelRellenoP = Math.round(bestP.diff);
+            codPanelRellenoP = "PN" + anchoPanelRellenoP;
+            bestP.total = claroAjustadoH;
+            bestP.diff = 0
+        }
         const tolExactoP = esCierrePanel ? 5 : .5;
         const absDiffP = Math.abs(bestP.diff);
         let ajusteP;
@@ -6381,6 +6406,10 @@ function sugerirModulacion({
             tipo: "falta",
             msg: `✕ Las piezas se pasan ${absDiffP.toFixed(1)} cm — no caben en el segmento (reducí una pieza)`
         };
+        if (codPanelRellenoP) ajusteP = {
+            tipo: "relleno",
+            msg: `✓ Calza — el resto (${anchoPanelRellenoP} cm) se rellena con 1 panel al fin de la pared`
+        };
         let codCanaletaP = null,
             anchoCanaletaP = null,
             nCanaletasP = 0;
@@ -6396,8 +6425,9 @@ function sugerirModulacion({
         // (panel + 90 + frente) calza con la profundidad del lugar.
         const profPmr = (typeof leerDimensionesLugar === "function" ? (leerDimensionesLugar() || {}).paredOpuesta : 0) || 0;
         const anchoPuertaLat = 90;
-        const anchoPanelDiv = Math.max(30, parseInt(aCfg.anchoPanelDivisorPmr, 10) || 100);
         const minFrentePmr = 10;
+        const panelMaxPmr = 100;
+        const anchoPanelDiv = profPmr > 0 ? Math.max(30, Math.min(panelMaxPmr, profPmr - anchoPuertaLat - minFrentePmr)) : panelMaxPmr;
         const frenteRawPmr = profPmr - anchoPanelDiv - anchoPuertaLat;
         const anchoFrentePmr = profPmr > 0 ? Math.max(0, Math.round(frenteRawPmr)) : 45;
         let ajusteProfPmr;
@@ -6418,10 +6448,10 @@ function sugerirModulacion({
             }
         }
         const codPanelDivisor = "PI" + anchoPanelDiv + sufR;
-        const codPilFrentePmr = `PI${anchoFrentePmr}${sufR}`;
+        const codPilFrentePmr = anchoFrentePmr >= minFrentePmr ? `PI${anchoFrentePmr}${sufR}` : null;
         const codMGCierre = cierreMingit ? (aCfg.mgTipo || "MG60120") : null;
         const cierreDerTxt = cierreMingit ? "cierra con mampara MG (mingitorio, sin muro der)" : esCierrePanel ? "terminal der (cierra con panel PN150)" : "a muro der";
-        const pasosP = [`Claro del vano: ${claro} cm`, `− Cuarto PMR (espacio libre, sin modulación): ${anchoPmr} cm → segmento de cabinas = ${claroHoriz} cm`, cierreMingit ? "Termina en mingitorio sin muro der: cierre con mampara MG" : esCierrePanel ? "Sin muro derecho: cierre con pilastra terminal + panel" : `− 1 cm × 1 pilastra a muro der (herraje) = ${(claroHoriz-1).toFixed(1)} cm`, nEst > 0 ? `+ 1.5 cm × ${nEst} puerta(s) (clearance bisagra) = ${claroAjustadoH.toFixed(1)} cm` : null, `Segmento: ${bestP.apJ>0?"PI"+bestP.apJ+" (junto al divisor) + ":""}${nEst}×PT${bestP.ap}${nDiv>0?" + "+nDiv+"×PI"+bestP.apI+" (central)":""}${(nMingit||0)>0?" + "+(nMingit)+"×MG60":""}${cierreMingit?" + MG (cierre der)":" + PI"+bestP.apE2+" ("+cierreDerTxt+")"}`, `Cuarto PMR (perpendicular, en el divisor, sobre la profundidad ${profPmr||"—"} cm): ${codPanelDivisor} + ${codPuertaPmrLateral} puerta lateral + ${codPilFrentePmr} frente`, ajusteProfPmr.msg].filter(Boolean);
+        const pasosP = [`Claro del vano: ${claro} cm`, `− Cuarto PMR (espacio libre, sin modulación): ${anchoPmr} cm → segmento de cabinas = ${claroHoriz} cm`, cierreMingit ? "Termina en mingitorio sin muro der: cierre con mampara MG" : esCierrePanel ? "Sin muro derecho: cierre con pilastra terminal + panel" : `− 1 cm × 1 pilastra a muro der (herraje) = ${(claroHoriz-1).toFixed(1)} cm`, nEst > 0 ? `+ 1.5 cm × ${nEst} puerta(s) (clearance bisagra) = ${claroAjustadoH.toFixed(1)} cm` : null, `Segmento: ${bestP.apJ>0?"PI"+bestP.apJ+" (junto al divisor) + ":""}${nEst}×PT${bestP.ap}${nDiv>0?" + "+nDiv+"×PI"+bestP.apI+" (central)":""}${(nMingit||0)>0?" + "+(nMingit)+"×MG60":""}${cierreMingit?" + MG (cierre der)":" + PI"+bestP.apE2+" ("+cierreDerTxt+")"}`, `Cuarto PMR (perpendicular, en el divisor, sobre la profundidad ${profPmr||"—"} cm): ${codPanelDivisor} + ${codPuertaPmrLateral} puerta lateral + ${codPilFrentePmr || "frente (ajustar fondo)"}${codPilFrentePmr ? " frente" : ""}`, ajusteProfPmr.msg].filter(Boolean);
         return {
             nCabinas: N,
             nEstandar: nEst,
@@ -6449,6 +6479,8 @@ function sugerirModulacion({
             anchoFrentePmr: anchoFrentePmr,
             profundidad: profPmr,
             codPilFrentePmr: codPilFrentePmr,
+            codPanelRelleno: codPanelRellenoP,
+            anchoPanelRelleno: anchoPanelRellenoP,
             codPanelCierre: (esCierrePanel && !cierreMingit) ? "PN150" : null,
             codMG: (nMingit || 0) > 0 ? "MG60" : null,
             anchoPuerta: bestP.ap,
@@ -6634,13 +6666,14 @@ function mostrarSugerencia(s) {
     if (s.esPmrCuarto) {
         items.push(`<strong>Cuarto PMR:</strong> ${s.anchoPmrCuarto} cm <span class="dim">— espacio libre (no se modula); giro Ø1.50 m</span>`);
         items.push(`<strong>1</strong> × ${s.codPuertaAcc} <span class="dim">— puerta LATERAL del cuarto PMR (en el panel divisor, perpendicular)</span>`);
-        items.push(`<strong>1</strong> × ${s.codPanelDivisor} <span class="dim">— pilastra separadora del cuarto (${s.anchoPanelDivisor} cm, editable). Divisor = pilastra + puerta 90 + frente = profundidad ${s.profundidad||"—"} cm</span>`);
-        items.push(`<strong>1</strong> × ${s.codPilFrentePmr} <span class="dim">— frente del cuarto (${s.anchoFrentePmr} cm = profundidad − panel − 90, junto a la puerta lateral)</span>`);
+        items.push(`<strong>1</strong> × ${s.codPanelDivisor} <span class="dim">— pilastra separadora del cuarto (${s.anchoPanelDivisor} cm, la más grande que entra en el fondo). Divisor = pilastra + puerta 90 + frente = profundidad ${s.profundidad||"—"} cm</span>`);
+        if (s.codPilFrentePmr) items.push(`<strong>1</strong> × ${s.codPilFrentePmr} <span class="dim">— frente del cuarto (${s.anchoFrentePmr} cm = profundidad − panel − 90, junto a la puerta lateral)</span>`);
         if (s.cierreMingit) {
             items.push(`<strong>1</strong> × ${s.codMGCierre} <span class="dim">— mampara MG de CIERRE al final (termina en mingitorio, sin muro der)</span>`)
         } else if (s.esCierrePanel) {
             items.push(`<strong>1</strong> × ${s.codPanelCierre||"PN150"} <span class="dim">— panel de CIERRE al final (sin muro derecho)</span>`)
         }
+        if (s.codPanelRelleno) items.push(`<strong>1</strong> × ${s.codPanelRelleno} <span class="dim">— panel de relleno al fin de la pared (${s.anchoPanelRelleno} cm, rellena lo que sobra del claro)</span>`);
     }
     if (s.nPilEsquinas > 0) {
         if (s.esPmrCuarto) {
@@ -6656,7 +6689,7 @@ function mostrarSugerencia(s) {
     if (s.codCanaleta) {
         items.push(`<strong>${s.nCanaletas}</strong> × ${s.codCanaleta} <span class="dim">— canaleta de ${s.anchoCanaleta} cm para ajustar modulación (se trima en obra)</span>`)
     }
-    const diffClass = s.ajuste.tipo === "exacto" ? "ok" : s.ajuste.tipo === "canaleta" ? "ok" : s.ajuste.tipo === "sobra" ? "warn" : "bad";
+    const diffClass = s.ajuste.tipo === "exacto" ? "ok" : s.ajuste.tipo === "canaleta" ? "ok" : s.ajuste.tipo === "relleno" ? "ok" : s.ajuste.tipo === "sobra" ? "warn" : "bad";
     const pasosHtml = (s.pasos || []).map((p, i) => `<li><span class="dim">Paso ${i+1}:</span> ${escapeHtml(p)}</li>`).join("");
     cont.innerHTML = `\n    <h4>💡 Modulación sugerida — ${s.claro} cm de claro · ${s.nCabinas} cabinas · Layout ${s.layout}</h4>\n    <ul>${items.map(it=>`<li>${it}</li>`).join("")}</ul>\n    <details style="margin-top: 10px; background: rgba(0,0,0,.04); padding: 8px 12px; border-radius: 6px;">\n      <summary style="cursor:pointer; font-size:12px; font-weight:600; color:var(--brand);">▸ Cálculo (fórmula oficial Modumex)</summary>\n      <ol style="margin: 8px 0 4px 16px; padding: 0; font-size: 12px; line-height: 1.6;">${pasosHtml}</ol>\n      <div class="dim" style="font-size:11px; margin-top: 6px;">Regla oficial: − 1 cm por pilastra a muro (herraje); + 1.5 cm por puerta (clearance bisagra).</div>\n    </details>\n    <div class="resumen ${diffClass}" style="margin-top: 10px;">\n      <span>Suma de piezas: <b>${s.total} cm</b></span>\n      <span>${escapeHtml(s.ajuste.msg)}</span>\n    </div>\n    ${s.esPmrCuarto && s.ajusteProf ? `<div class="resumen ${s.ajusteProf.tipo==="exacto"?"ok":s.ajusteProf.tipo==="sinDato"?"warn":"bad"}" style="margin-top: 8px;">\n      <span>Profundidad del cuarto PMR</span>\n      <span>${escapeHtml(s.ajusteProf.msg)}</span>\n    </div>` : ""}\n    <button class="btn btn-primary" id="btn-aplicar-sug" type="button">Aplicar al área activa</button>\n  `;
     cont.hidden = false;
@@ -6800,17 +6833,24 @@ function aplicarSugerencia(s) {
         // igual que sin invertir (donde el cierre cae en el último mingitorio).
         if (cfg.invertir && s.cierreMingit && (s.nMingit || 0) > 0) a.paneles[(s.nMingit || 0) - 1] = s.codMGCierre || a.mgTipo || "MG60120";
         a.anchoPmrCuarto = s.anchoPmrCuarto || a.anchoPmrCuarto || 162;
+        if (s.anchoPanelDivisor) a.anchoPanelDivisorPmr = s.anchoPanelDivisor;
         a.paneles[accCabinaIdx] = s.codPanelDivisor || "PN150";
         a.puertas[accCabinaIdx] = s.codPuertaAcc || "PT90";
         a.aperturas[accCabinaIdx] = cfg.invertir ? "IZQ_EXT" : "DER_EXT";
         const yaTieneFrentePmr = a.pilastrasExtras && a.pilastrasExtras.some(ex => (ex.descripcion || "").toLowerCase().includes("frente del cuarto pmr"));
-        if (!yaTieneFrentePmr) {
+        if (!yaTieneFrentePmr && s.codPilFrentePmr) {
             if (!a.pilastrasExtras) a.pilastrasExtras = [];
             a.pilastrasExtras.push({
-                codigo: s.codPilFrentePmr || "PI45",
+                codigo: s.codPilFrentePmr,
                 descripcion: "Pilastra frente del cuarto PMR (junto a la puerta lateral)"
             })
         }
+        if (!a.panelesExtras) a.panelesExtras = [];
+        a.panelesExtras = a.panelesExtras.filter(ex => !(ex.descripcion || "").toLowerCase().includes("relleno fin de pared"));
+        if (s.codPanelRelleno) a.panelesExtras.push({
+            codigo: s.codPanelRelleno,
+            descripcion: "Panel relleno fin de pared"
+        });
     }
     if (s.esPmrCuarto) {
         // El cierre (pilastra terminal / o nada si termina en mingitorio con mampara MG)
