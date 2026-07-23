@@ -5276,8 +5276,7 @@ function buildPmrPanelSvg() {
         const mgLen = Math.min((cbX1 - cbX0) * 0.5, 42);
         for (let k = 0; k < nOri; k++) {
             const cy = recessY + (k + 0.5) * slot;
-            svg += `<rect x="${inv?wallX:wallX-4}" y="${cy-9}" width="4" height="18" fill="#0a1f3d"/>`;
-            svg += `<ellipse cx="${wallX+sgnO*15}" cy="${cy}" rx="11" ry="8" fill="none" stroke="#0a1f3d" stroke-width="1.6"/>`
+            svg += `<rect x="${inv?wallX:wallX-4}" y="${cy-9}" width="4" height="18" fill="#0a1f3d"/>`
         }
         for (let k = 1; k <= nOri; k++) {
             const dy = recessY + k * slot;
