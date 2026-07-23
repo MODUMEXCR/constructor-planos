@@ -5255,11 +5255,14 @@ function buildPmrPanelSvg() {
             svg += `<text x="${it.x0+it.wpx/2}" y="${frontY-6}" font-size="8" fill="#0a1f3d" font-weight="600" text-anchor="middle">${it.code}</text>`
         } else if (it.kind === "door") {
             const ap = (aperturas[it.idx] || "DER_EXT").split("_");
-            const hingeRight = ap[0] !== "IZQ";
-            const hx = hingeRight ? it.x0 + it.wpx : it.x0;
-            const leafLen = Math.max(6, it.wpx);
-            const swingV = Math.min(leafLen, (frontY - y0) * 0.9);
-            svg += `<g data-piece="${it.dp}"><line x1="${hx}" y1="${frontY}" x2="${hx}" y2="${frontY-swingV}" stroke="#0a1f3d" stroke-width="2.5"/></g>`;
+            const isIzq = ap[0] === "IZQ";
+            const isAfuera = ap[1] !== "INT";
+            const hx = isIzq ? it.x0 + 2 : it.x0 + it.wpx - 2;
+            const dirX = isIzq ? 1 : -1;
+            const dirY = isAfuera ? 1 : -1;
+            const vAvail = Math.max(12, (isAfuera ? floor - frontY : frontY - y0) * 0.85);
+            const leafLen = Math.min(Math.max(6, it.wpx - 6), vAvail / Math.sin(Math.PI / 9));
+            svg += `<g data-piece="${it.dp}"><rect x="${hx-2}" y="${frontY-2}" width="4" height="4" fill="#0a1f3d"/><line x1="${hx}" y1="${frontY}" x2="${hx+dirX*leafLen*Math.cos(Math.PI/9)}" y2="${frontY+dirY*leafLen*Math.sin(Math.PI/9)}" stroke="#0a1f3d" stroke-width="2.5"/></g>`;
             svg += `<text x="${it.x0+it.wpx/2}" y="${frontY-7}" font-size="8" fill="#0a1f3d" font-weight="600" text-anchor="middle">${it.code}${it.cuarto?" ♿":""}</text>`
         }
     });
@@ -9364,12 +9367,18 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
             })
         } else if (it.kind === "door") {
             const ap = (aperturas[it.idx] || "DER_EXT").split("_");
-            const hingeRight = ap[0] !== "IZQ";
-            const hx = hingeRight ? it.x0 + it.wmm : it.x0;
-            const leaf = Math.max(3, Math.min(it.wmm, (fy - drawTop) * 0.85));
+            const isIzq = ap[0] === "IZQ";
+            const isAfuera = ap[1] !== "INT";
+            const hx = isIzq ? it.x0 + 1 : it.x0 + it.wmm - 1;
+            const dirX = isIzq ? 1 : -1;
+            const dirY = isAfuera ? 1 : -1;
+            const vAvail = Math.max(6, (isAfuera ? floorY - fy : fy - drawTop) * 0.85);
+            const leaf = Math.min(Math.max(3, it.wmm - 3), vAvail / Math.sin(Math.PI / 9));
             doc.setDrawColor(10, 31, 61);
             doc.setLineWidth(.9);
-            doc.line(hx, fy, hx, fy - leaf);
+            doc.setFillColor(10, 31, 61);
+            doc.rect(hx - 0.7, fy - 0.7, 1.4, 1.4, "F");
+            doc.line(hx, fy, hx + dirX * leaf * Math.cos(Math.PI / 9), fy + dirY * leaf * Math.sin(Math.PI / 9));
             doc.setFont("helvetica", "bold");
             doc.setFontSize(5.5);
             doc.setTextColor(10, 31, 61);
