@@ -5202,6 +5202,8 @@ function buildPmrPanelSvg() {
     const floor = y0 + depthPx;
     const receso = Math.max(0, parseFloat(a.recesoPmr) || 0);
     const recessY = receso > 0 ? y0 + Math.min(receso, prof) * pxCm : floor;
+    const panelW = W(panelCode) || prof;
+    const cuartoFloorY = y0 + Math.min(panelW, prof) * pxCm;
     const svgH = floor + 64;
     let x = leftX,
         boundaryX = null;
@@ -5219,24 +5221,22 @@ function buildPmrPanelSvg() {
     const wcGlyph = tx => `<g transform="${tx}"><rect width="6" height="28" rx="2" fill="#0a1f3d"/><ellipse cx="26" cy="14" rx="17" ry="13" fill="none" stroke="#0a1f3d" stroke-width="2"/></g>`;
     let svg = `<svg viewBox="0 0 ${displayW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">`;
     svg += `<defs><pattern id="wallHatchPR" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#0a1f3d" stroke-width="0.7"/></pattern></defs>`;
-    svg += `<rect x="${cuX0}" y="${y0}" width="${cuX1-cuX0}" height="${floor-y0}" fill="#f0f3f7"/>`;
+    svg += `<rect x="${cuX0}" y="${y0}" width="${cuX1-cuX0}" height="${cuartoFloorY-y0}" fill="#f0f3f7"/>`;
+    if (cuartoFloorY < floor - .5) svg += `<rect x="${cuX0}" y="${cuartoFloorY}" width="${cuX1-cuX0}" height="${floor-cuartoFloorY}" fill="#fbfcff"/>`;
     svg += `<rect x="${cbX0}" y="${y0}" width="${cbX1-cbX0}" height="${recessY-y0}" fill="#f0f3f7"/>`;
     if (recessY < floor - .5) svg += `<rect x="${cbX0}" y="${recessY}" width="${cbX1-cbX0}" height="${floor-recessY}" fill="#fbfcff"/>`;
     svg += `<rect x="${leftX}" y="10" width="${drawW}" height="10" fill="white" stroke="#0a1f3d" stroke-width="1.2"/><rect x="${leftX}" y="10" width="${drawW}" height="10" fill="url(#wallHatchPR)" stroke="none"/>`;
     const wall = wx => `<rect x="${wx}" y="10" width="8" height="${floor-10}" fill="white" stroke="#0a1f3d" stroke-width="1.2"/><rect x="${wx}" y="10" width="8" height="${floor-10}" fill="url(#wallHatchPR)" stroke="none"/>`;
     svg += wall(leftX - 8);
     svg += wall(rightX);
-    const panelW = W(panelCode) || prof;
-    const panelPx = Math.min(panelW, prof) * pxCm;
-    const frenteCm = Math.max(0, Math.round(prof - panelW));
-    svg += `<rect data-piece="panel-${cuartoIdx}" x="${boundaryX-1.5}" y="${y0}" width="3" height="${floor-y0}" fill="#0a1f3d"/>`;
-    if (frenteCm > 0.5) svg += `<line x1="${boundaryX-4}" y1="${y0+panelPx}" x2="${boundaryX+4}" y2="${y0+panelPx}" stroke="#5db0e0" stroke-width="1.2"/>`;
+    const panelPx = cuartoFloorY - y0;
+    svg += `<rect data-piece="panel-${cuartoIdx}" x="${boundaryX-1.5}" y="${y0}" width="3" height="${panelPx}" fill="#0a1f3d"/>`;
     const plx = boundaryX + (inv ? -7 : 7);
-    svg += `<text x="${plx}" y="${y0+panelPx*0.5}" font-size="9" fill="#0a1f3d" font-weight="600" text-anchor="middle" transform="rotate(90 ${plx} ${y0+panelPx*0.5})">${panelCode} · ${panelW} cm</text>`;
-    if (frenteCm > 0.5) svg += `<text x="${plx}" y="${y0+panelPx+(frenteCm*pxCm)*0.5}" font-size="8" fill="#3a7fb0" font-weight="600" text-anchor="middle" transform="rotate(90 ${plx} ${y0+panelPx+(frenteCm*pxCm)*0.5})">frente ${frenteCm}</text>`;
+    const ply = (y0 + cuartoFloorY) / 2;
+    svg += `<text x="${plx}" y="${ply}" font-size="9" fill="#0a1f3d" font-weight="600" text-anchor="middle" transform="rotate(90 ${plx} ${ply})">${panelCode}</text>`;
     const cuCx = (cuX0 + cuX1) / 2,
-        cuCy = (y0 + floor) / 2;
-    const rGiro = Math.min(75 * scale, (cuX1 - cuX0) * 0.42, (floor - y0) * 0.42);
+        cuCy = (y0 + cuartoFloorY) / 2;
+    const rGiro = Math.min(75 * scale, (cuX1 - cuX0) * 0.42, (cuartoFloorY - y0) * 0.42);
     svg += `<circle cx="${cuCx}" cy="${cuCy}" r="${rGiro}" fill="none" stroke="#5db0e0" stroke-width="1.2" stroke-dasharray="5,4"/>`;
     svg += `<text x="${cuCx}" y="${cuCy+rGiro-5}" font-size="8" fill="#5db0e0" font-weight="700" text-anchor="middle">Ø1.50</text>`;
     svg += `<text x="${cuCx-11}" y="${cuCy+6}" font-size="20" fill="#5db0e0">♿</text>`;
@@ -5244,7 +5244,7 @@ function buildPmrPanelSvg() {
     svg += wcGlyph(inv ? `translate(${cbX1-10}, 34) scale(-1,1)` : `translate(${cbX0+10}, 34)`);
     seq.forEach(it => {
         if (it.kind === "panel") return;
-        const frontY = it.zona === "cub" ? recessY : floor;
+        const frontY = it.zona === "cub" ? recessY : cuartoFloorY;
         if (it.kind === "muro" || it.kind === "pil") {
             if (it.wpx <= 0.2) return;
             svg += `<rect x="${it.x0}" y="${frontY-3}" width="${it.wpx}" height="4" fill="#0a1f3d"/>`;
@@ -5279,6 +5279,7 @@ function buildPmrPanelSvg() {
         }
         svg += `<text x="${wallX+sgnO*24}" y="${recessY+12}" font-size="7.5" fill="#0a1f3d" font-weight="600" text-anchor="${inv?"start":"end"}">${nOri} orinal${nOri>1?"es":""}</text>`
     }
+    if (cuartoFloorY < floor - 8) svg += `<text x="${cuCx}" y="${(cuartoFloorY+floor)/2+2}" font-size="8" fill="#8a95a3" text-anchor="middle">espacio libre</text>`;
     svg += `<text x="${cuCx}" y="${floor+13}" font-size="9" fill="#1e40af" font-weight="600" text-anchor="middle">Cuarto PMR</text>`;
     svg += `<text x="${(cbX0+cbX1)/2}" y="${floor+13}" font-size="9" fill="#166534" font-weight="600" text-anchor="middle">Cubículo</text>`;
     if (recessY < floor - .5 && !oriEnLibre) svg += `<text x="${(cbX0+cbX1)/2}" y="${(recessY+floor)/2}" font-size="8" fill="#8a95a3" text-anchor="middle">espacio libre</text>`;
@@ -5295,8 +5296,8 @@ function buildPmrPanelSvg() {
     };
     svg += vdim(leftX - 13, y0, floor, `Prof. ${prof}`);
     if (recessY < floor - .5) {
-        svg += vdim(rightX + 13, y0, recessY, `receso ${receso}`);
-        svg += vdim(rightX + 13, recessY, floor, `libre ${Math.round(prof-receso)}`)
+        svg += vdim(rightX + 20, y0, recessY, `receso ${receso}`);
+        svg += vdim(rightX + 20, recessY, floor, `libre ${Math.round(prof-receso)}`)
     }
     svg += `</svg>`;
     return svg
@@ -6795,7 +6796,6 @@ function sugerirModulacion({
         const pnOpts = CATALOGO.piezas.filter(p => p.familia === "PN" && !p.sufijo && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual())).map(p => p.ancho);
         const maxPanel = profPmrP > 0 ? profPmrP : 180;
         const panelW = pnOpts.filter(w => w <= maxPanel).sort((a, b) => b - a)[0] || (pnOpts.length ? Math.min.apply(null, pnOpts) : 150);
-        const frenteCierreCm = profPmrP > 0 ? Math.max(0, Math.round(profPmrP - panelW)) : 0;
         const totalReal = anchoCuartoReal + bestNb.tot;
         const diffP = claro - totalReal;
         const absP = Math.abs(diffP);
@@ -6831,7 +6831,7 @@ function sugerirModulacion({
             msg: profOkP ? `✓ Panel PN${panelW} entra en la profundidad de ${profPmrP} cm` : `⚠ Revisá: el panel PN${panelW} contra ${profPmrP} cm de fondo`
         };
         const sufRp = isReforzado ? "R" : "";
-        const pasosP = [`Claro del vano: ${claro} cm`, `Cuarto PMR (frente ${claroCuarto} cm): PI${cierreCuarto} (a muro) + PT${doorAccW} + PI${divisorCuarto} = ${anchoCuartoReal} cm`, `Panel de cierre del cuarto: PN${panelW}${frenteCierreCm >= 5 ? " + frente PI" + frenteCierreCm : ""} = ${profPmrP || "—"} cm de profundidad (sin pilastra central)`, `Cubículo(s) (resto ${claroNb.toFixed(1)} cm): PI${bestNb.ci} (junto al panel) + ${nNb}×PT${bestNb.dr}${nNb > 1 ? " + " + (nNb - 1) + "×PI" + bestNb.ip : ""} + PI${bestNb.cd} (a muro)`, ajusteProfP.msg];
+        const pasosP = [`Claro del vano: ${claro} cm`, `Cuarto PMR (frente ${claroCuarto} cm): PI${cierreCuarto} (a muro) + PT${doorAccW} + PI${divisorCuarto} = ${anchoCuartoReal} cm`, `Panel de cierre del cuarto: PN${panelW} (corre hacia el fondo, ≤ ${profPmrP || "—"} cm; no cierra la profundidad, sin frente ni pilastra central)`, `Cubículo(s) (resto ${claroNb.toFixed(1)} cm): PI${bestNb.ci} (junto al panel) + ${nNb}×PT${bestNb.dr}${nNb > 1 ? " + " + (nNb - 1) + "×PI" + bestNb.ip : ""} + PI${bestNb.cd} (a muro)`, ajusteProfP.msg];
         return {
             nCabinas: N,
             nEstandar: nNb,
@@ -6851,8 +6851,6 @@ function sugerirModulacion({
             codDivisorCuarto: "PI" + divisorCuarto + sufRp,
             codPanelCierre: "PN" + panelW,
             anchoPanelCierre: panelW,
-            codFrenteCierre: frenteCierreCm >= 5 ? "PI" + frenteCierreCm + sufRp : null,
-            anchoFrenteCierre: frenteCierreCm,
             profundidad: profPmrP,
             codPuerta: "PT" + bestNb.dr,
             anchoPuerta: bestNb.dr,
@@ -7215,10 +7213,6 @@ function aplicarSugerencia(s) {
         if (s.codCierreNbIzq) a.pilastrasExtras.push({
             codigo: s.codCierreNbIzq,
             descripcion: "Cierre del cubículo junto al panel PMR"
-        });
-        if (s.codFrenteCierre) a.pilastrasExtras.push({
-            codigo: s.codFrenteCierre,
-            descripcion: "Frente del panel de cierre PMR"
         });
         a.pilastrasExtras.push({
             codigo: cfg.modelo === "REFORZADO" ? "PI19R" : "PI19",
@@ -9284,13 +9278,14 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
         cuX1 = inv ? drawX + drawW : boundaryX;
     const cbX0 = inv ? drawX : boundaryX,
         cbX1 = inv ? boundaryX : drawX + drawW;
+    const panelW = Wc(panelCode) || prof;
+    const cuartoFloorYp = drawTop + Math.min(panelW, prof) * pxCm;
     doc.setFillColor(240, 243, 247);
-    doc.rect(cuX0, drawTop, cuX1 - cuX0, floorY - drawTop, "F");
+    doc.rect(cuX0, drawTop, cuX1 - cuX0, cuartoFloorYp - drawTop, "F");
     doc.rect(cbX0, drawTop, cbX1 - cbX0, recessY - drawTop, "F");
-    if (recessY < floorY - .3) {
-        doc.setFillColor(251, 252, 255);
-        doc.rect(cbX0, recessY, cbX1 - cbX0, floorY - recessY, "F")
-    }
+    doc.setFillColor(251, 252, 255);
+    if (cuartoFloorYp < floorY - .3) doc.rect(cuX0, cuartoFloorYp, cuX1 - cuX0, floorY - cuartoFloorYp, "F");
+    if (recessY < floorY - .3) doc.rect(cbX0, recessY, cbX1 - cbX0, floorY - recessY, "F");
     const wallBand = (wx, wy, ww, wh) => {
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(10, 31, 61);
@@ -9310,32 +9305,20 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
     wallBand(drawX - 6, drawTop - 6, drawW + 12, 6);
     wallBand(drawX - 6, drawTop - 6, 6, floorY - drawTop + 6);
     wallBand(drawX + drawW, drawTop - 6, 6, floorY - drawTop + 6);
-    const panelW = Wc(panelCode) || prof;
-    const panelMm = Math.min(panelW, prof) * pxCm;
-    const frenteCm = Math.max(0, Math.round(prof - panelW));
+    const panelMm = cuartoFloorYp - drawTop;
     doc.setFillColor(217, 217, 217);
     doc.setDrawColor(10, 31, 61);
     doc.setLineWidth(.5);
-    doc.rect(boundaryX - 1, drawTop, 2, floorY - drawTop, "FD");
+    doc.rect(boundaryX - 1, drawTop, 2, panelMm, "FD");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(6);
     doc.setTextColor(10, 31, 61);
     doc.text(`${panelCode}`, boundaryX + (inv ? -2.5 : 3.5), drawTop + panelMm * 0.5 + doc.getTextWidth(panelCode) / 2, {
         angle: 90
     });
-    if (frenteCm > .5) {
-        doc.setDrawColor(93, 176, 224);
-        doc.setLineWidth(.4);
-        doc.line(boundaryX - 2, drawTop + panelMm, boundaryX + 2, drawTop + panelMm);
-        doc.setTextColor(58, 127, 176);
-        const ft = "frente " + frenteCm;
-        doc.text(ft, boundaryX + (inv ? -2.5 : 3.5), drawTop + panelMm + frenteCm * pxCm * 0.5 + doc.getTextWidth(ft) / 2, {
-            angle: 90
-        })
-    }
     const cuCx = (cuX0 + cuX1) / 2,
-        cuCy = (drawTop + floorY) / 2;
-    const rG = Math.min((cuX1 - cuX0) * 0.4, (floorY - drawTop) * 0.4);
+        cuCy = (drawTop + cuartoFloorYp) / 2;
+    const rG = Math.min((cuX1 - cuX0) * 0.4, (cuartoFloorYp - drawTop) * 0.4);
     doc.setDrawColor(93, 176, 224);
     doc.setLineWidth(.4);
     doc.setLineDashPattern([1.4, 1.1], 0);
@@ -9356,7 +9339,7 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
     } catch (e) {}
     seq.forEach(it => {
         if (it.kind === "panel") return;
-        const fy = it.zona === "cub" ? recessY : floorY;
+        const fy = it.zona === "cub" ? recessY : cuartoFloorYp;
         if (it.kind === "muro" || it.kind === "pil") {
             if (it.wmm <= 0.2) return;
             doc.setFillColor(217, 217, 217);
@@ -9434,6 +9417,14 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
             align: "center"
         })
     }
+    if (cuartoFloorYp < floorY - 5) {
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(5.5);
+        doc.setTextColor(138, 149, 163);
+        doc.text("espacio libre", cuCx, (cuartoFloorYp + floorY) / 2 + 1, {
+            align: "center"
+        })
+    }
     doc.setFont("helvetica", "normal");
     doc.setFontSize(5.5);
     doc.setTextColor(51, 71, 91);
@@ -9465,8 +9456,8 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
     };
     vDimPdf(drawX - 9, drawTop, floorY, `Prof. ${prof}`);
     if (recessY < floorY - .5) {
-        vDimPdf(drawX + drawW + 9, drawTop, recessY, `receso ${receso}`);
-        vDimPdf(drawX + drawW + 9, recessY, floorY, `libre ${Math.round(prof-receso)}`)
+        vDimPdf(drawX + drawW + 12, drawTop, recessY, `receso ${receso}`);
+        vDimPdf(drawX + drawW + 12, recessY, floorY, `libre ${Math.round(prof-receso)}`)
     }
 }
 
