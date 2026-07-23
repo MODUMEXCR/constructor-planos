@@ -4614,6 +4614,34 @@ function recomputarCabinas(banos, orinales) {
     if (!a) return;
     banos = Math.max(1, parseInt(banos, 10) || 1);
     orinales = Math.max(0, Math.min(parseInt(orinales, 10) || 0, 15));
+    const layoutRc = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
+    if (layoutRc.pmrPanel) {
+        a.cabinas = banos;
+        cfg.cabinas = banos;
+        a.nMingitorios = orinales;
+        ["tiposCabina", "puertas", "paneles", "pilastras", "aperturas", "bisagras", "puertaSubTipo", "panelSubTipo", "pilastraSubTipo", "canaletas", "centrosDescarga"].forEach(k => {
+            if (Array.isArray(a[k]) && a[k].length > banos) a[k].length = banos
+        });
+        const slR = document.getElementById("cfg-cabinas"),
+            slvR = document.getElementById("cfg-cabinas-val");
+        if (slR) slR.value = banos;
+        if (slvR) slvR.textContent = banos;
+        const infoR = typeof leerDimensionesLugar === "function" ? leerDimensionesLugar() : null;
+        const esLeederR = ["LEEDER", "SUPERIOR", "TOUCHLESS"].includes((cfg.linea || "").toUpperCase());
+        if (infoR && esLeederR && cfg.areaActivaIdx >= 0) {
+            const sugR = sugerirModulacion({
+                claro: infoR.paredCabinas,
+                N: banos,
+                layoutCodigo: cfg.layout,
+                nMingit: 0
+            });
+            if (sugR && !sugR.error) aplicarSugerencia(sugR)
+        }
+        if (typeof renderPreview === "function") renderPreview();
+        if (typeof renderPreviewControls === "function") renderPreviewControls(activeTab);
+        if (typeof recalcularSugerencia === "function") recalcularSugerencia();
+        return
+    }
     const total = banos + orinales;
     const prevTotal = cfg.cabinas;
     a.cabinas = total;
@@ -4656,7 +4684,8 @@ function recomputarCabinas(banos, orinales) {
 function aplicarNMingitorios(n) {
     const a = typeof activeAreaCfg === "function" ? activeAreaCfg() : null;
     if (!a) return 0;
-    const banos = Math.max(1, (a.cabinas || 1) - (a.nMingitorios || 0));
+    const layoutM = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
+    const banos = layoutM.pmrPanel ? Math.max(1, a.cabinas || 1) : Math.max(1, (a.cabinas || 1) - (a.nMingitorios || 0));
     recomputarCabinas(banos, n);
     return (typeof activeAreaCfg === "function" ? activeAreaCfg() : {} || {}).nMingitorios || 0
 }
@@ -5226,21 +5255,49 @@ function buildPmrPanelSvg() {
             const hx = hingeRight ? it.x0 + it.wpx : it.x0;
             const leafLen = Math.max(6, it.wpx);
             const swingV = Math.min(leafLen, (frontY - y0) * 0.9);
-            const dir = hingeRight ? -1 : 1;
             svg += `<line x1="${hx}" y1="${frontY}" x2="${hx}" y2="${frontY-swingV}" stroke="#0a1f3d" stroke-width="2.5"/>`;
-            svg += `<path d="M${hx} ${frontY-swingV} A ${leafLen} ${swingV} 0 0 ${hingeRight?1:0} ${hx+dir*leafLen} ${frontY}" fill="none" stroke="#5db0e0" stroke-width="1" stroke-dasharray="4,3"/>`;
             svg += `<text x="${it.x0+it.wpx/2}" y="${frontY-7}" font-size="8" fill="#0a1f3d" font-weight="600" text-anchor="middle">${it.code}${it.cuarto?" ♿":""}</text>`
         }
     });
+    const nOri = Math.max(0, parseInt(a.nMingitorios, 10) || 0);
+    const oriEnLibre = recessY < floor - .5 && nOri > 0;
+    if (oriEnLibre) {
+        const wallX = inv ? cbX0 : cbX1;
+        const sgnO = inv ? 1 : -1;
+        const freeDepth = floor - recessY;
+        const slot = freeDepth / nOri;
+        const mgLen = Math.min((cbX1 - cbX0) * 0.5, 42);
+        for (let k = 0; k < nOri; k++) {
+            const cy = recessY + (k + 0.5) * slot;
+            svg += `<rect x="${inv?wallX:wallX-4}" y="${cy-9}" width="4" height="18" fill="#0a1f3d"/>`;
+            svg += `<ellipse cx="${wallX+sgnO*15}" cy="${cy}" rx="11" ry="8" fill="none" stroke="#0a1f3d" stroke-width="1.6"/>`
+        }
+        for (let k = 1; k <= nOri; k++) {
+            const dy = recessY + k * slot;
+            svg += `<line x1="${wallX}" y1="${dy}" x2="${wallX+sgnO*mgLen}" y2="${dy}" stroke="#0a1f3d" stroke-width="3" stroke-linecap="round"/>`;
+            svg += `<text x="${wallX+sgnO*(mgLen+3)}" y="${dy-2.5}" font-size="6.5" fill="#0a1f3d" font-weight="600" text-anchor="${inv?"start":"end"}">${a.mgTipo||"MG"}${k===nOri?" (cierre)":""}</text>`
+        }
+        svg += `<text x="${wallX+sgnO*24}" y="${recessY+12}" font-size="7.5" fill="#0a1f3d" font-weight="600" text-anchor="${inv?"start":"end"}">${nOri} orinal${nOri>1?"es":""}</text>`
+    }
     svg += `<text x="${cuCx}" y="${floor+13}" font-size="9" fill="#1e40af" font-weight="600" text-anchor="middle">Cuarto PMR</text>`;
     svg += `<text x="${(cbX0+cbX1)/2}" y="${floor+13}" font-size="9" fill="#166534" font-weight="600" text-anchor="middle">Cubículo</text>`;
-    if (recessY < floor - .5) svg += `<text x="${(cbX0+cbX1)/2}" y="${(recessY+floor)/2}" font-size="8" fill="#8a95a3" text-anchor="middle">espacio libre</text>`;
+    if (recessY < floor - .5 && !oriEnLibre) svg += `<text x="${(cbX0+cbX1)/2}" y="${(recessY+floor)/2}" font-size="8" fill="#8a95a3" text-anchor="middle">espacio libre</text>`;
     seq.forEach(it => {
         if (it.kind === "panel" || it.wpx <= 0.2) return;
         svg += `<text x="${it.x0+it.wpx/2}" y="${floor+30}" font-size="8.5" fill="#33475b" text-anchor="middle">${Math.round(it.w)}</text>`
     });
     svg += `<line x1="${leftX}" y1="${floor+38}" x2="${rightX}" y2="${floor+38}" stroke="#9aa7b5" stroke-width="0.7"/>`;
-    svg += `<text x="${(leftX+rightX)/2}" y="${floor+52}" font-size="9.5" fill="#0a1f3d" font-weight="600" text-anchor="middle">Claro total ${Math.round(totalCm)} cm · Profundidad ${prof} cm${receso>0?" · receso "+receso+" cm":""}</text>`;
+    svg += `<text x="${(leftX+rightX)/2}" y="${floor+52}" font-size="9.5" fill="#0a1f3d" font-weight="600" text-anchor="middle">Claro total ${Math.round(totalCm)} cm</text>`;
+    const vdim = (dx, ya, yb, txt) => {
+        if (yb - ya < 6) return "";
+        const my = (ya + yb) / 2;
+        return `<line x1="${dx}" y1="${ya}" x2="${dx}" y2="${yb}" stroke="#33475b" stroke-width="0.7"/><line x1="${dx-2}" y1="${ya}" x2="${dx+2}" y2="${ya}" stroke="#33475b" stroke-width="0.7"/><line x1="${dx-2}" y1="${yb}" x2="${dx+2}" y2="${yb}" stroke="#33475b" stroke-width="0.7"/><text x="${dx-3}" y="${my}" font-size="8.5" fill="#33475b" text-anchor="middle" transform="rotate(-90 ${dx-3} ${my})">${txt}</text>`
+    };
+    svg += vdim(leftX - 13, y0, floor, `Prof. ${prof}`);
+    if (recessY < floor - .5) {
+        svg += vdim(rightX + 13, y0, recessY, `receso ${receso}`);
+        svg += vdim(rightX + 13, recessY, floor, `libre ${Math.round(prof-receso)}`)
+    }
     svg += `</svg>`;
     return svg
 }
@@ -8136,7 +8193,15 @@ function exportarCSV(proyecto) {
             const p = CATALOGO.piezas.find(x => x.codigo === c.codigo);
             if (!p) return;
             agregar(p, "CN", areaName)
-        })
+        });
+        const layoutCsvPR = CATALOGO.layouts.find(l => l.codigo === areaLayout) || {};
+        if (layoutCsvPR.pmrPanel && (areaCfg.nMingitorios || 0) > 0 && (areaCfg.recesoPmr || 0) > 0) {
+            const mgP = CATALOGO.piezas.find(x => x.codigo === (areaCfg.mgTipo || "MG60120"));
+            if (mgP) {
+                const subMg = mgP.alto >= 150 ? "MG150" : "MG120";
+                for (let u = 0; u < areaCfg.nMingitorios; u++) agregar(mgP, subMg, areaName)
+            }
+        }
     });
     const csvCell = v => {
         const s = String(v == null ? "" : v);
@@ -9312,15 +9377,6 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
             doc.setDrawColor(10, 31, 61);
             doc.setLineWidth(.9);
             doc.line(hx, fy, hx, fy - leaf);
-            if (typeof drawQuarterArc === "function") {
-                doc.setDrawColor(93, 176, 224);
-                doc.setLineWidth(.4);
-                doc.setLineDashPattern([1.4, 1.1], 0);
-                try {
-                    drawQuarterArc(doc, hx, fy, leaf, hingeRight ? "NW" : "NE", "S")
-                } catch (e) {}
-                doc.setLineDashPattern([], 0)
-            }
             doc.setFont("helvetica", "bold");
             doc.setFontSize(5.5);
             doc.setTextColor(10, 31, 61);
@@ -9329,6 +9385,37 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
             })
         }
     });
+    const nOriP = Math.max(0, parseInt(a.nMingitorios, 10) || 0);
+    if (recessY < floorY - .5 && nOriP > 0) {
+        const wallXp = inv ? cbX0 : cbX1;
+        const sgnP = inv ? 1 : -1;
+        const slotP = (floorY - recessY) / nOriP;
+        const mgLenP = Math.min((cbX1 - cbX0) * 0.5, 15);
+        const uw = Math.min(9, slotP * 0.6),
+            uh = uw * 1.2;
+        for (let k = 0; k < nOriP; k++) {
+            const cy = recessY + (k + 0.5) * slotP;
+            try {
+                doc.addImage(ORINAL_IMG_B64, "PNG", inv ? wallXp + 1 : wallXp - 1 - uh, cy + (inv ? -uw / 2 : uw / 2), uh, uw, undefined, "FAST", inv ? 270 : 90)
+            } catch (e) {}
+        }
+        doc.setDrawColor(10, 31, 61);
+        doc.setLineWidth(.7);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(5);
+        doc.setTextColor(10, 31, 61);
+        for (let k = 1; k <= nOriP; k++) {
+            const dy = recessY + k * slotP;
+            doc.line(wallXp, dy, wallXp + sgnP * mgLenP, dy);
+            doc.text(`${a.mgTipo||"MG"}${k===nOriP?" cierre":""}`, wallXp + sgnP * (mgLenP + 1), dy - 1, {
+                align: inv ? "left" : "right"
+            })
+        }
+        doc.setFontSize(5.5);
+        doc.text(`${nOriP} orinal${nOriP>1?"es":""}`, wallXp + sgnP * 18, recessY + 5, {
+            align: inv ? "left" : "right"
+        })
+    }
     doc.setFont("helvetica", "bold");
     doc.setFontSize(6);
     doc.setTextColor(30, 64, 175);
@@ -9359,9 +9446,28 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(6.5);
     doc.setTextColor(10, 31, 61);
-    doc.text(`Claro ${Math.round(totalCm)} cm · Prof ${prof} cm${receso>0?" · receso "+receso:""}`, drawX + drawW / 2, floorY + 18, {
+    doc.text(`Claro ${Math.round(totalCm)} cm`, drawX + drawW / 2, floorY + 18, {
         align: "center"
-    })
+    });
+    const vDimPdf = (dx, ya, yb, txt) => {
+        if (yb - ya < 5) return;
+        doc.setDrawColor(51, 71, 91);
+        doc.setLineWidth(.3);
+        doc.line(dx, ya, dx, yb);
+        doc.line(dx - 1, ya, dx + 1, ya);
+        doc.line(dx - 1, yb, dx + 1, yb);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(5.5);
+        doc.setTextColor(51, 71, 91);
+        doc.text(txt, dx - 1.4, (ya + yb) / 2 + doc.getTextWidth(txt) / 2, {
+            angle: 90
+        })
+    };
+    vDimPdf(drawX - 9, drawTop, floorY, `Prof. ${prof}`);
+    if (recessY < floorY - .5) {
+        vDimPdf(drawX + drawW + 9, drawTop, recessY, `receso ${receso}`);
+        vDimPdf(drawX + drawW + 9, recessY, floorY, `libre ${Math.round(prof-receso)}`)
+    }
 }
 
 function renderAreaInto(doc, proyecto, areaIdx, region) {
