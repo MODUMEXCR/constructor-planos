@@ -5254,9 +5254,17 @@ function buildPmrPanelSvg() {
     svg += `<circle cx="${cuCx}" cy="${cuCy}" r="${rGiro}" fill="none" stroke="#5db0e0" stroke-width="1.2" stroke-dasharray="5,4"/>`;
     svg += `<text x="${cuCx}" y="${cuCy+rGiro-5}" font-size="8" fill="#5db0e0" font-weight="700" text-anchor="middle">Ø1.50</text>`;
     svg += `<text x="${cuCx-11}" y="${cuCy+6}" font-size="20" fill="#5db0e0">♿</text>`;
-    svg += wcGlyph(inv ? cuX1 - 22 : cuX0 + 22, 24);
+    const cdesc = a.centrosDescarga || [];
+    const cuCd = cdesc[cuartoIdx];
+    let cuartoWcY = 24;
+    if (cuCd !== "" && cuCd != null && !isNaN(cuCd)) cuartoWcY = Math.max(24, Math.min(cuartoFloorY - 46, y0 + Number(cuCd) * pxCm - 14));
+    svg += wcGlyph(inv ? cuX1 - 22 : cuX0 + 22, cuartoWcY);
     seq.forEach(it => {
-        if (it.kind === "door" && it.zona === "cub" && it.wpx > 4) svg += wcGlyph(it.x0 + it.wpx / 2, 24)
+        if (it.kind !== "door" || it.zona !== "cub" || it.wpx <= 4) return;
+        const cc = cdesc[it.idx];
+        const ccX = inv ? rightX - Number(cc) * scale : leftX + Number(cc) * scale;
+        const wcX = cc !== "" && cc != null && !isNaN(cc) ? Math.max(it.x0 + 14, Math.min(it.x0 + it.wpx - 14, ccX)) : it.x0 + it.wpx / 2;
+        svg += wcGlyph(wcX, 24)
     });
     seq.forEach(it => {
         if (it.kind === "panel") return;
@@ -7592,7 +7600,7 @@ function renderCentrosDescarga() {
     }
     const N = a.cabinas || 0;
     const tipos = a.tiposCabina || [];
-    const esPmr = !!(CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {}).pmrCuarto;
+    const esPmr = !!((lay => lay.pmrCuarto || lay.pmrPanel)(CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {}));
     // Qué cabinas llevan centro de descarga y sobre qué eje:
     //  - PMR: el cuarto (i=0) sobre la PROFUNDIDAD; los urinales sobre el CLARO.
     //  - Resto: baños sobre el claro (los urinales sueltos también, sobre el claro).
@@ -7629,7 +7637,7 @@ function actualizarValidacionCentros() {
     if (!a || !valBox) return;
     const info = leerDimensionesLugar();
     const claro = info ? info.paredCabinas : null;
-    const esPmr = !!(CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {}).pmrCuarto;
+    const esPmr = !!((lay => lay.pmrCuarto || lay.pmrPanel)(CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {}));
     const prof = info ? info.paredOpuesta : null;
     // El centro del cuarto PMR va sobre la profundidad → se excluye del orden del claro.
     const pmrIdxCentro = cfg.invertir ? cfg.cabinas - 1 : 0;
@@ -9385,15 +9393,22 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
     });
     const iwB = Math.min(13, (cuX1 - cuX0) * 0.28),
         ihB = iwB * 1.3;
+    const cdP = a.centrosDescarga || [];
+    const cuCdP = cdP[cuartoIdx];
+    let cuWcY = drawTop + 3;
+    if (cuCdP !== "" && cuCdP != null && !isNaN(cuCdP)) cuWcY = Math.max(drawTop + 2, Math.min(cuartoFloorYp - ihB - 2, drawTop + Number(cuCdP) * pxCm - ihB / 2));
     try {
-        doc.addImage(WC_IMG_B64, "PNG", cuX0 + 3, drawTop + 3, iwB, ihB, undefined, "FAST")
+        doc.addImage(WC_IMG_B64, "PNG", inv ? cuX1 - 3 - iwB : cuX0 + 3, cuWcY, iwB, ihB, undefined, "FAST")
     } catch (e) {}
     seq.forEach(it => {
         if (it.kind !== "door" || it.zona !== "cub") return;
         const iwC = Math.min(iwB, it.wmm * 0.62),
             ihC = iwC * 1.45;
+        const cc = cdP[it.idx];
+        const ccX = inv ? drawX + drawW - Number(cc) * scale : drawX + Number(cc) * scale;
+        const cxC = cc !== "" && cc != null && !isNaN(cc) ? Math.max(it.x0 + iwC / 2, Math.min(it.x0 + it.wmm - iwC / 2, ccX)) : it.x0 + it.wmm / 2;
         try {
-            doc.addImage(WC_IMG_B64, "PNG", it.x0 + it.wmm / 2 - iwC / 2, drawTop + 3, iwC, ihC, undefined, "FAST")
+            doc.addImage(WC_IMG_B64, "PNG", cxC - iwC / 2, drawTop + 3, iwC, ihC, undefined, "FAST")
         } catch (e) {}
     });
     seq.forEach(it => {
