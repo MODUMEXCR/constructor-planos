@@ -5980,6 +5980,12 @@ function piezaPermitidaPorModelo(pieza, modeloCod, altoTouchless) {
     return true
 }
 
+function opcionesPilastraPorModelo() {
+    const esRef = (cfg.modelo || "").toUpperCase() === "REFORZADO";
+    if (!esRef) return CATALOGO.piezas.filter(p => p.familia === "PI" && !p.sufijo);
+    return CATALOGO.piezas.filter(p => p.familia === "PI" && (p.sufijo === "R" || (!p.sufijo && !CATALOGO.piezas.some(q => q.familia === "PI" && q.sufijo === "R" && q.ancho === p.ancho))));
+}
+
 function renderPreviewControls(tab) {
     activeTab = tab;
     const cont = document.getElementById("preview-controls");
@@ -5992,7 +5998,7 @@ function renderPreviewControls(tab) {
     const leftWallEff = cfg.invertir ? _hasRightWallPC : _hasLeftWallPC;
     const rightWallEff = cfg.invertir ? _hasLeftWallPC : _hasRightWallPC;
     const piezasFamilia = tab === "paneles" ? "PN" : tab === "puertas" ? "PT" : "PI";
-    const piezasFamilia2 = CATALOGO.piezas.filter(p => p.familia === piezasFamilia && !p.sufijo).filter(p => piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual()));
+    const piezasFamilia2 = (piezasFamilia === "PI" ? opcionesPilastraPorModelo() : CATALOGO.piezas.filter(p => p.familia === piezasFamilia && !p.sufijo)).filter(p => piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual()));
     const piezasMG = CATALOGO.piezas.filter(p => p.familia === "MG");
     const tiposCabActiva = (activeAreaCfg() || {}).tiposCabina || [];
     const _esPmrPC = !!_layoutPC.pmrCuarto;
@@ -6273,7 +6279,7 @@ function pmrCtrlHtml(kind, a) {
         return `\n        <label>\n          <span>Cuarto PMR · puerta lateral</span>\n          <select data-pmr="door">${opts}</select>\n        </label>\n        <label>\n          <span>Apertura (cuarto PMR)</span>\n          <select data-tab="apertura" data-idx="${cuartoIdx}" data-pmrdoor="1">\n            ${apOpt("IZQ_EXT","Abre afuera · izquierda")}\n            ${apOpt("DER_EXT","Abre afuera · derecha")}\n            ${apOpt("IZQ_INT","Abre adentro · izquierda")}\n            ${apOpt("DER_INT","Abre adentro · derecha")}\n          </select>\n        </label>\n        ${fitDiv}`
     }
     const sepActual = (a.pilastras || [])[sepIdx] || "";
-    const pilOpts = CATALOGO.piezas.filter(p => p.familia === "PI" && !p.sufijo && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual())).map(p => `<option value="${p.codigo}"${sepActual===p.codigo?" selected":""}>${p.codigo} (${p.ancho} cm)</option>`).join("");
+    const pilOpts = opcionesPilastraPorModelo().filter(p => piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual())).map(p => `<option value="${p.codigo}"${sepActual===p.codigo?" selected":""}>${p.codigo} (${p.ancho} cm)</option>`).join("");
     return `\n        <label>\n          <span>Cuarto PMR · pilastra lateral (junto a cabina)</span>\n          <select data-pmr="pilastra">\n            <option value=""${sepActual===""?" selected":""}>— Sin pilastra —</option>\n            ${pilOpts}\n          </select>\n          <div class="form-help" style="font-size:10px; margin-top:2px;">Pilastra normal, a la derecha del panel — solo cuando la cabina de al lado lleva puerta.</div>\n        </label>`
 }
 
@@ -6356,7 +6362,7 @@ function renderMurosYExtrasSection() {
     const a = typeof activeAreaCfg === "function" ? activeAreaCfg() || {} : {};
     const tieneCierreIzq = leftWallEff || !!(a.muroIzq && a.muroIzq.codigo);
     const tieneCierreDer = rightWallEff || !!(a.muroDer && a.muroDer.codigo);
-    const pilastras = CATALOGO.piezas.filter(p => p.familia === "PI");
+    const pilastras = opcionesPilastraPorModelo();
     const opts = pilastras.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("");
     let html = `<div style="grid-column: 1 / -1; margin-top: 14px; padding: 14px 16px; background: var(--bg-soft); border: 1px dashed var(--line); border-radius: 8px;">\n    <div style="font-weight: 700; color: var(--brand); margin-bottom: 10px; font-size: 13px;">Pilastras de cierre y extras</div>`;
     if (tieneCierreIzq || tieneCierreDer) {
@@ -6375,7 +6381,7 @@ function bindExtrasSection(cont, a) {
     const renderList = () => {
         const extrasList = cont.querySelector("#extras-list");
         if (!extrasList) return;
-        const pilastras = CATALOGO.piezas.filter(p => p.familia === "PI");
+        const pilastras = opcionesPilastraPorModelo();
         extrasList.innerHTML = (a.pilastrasExtras || []).map((ex, idx) => `\n      <div style="display: flex; gap: 6px; align-items: center;">\n        <select data-extra-idx="${idx}" data-extra-field="codigo" style="flex: 0 0 160px;">\n          <option value="">— Pieza —</option>\n          ${pilastras.map(p=>`<option value="${p.codigo}" ${ex.codigo===p.codigo?"selected":""}>${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("")}\n        </select>\n        <input type="text" placeholder='Descripción (ej. "T entre damas y mingitorios" o "contra muro")' data-extra-idx="${idx}" data-extra-field="descripcion" value="${escapeHtml(ex.descripcion||"")}" style="flex: 1; padding: 6px 10px; border: 1px solid var(--line); border-radius: 6px;">\n        <button class="icon-btn danger" data-remove-extra="${idx}" title="Eliminar">✕</button>\n      </div>`).join("");
         extrasList.querySelectorAll("[data-extra-idx]").forEach(el => {
             const fn = e => {
