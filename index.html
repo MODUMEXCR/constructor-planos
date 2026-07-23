@@ -5133,6 +5133,16 @@ function actualizarValidacionModulacion() {
     }
 }
 
+function panelCubiculoPmr(a, modeloOverride, profOverride) {
+    const receso = Math.max(0, parseFloat((a || {}).recesoPmr) || 0);
+    const prof = profOverride != null ? profOverride : ((typeof leerDimensionesLugar === "function" ? (leerDimensionesLugar() || {}).paredOpuesta : 0) || 0);
+    const depth = receso > 0 ? receso : prof;
+    if (depth <= 0) return "";
+    const modelo = modeloOverride != null ? modeloOverride : cfg.modelo;
+    const anchos = CATALOGO.piezas.filter(p => p.familia === "PN" && !p.sufijo && piezaPermitidaPorModelo(p, modelo, altoTouchlessActual())).map(p => p.ancho).filter(w => w <= depth).sort((x, y) => y - x);
+    return anchos.length ? "PN" + anchos[0] : ""
+}
+
 function buildPmrPanelSvg() {
     const N = cfg.cabinas;
     const a = activeAreaCfg() || {};
@@ -5266,6 +5276,19 @@ function buildPmrPanelSvg() {
             svg += `<text x="${it.x0+it.wpx/2}" y="${frontY-7}" font-size="8" fill="#0a1f3d" font-weight="600" text-anchor="middle">${it.code}${it.cuarto?" ♿":""}</text>`
         }
     });
+    const panelCubCode = panelCubiculoPmr(a);
+    if (panelCubCode && recessY > y0 + 2) {
+        const panelCubPx = Math.min(W(panelCubCode) * pxCm, recessY - y0);
+        seq.forEach(it => {
+            if (it.kind === "pil" && it.zona === "cub" && /^pilastra-/.test(it.dp) && it.wpx > 0.2) {
+                const cx = it.x0 + it.wpx / 2;
+                svg += `<g data-piece="panelcub-${it.dp}"><rect x="${cx-1.5}" y="${y0}" width="3" height="${panelCubPx}" fill="#0a1f3d"/></g>`;
+                const lpx = cx - 7,
+                    lpy = y0 + panelCubPx / 2;
+                svg += `<text x="${lpx}" y="${lpy}" font-size="8" fill="#0a1f3d" font-weight="600" text-anchor="middle" transform="rotate(90 ${lpx} ${lpy})">${panelCubCode}</text>`
+            }
+        })
+    }
     const nOri = Math.max(0, parseInt(a.nMingitorios, 10) || 0);
     const oriEnLibre = recessY < floor - .5 && nOri > 0;
     if (oriEnLibre) {
@@ -6843,7 +6866,10 @@ function sugerirModulacion({
             msg: profOkP ? `✓ Panel PN${panelW} entra en la profundidad de ${profPmrP} cm` : `⚠ Revisá: el panel PN${panelW} contra ${profPmrP} cm de fondo`
         };
         const sufRp = isReforzado ? "R" : "";
-        const pasosP = [`Claro del vano: ${claro} cm`, `Cuarto PMR (frente ${claroCuarto} cm): PI${cierreCuarto} (a muro) + PT${doorAccW} + PI${divisorCuarto} = ${anchoCuartoReal} cm`, `Panel de cierre del cuarto: PN${panelW} (corre hacia el fondo, ≤ ${profPmrP || "—"} cm; no cierra la profundidad, sin frente ni pilastra central)`, `Cubículo(s) (resto ${claroNb.toFixed(1)} cm): PI${bestNb.ci} (junto al panel) + ${nNb}×PT${bestNb.dr}${nNb > 1 ? " + " + (nNb - 1) + "×PI" + bestNb.ip : ""} + PI${bestNb.cd} (a muro)`, ajusteProfP.msg];
+        const codPanelCubP = nNb > 1 ? panelCubiculoPmr(aCfgP) : "";
+        const pasosP = [`Claro del vano: ${claro} cm`, `Cuarto PMR (frente ${claroCuarto} cm): PI${cierreCuarto} (a muro) + PT${doorAccW} + PI${divisorCuarto} = ${anchoCuartoReal} cm`, `Panel de cierre del cuarto: PN${panelW} (corre hacia el fondo, ≤ ${profPmrP || "—"} cm; no cierra la profundidad, sin frente ni pilastra central)`, `Cubículo(s) (resto ${claroNb.toFixed(1)} cm): PI${bestNb.ci} (junto al panel) + ${nNb}×PT${bestNb.dr}${nNb > 1 ? " + " + (nNb - 1) + "×PI" + bestNb.ip : ""} + PI${bestNb.cd} (a muro)`];
+        if (nNb > 1 && codPanelCubP) pasosP.push(`Panel divisor entre cubículos: ${nNb-1}×${codPanelCubP} (corre hacia el fondo, del largo del receso)`);
+        pasosP.push(ajusteProfP.msg);
         return {
             nCabinas: N,
             nEstandar: nNb,
@@ -8208,6 +8234,19 @@ function exportarCSV(proyecto) {
                 for (let u = 0; u < areaCfg.nMingitorios; u++) agregar(mgP, subMg, areaName)
             }
         }
+        const nCubDivCsv = Math.max(0, N - 2);
+        if (layoutCsvPR.pmrPanel && nCubDivCsv > 0) {
+            const codCub = panelCubiculoPmr(areaCfg, proyecto.modelo);
+            if (codCub) {
+                const pCub = CATALOGO.piezas.find(x => x.codigo === codCub) || {
+                    codigo: codCub,
+                    familia: "PN",
+                    ancho: anchoDePiezaCodigo(codCub)
+                };
+                const altoCub = altoDeCabina("PN", areaCfg, areaInvertir ? 0 : 1);
+                for (let d = 0; d < nCubDivCsv; d++) agregar(pCub, "PNCEN", areaName, altoCub != null ? altoCub : undefined)
+            }
+        }
     });
     const csvCell = v => {
         const s = String(v == null ? "" : v);
@@ -9221,7 +9260,7 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
         cierreNbCode = inv ? mIzq : mDer;
     const seq = [];
     let panelVisto = false;
-    const push = (kind, code, esCuarto, idx) => {
+    const push = (kind, code, esCuarto, idx, dp) => {
         if (kind === "panel") panelVisto = true;
         const enC = inv ? panelVisto : !panelVisto;
         seq.push({
@@ -9230,6 +9269,7 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
             w: kind === "panel" ? 0 : Wc(code),
             cuarto: !!esCuarto,
             idx: idx,
+            dp: dp || "",
             zona: kind === "panel" ? "panel" : enC ? "cuarto" : "cub"
         })
     };
@@ -9241,14 +9281,14 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
         push("pil", nbEx ? nbEx.codigo : "");
         for (let i = 1; i < N; i++) {
             push("door", puertas[i], false, i);
-            if (i < N - 1) push("pil", pilastras[i])
+            if (i < N - 1) push("pil", pilastras[i], false, null, "divcub")
         }
         push("muro", cierreNbCode)
     } else {
         push("muro", cierreNbCode);
         for (let i = 0; i < N - 1; i++) {
             push("door", puertas[i], false, i);
-            if (i < N - 2) push("pil", pilastras[i])
+            if (i < N - 2) push("pil", pilastras[i], false, null, "divcub")
         }
         push("pil", nbEx ? nbEx.codigo : "");
         push("panel", panelCode);
@@ -9386,6 +9426,25 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
             })
         }
     });
+    const panelCubCodeP = panelCubiculoPmr(a, proyecto.modelo);
+    if (panelCubCodeP && recessY > drawTop + 1) {
+        const panelCubMm = Math.min(anchoDePiezaCodigo(panelCubCodeP) * pxCm, recessY - drawTop);
+        seq.forEach(it => {
+            if (it.kind === "pil" && it.dp === "divcub" && it.wmm > 0.2) {
+                const cxp = it.x0 + it.wmm / 2;
+                doc.setFillColor(217, 217, 217);
+                doc.setDrawColor(10, 31, 61);
+                doc.setLineWidth(.5);
+                doc.rect(cxp - 1, drawTop, 2, panelCubMm, "FD");
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(5.5);
+                doc.setTextColor(10, 31, 61);
+                doc.text(panelCubCodeP, cxp - 3, drawTop + panelCubMm * 0.5 + doc.getTextWidth(panelCubCodeP) / 2, {
+                    angle: 90
+                })
+            }
+        })
+    }
     const nOriP = Math.max(0, parseInt(a.nMingitorios, 10) || 0);
     if (recessY < floorY - .5 && nOriP > 0) {
         const wallXp = inv ? cbX0 : cbX1;
