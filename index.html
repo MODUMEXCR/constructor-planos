@@ -1135,16 +1135,16 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
               </select>
             </div>
             <div class="form-row">
-              <label class="form-label">Incluye mingitorios</label>
+              <label class="form-label">Incluye orinales</label>
               <select class="form-select" id="cfg-mingitorios">
                 <option value="0">No</option>
                 <option value="1">Sí</option>
               </select>
             </div>
             <div class="form-row" id="cfg-nmingit-row" style="display:none;">
-              <label class="form-label">¿Cuántos mingitorios (orinales)?</label>
+              <label class="form-label">¿Cuántos orinales?</label>
               <input type="number" class="form-input" id="cfg-n-mingitorios" min="0" value="0">
-              <div class="form-help" style="margin-top:4px; font-size:11px;">Se suman aparte de las cabinas (baños). La app los acomoda solos a un extremo, 60 cm mínimo cada uno.</div>
+              <div class="form-help" style="margin-top:4px; font-size:11px;">Los orinales se suman aparte de las cabinas (baños); la app los acomoda solos a un extremo, 60 cm mínimo cada uno. Las mamparas (mingitorios) que los dividen se calculan solas y salen en la OC.</div>
             </div>
             <div class="form-row" id="cfg-mg-tipo-row" style="display:none;">
               <label class="form-label">Tipo de mampara divisora (MG)</label>
@@ -5151,8 +5151,11 @@ function buildPmrPanelSvg() {
     const cierreCuartoCode = inv ? mDer : mIzq;
     const cierreNbCode = inv ? mIzq : mDer;
     const seq = [];
+    const nbExIdx = (a.pilastrasExtras || []).findIndex(ex => /junto al panel pmr/i.test(ex.descripcion || ""));
+    const nbDp = nbExIdx >= 0 ? "extra-" + nbExIdx : "";
+    const divIdx = inv ? N - 2 : 0;
     let panelVisto = false;
-    const push = (kind, code, esCuarto, idx) => {
+    const push = (kind, code, esCuarto, idx, dp) => {
         if (kind === "panel") panelVisto = true;
         const enCuarto = inv ? panelVisto : !panelVisto;
         seq.push({
@@ -5161,31 +5164,32 @@ function buildPmrPanelSvg() {
             w: kind === "panel" ? 0 : W(code),
             cuarto: !!esCuarto,
             idx: idx,
+            dp: dp || "",
             zona: kind === "panel" ? "panel" : enCuarto ? "cuarto" : "cub"
         })
     };
     if (!inv) {
-        push("muro", cierreCuartoCode);
-        push("door", puertas[cuartoIdx], true, cuartoIdx);
-        push("pil", cuartoDivCode);
-        push("panel", panelCode);
-        push("pil", nbCierreCode);
+        push("muro", cierreCuartoCode, false, null, "muroIzq");
+        push("door", puertas[cuartoIdx], true, cuartoIdx, "puerta-" + cuartoIdx);
+        push("pil", cuartoDivCode, false, null, "pilastra-" + divIdx);
+        push("panel", panelCode, false, null, "panel-" + cuartoIdx);
+        push("pil", nbCierreCode, false, null, nbDp);
         for (let i = 1; i < N; i++) {
-            push("door", puertas[i], false, i);
-            if (i < N - 1) push("pil", pilastras[i])
+            push("door", puertas[i], false, i, "puerta-" + i);
+            if (i < N - 1) push("pil", pilastras[i], false, null, "pilastra-" + i)
         }
-        push("muro", cierreNbCode)
+        push("muro", cierreNbCode, false, null, "muroDer")
     } else {
-        push("muro", cierreNbCode);
+        push("muro", cierreNbCode, false, null, "muroIzq");
         for (let i = 0; i < N - 1; i++) {
-            push("door", puertas[i], false, i);
-            if (i < N - 2) push("pil", pilastras[i])
+            push("door", puertas[i], false, i, "puerta-" + i);
+            if (i < N - 2) push("pil", pilastras[i], false, null, "pilastra-" + i)
         }
-        push("pil", nbCierreCode);
-        push("panel", panelCode);
-        push("pil", cuartoDivCode);
-        push("door", puertas[cuartoIdx], true, cuartoIdx);
-        push("muro", cierreCuartoCode)
+        push("pil", nbCierreCode, false, null, nbDp);
+        push("panel", panelCode, false, null, "panel-" + cuartoIdx);
+        push("pil", cuartoDivCode, false, null, "pilastra-" + divIdx);
+        push("door", puertas[cuartoIdx], true, cuartoIdx, "puerta-" + cuartoIdx);
+        push("muro", cierreCuartoCode, false, null, "muroDer")
     }
     const totalCm = seq.reduce((s, x) => s + x.w, 0) || 337;
     const padding = 26;
@@ -5230,7 +5234,7 @@ function buildPmrPanelSvg() {
     svg += wall(leftX - 8);
     svg += wall(rightX);
     const panelPx = cuartoFloorY - y0;
-    svg += `<rect data-piece="panel-${cuartoIdx}" x="${boundaryX-1.5}" y="${y0}" width="3" height="${panelPx}" fill="#0a1f3d"/>`;
+    svg += `<g data-piece="panel-${cuartoIdx}"><rect x="${boundaryX-1.5}" y="${y0}" width="3" height="${panelPx}" fill="#0a1f3d"/></g>`;
     const plx = boundaryX + (inv ? -7 : 7);
     const ply = (y0 + cuartoFloorY) / 2;
     svg += `<text x="${plx}" y="${ply}" font-size="9" fill="#0a1f3d" font-weight="600" text-anchor="middle" transform="rotate(90 ${plx} ${ply})">${panelCode}</text>`;
@@ -5247,7 +5251,7 @@ function buildPmrPanelSvg() {
         const frontY = it.zona === "cub" ? recessY : cuartoFloorY;
         if (it.kind === "muro" || it.kind === "pil") {
             if (it.wpx <= 0.2) return;
-            svg += `<rect x="${it.x0}" y="${frontY-3}" width="${it.wpx}" height="4" fill="#0a1f3d"/>`;
+            svg += `<g data-piece="${it.dp}"><rect x="${it.x0}" y="${frontY-3}" width="${it.wpx}" height="4" fill="#0a1f3d"/></g>`;
             svg += `<text x="${it.x0+it.wpx/2}" y="${frontY-6}" font-size="8" fill="#0a1f3d" font-weight="600" text-anchor="middle">${it.code}</text>`
         } else if (it.kind === "door") {
             const ap = (aperturas[it.idx] || "DER_EXT").split("_");
@@ -5255,7 +5259,7 @@ function buildPmrPanelSvg() {
             const hx = hingeRight ? it.x0 + it.wpx : it.x0;
             const leafLen = Math.max(6, it.wpx);
             const swingV = Math.min(leafLen, (frontY - y0) * 0.9);
-            svg += `<line x1="${hx}" y1="${frontY}" x2="${hx}" y2="${frontY-swingV}" stroke="#0a1f3d" stroke-width="2.5"/>`;
+            svg += `<g data-piece="${it.dp}"><line x1="${hx}" y1="${frontY}" x2="${hx}" y2="${frontY-swingV}" stroke="#0a1f3d" stroke-width="2.5"/></g>`;
             svg += `<text x="${it.x0+it.wpx/2}" y="${frontY-7}" font-size="8" fill="#0a1f3d" font-weight="600" text-anchor="middle">${it.code}${it.cuarto?" ♿":""}</text>`
         }
     });
