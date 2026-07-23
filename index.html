@@ -5235,7 +5235,7 @@ function buildPmrPanelSvg() {
     svg += wall(rightX);
     const panelPx = cuartoFloorY - y0;
     svg += `<g data-piece="panel-${cuartoIdx}"><rect x="${boundaryX-1.5}" y="${y0}" width="3" height="${panelPx}" fill="#0a1f3d"/></g>`;
-    const plx = boundaryX + (inv ? -7 : 7);
+    const plx = boundaryX + (inv ? 9 : -9);
     const ply = (y0 + cuartoFloorY) / 2;
     svg += `<text x="${plx}" y="${ply}" font-size="9" fill="#0a1f3d" font-weight="600" text-anchor="middle" transform="rotate(90 ${plx} ${ply})">${panelCode}</text>`;
     const cuCx = (cuX0 + cuX1) / 2,
@@ -9326,7 +9326,7 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(6);
     doc.setTextColor(10, 31, 61);
-    doc.text(`${panelCode}`, boundaryX + (inv ? -2.5 : 3.5), drawTop + panelMm * 0.5 + doc.getTextWidth(panelCode) / 2, {
+    doc.text(`${panelCode}`, boundaryX + (inv ? 4 : -4), drawTop + panelMm * 0.5 + doc.getTextWidth(panelCode) / 2, {
         angle: 90
     });
     const cuCx = (cuX0 + cuX1) / 2,
