@@ -5232,7 +5232,7 @@ function buildPmrPanelSvg() {
         cuX1 = inv ? rightX : boundaryX;
     const cbX0 = inv ? leftX : boundaryX,
         cbX1 = inv ? boundaryX : rightX;
-    const wcGlyph = tx => `<g transform="${tx}"><rect width="6" height="28" rx="2" fill="#0a1f3d"/><ellipse cx="26" cy="14" rx="17" ry="13" fill="none" stroke="#0a1f3d" stroke-width="2"/></g>`;
+    const wcGlyph = (cx, topY) => `<g transform="translate(${cx-14}, ${topY})"><rect width="28" height="6" rx="2" fill="#0a1f3d"/><ellipse cx="14" cy="26" rx="13" ry="17" fill="none" stroke="#0a1f3d" stroke-width="2"/></g>`;
     let svg = `<svg viewBox="0 0 ${displayW} ${svgH}" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">`;
     svg += `<defs><pattern id="wallHatchPR" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#0a1f3d" stroke-width="0.7"/></pattern></defs>`;
     svg += `<rect x="${cuX0}" y="${y0}" width="${cuX1-cuX0}" height="${cuartoFloorY-y0}" fill="#f0f3f7"/>`;
@@ -5254,8 +5254,10 @@ function buildPmrPanelSvg() {
     svg += `<circle cx="${cuCx}" cy="${cuCy}" r="${rGiro}" fill="none" stroke="#5db0e0" stroke-width="1.2" stroke-dasharray="5,4"/>`;
     svg += `<text x="${cuCx}" y="${cuCy+rGiro-5}" font-size="8" fill="#5db0e0" font-weight="700" text-anchor="middle">Ø1.50</text>`;
     svg += `<text x="${cuCx-11}" y="${cuCy+6}" font-size="20" fill="#5db0e0">♿</text>`;
-    svg += wcGlyph(inv ? `translate(${cuX1-10}, 34) scale(-1,1)` : `translate(${cuX0+10}, 34)`);
-    svg += wcGlyph(inv ? `translate(${cbX1-10}, 34) scale(-1,1)` : `translate(${cbX0+10}, 34)`);
+    svg += wcGlyph(inv ? cuX1 - 22 : cuX0 + 22, 24);
+    seq.forEach(it => {
+        if (it.kind === "door" && it.zona === "cub" && it.wpx > 4) svg += wcGlyph(it.x0 + it.wpx / 2, 24)
+    });
     seq.forEach(it => {
         if (it.kind === "panel") return;
         const frontY = it.zona === "cub" ? recessY : cuartoFloorY;
@@ -9386,9 +9388,14 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
     try {
         doc.addImage(WC_IMG_B64, "PNG", cuX0 + 3, drawTop + 3, iwB, ihB, undefined, "FAST")
     } catch (e) {}
-    try {
-        doc.addImage(WC_IMG_B64, "PNG", cbX0 + 3, drawTop + 3, iwB, ihB, undefined, "FAST")
-    } catch (e) {}
+    seq.forEach(it => {
+        if (it.kind !== "door" || it.zona !== "cub") return;
+        const iwC = Math.min(iwB, it.wmm * 0.62),
+            ihC = iwC * 1.45;
+        try {
+            doc.addImage(WC_IMG_B64, "PNG", it.x0 + it.wmm / 2 - iwC / 2, drawTop + 3, iwC, ihC, undefined, "FAST")
+        } catch (e) {}
+    });
     seq.forEach(it => {
         if (it.kind === "panel") return;
         const fy = it.zona === "cub" ? recessY : cuartoFloorYp;
