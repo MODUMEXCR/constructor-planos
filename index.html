@@ -5546,6 +5546,7 @@ function buildBathroomSvg() {
         const counts = {};
         (areaCfg.paneles || []).forEach((pc, idx) => {
             if (esPmrLay && idx === 0) return;
+            if (!esPmrLay && !rightWall && N > 1 && idx === N - 1) return;
             const pz = pc ? CATALOGO.piezas.find(p => p.codigo === pc) : null;
             if (pz && pz.familia === "PN") counts[pz.ancho] = (counts[pz.ancho] || 0) + 1
         });
@@ -9840,6 +9841,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
         const counts = {};
         (areaCfg.paneles || []).forEach((pc, idx) => {
             if (esPmrLayPdf && idx === 0) return;
+            if (!esPmrLayPdf && !rightWallEff && N > 1 && idx === N - 1) return;
             const pz = pc ? CATALOGO.piezas.find(p => p.codigo === pc) : null;
             if (pz && pz.familia === "PN") counts[pz.ancho] = (counts[pz.ancho] || 0) + 1
         });
