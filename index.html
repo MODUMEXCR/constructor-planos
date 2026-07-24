@@ -4013,6 +4013,17 @@ function actualizarInputSoloOrinal() {
     hide("cfg-cabinas-row", on);
     hide("cfg-modulacion-box", on);
     hide("cfg-incluye-orinales-row", on);
+    const tabPu = document.querySelector('.preview-tab[data-tab="puertas"]');
+    const tabPi = document.querySelector('.preview-tab[data-tab="pilastras"]');
+    const tabPa = document.querySelector('.preview-tab[data-tab="paneles"]');
+    if (tabPu) tabPu.style.display = on ? "none" : "";
+    if (tabPi) tabPi.style.display = on ? "none" : "";
+    if (tabPa) tabPa.textContent = on ? "Mingitorios" : "Paneles";
+    if (on && tabPa) {
+        document.querySelectorAll(".preview-tab[data-tab]").forEach(t => t.classList.toggle("active", t === tabPa));
+        activeTab = "paneles";
+        if (typeof renderPreviewControls === "function") renderPreviewControls("paneles")
+    }
     const nmRow = document.getElementById("cfg-nmingit-row");
     const mgRow = document.getElementById("cfg-mg-tipo-row");
     if (on) {
@@ -6186,8 +6197,12 @@ function renderPreviewControls(tab) {
         let dropdownHtml;
         if (tab === "paneles" && esMingitorio) {
             const optsMG = piezasMG.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${p.alto})</option>`).join("");
-            const optsPN = piezasFamilia2.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("");
-            dropdownHtml = `\n        <label>\n          <span>Cabina ${i+1} · panel/mingitorio</span>\n          <select data-tab="${tab}" data-idx="${i}">\n            <option value="">— Elegir —</option>\n            <optgroup label="Panel mingitorio (entre 2 mingitorios)">${optsMG}</optgroup>\n            <optgroup label="Panel lateral (entre baño y mingitorio, o contra muro)">${optsPN}</optgroup>\n          </select>\n        </label>`
+            if (cfg.soloOrinal) {
+                dropdownHtml = `\n        <label>\n          <span>Orinal ${i+1} · mampara MG</span>\n          <select data-tab="${tab}" data-idx="${i}">\n            <option value="">— Sin mampara —</option>\n            ${optsMG}\n          </select>\n        </label>`
+            } else {
+                const optsPN = piezasFamilia2.map(p => `<option value="${p.codigo}">${p.codigo} (${p.ancho}×${alturaPiezaSegunModelo(p.familia,cfg.modelo,cfg.terminacion,altoTouchlessActual())})</option>`).join("");
+                dropdownHtml = `\n        <label>\n          <span>Cabina ${i+1} · panel/mingitorio</span>\n          <select data-tab="${tab}" data-idx="${i}">\n            <option value="">— Elegir —</option>\n            <optgroup label="Panel mingitorio (entre 2 mingitorios)">${optsMG}</optgroup>\n            <optgroup label="Panel lateral (entre baño y mingitorio, o contra muro)">${optsPN}</optgroup>\n          </select>\n        </label>`
+            }
         } else {
             const altoPieza = fam => { const r = altoDeCabina(fam, _areaPC, i); return r != null ? r : alturaPiezaSegunModelo(fam, cfg.modelo, cfg.terminacion, altoTouchlessActual()); };
             let piezasParaEste;
@@ -6235,7 +6250,7 @@ function renderPreviewControls(tab) {
     if (tab === "pilastras") {
         cont.insertAdjacentHTML("beforeend", renderMurosYExtrasSection())
     }
-    if (tab === "paneles") {
+    if (tab === "paneles" && !cfg.soloOrinal) {
         cont.insertAdjacentHTML("beforeend", renderPanelesExtrasSection())
     }
     const a = activeAreaCfg();
