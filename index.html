@@ -4013,6 +4013,12 @@ function actualizarInputSoloOrinal() {
     hide("cfg-cabinas-row", on);
     hide("cfg-modulacion-box", on);
     hide("cfg-incluye-orinales-row", on);
+    if (on) {
+        const vEl = document.getElementById("preview-validacion");
+        if (vEl) vEl.style.display = "none";
+        const sEl = document.getElementById("cfg-sugerencia");
+        if (sEl) sEl.hidden = true
+    }
     const tabPu = document.querySelector('.preview-tab[data-tab="puertas"]');
     const tabPi = document.querySelector('.preview-tab[data-tab="pilastras"]');
     const tabPa = document.querySelector('.preview-tab[data-tab="paneles"]');
@@ -5065,6 +5071,10 @@ function aperturaInteriorBloqueada(a, i) {
 function actualizarValidacionModulacion() {
     const el = document.getElementById("preview-validacion");
     if (!el) return;
+    if (cfg.soloOrinal) {
+        el.style.display = "none";
+        return
+    }
     const a = activeAreaCfg();
     if (!a) {
         el.style.display = "none";
@@ -7827,6 +7837,11 @@ function actualizarValidacionCentros() {
 function recalcularSugerencia() {
     actualizarInfoPared();
     renderCentrosDescarga();
+    if (cfg.soloOrinal) {
+        const contSo = document.getElementById("cfg-sugerencia");
+        if (contSo) contSo.hidden = true;
+        return
+    }
     const esLeeder = ["LEEDER", "SUPERIOR", "TOUCHLESS"].includes((cfg.linea || "").toUpperCase());
     if (!esLeeder) {
         const cont = document.getElementById("cfg-sugerencia");
