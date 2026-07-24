@@ -5196,17 +5196,6 @@ function actualizarValidacionModulacion() {
         el.textContent = `⚠ Falta(n) ${faltantes.length} pieza(s): ${faltantes.slice(0,3).join(", ")}${faltantes.length>3?"…":""}`;
         return
     }
-    if (N === 1 && suma > 0) {
-        a.largo = String(Math.round(suma));
-        const lgEl = document.getElementById("cfg-largo");
-        if (lgEl) lgEl.value = a.largo;
-        el.style.display = "block";
-        el.style.background = "#dcfce7";
-        el.style.color = "#166534";
-        el.style.border = "1px solid #bbf7d0";
-        el.textContent = `✓ Un solo cubículo — el largo del lugar se adapta a la pieza (${Math.round(suma)} cm)`;
-        return
-    }
     const esLayoutE = layout.codigo === "E" || layout.codigo === "E+";
     const esLayoutL = layout.codigo === "L" || layout.codigo === "L+";
     const esDosMuros = leftWall && rightWall && !esPmrCuartoVal;
@@ -5684,7 +5673,18 @@ function buildBathroomSvg() {
     const extraPmr = esPmrLay ? Math.max(0, Math.round(cabHeight * (pmrProfTotal - 150) / 150)) : 0;
     const hayCentros = (areaCfg.centrosDescarga || []).some(c => c !== "" && c != null && !isNaN(c));
     let panelBaseCm = 150;
-    {
+    if (!esPmrLay && N === 1) {
+        const anchosLat = [];
+        (areaCfg.paneles || []).forEach(pc => {
+            const pz = pc ? CATALOGO.piezas.find(p => p.codigo === pc) : null;
+            if (pz && pz.familia === "PN") anchosLat.push(pz.ancho)
+        });
+        if (areaCfg.panelCierreIzq) {
+            const pzc = CATALOGO.piezas.find(p => p.codigo === areaCfg.panelCierreIzq);
+            if (pzc && pzc.familia === "PN") anchosLat.push(pzc.ancho)
+        }
+        if (anchosLat.length) panelBaseCm = Math.max.apply(null, anchosLat)
+    } else {
         const counts = {};
         (areaCfg.paneles || []).forEach((pc, idx) => {
             if (esPmrLay && idx === 0) return;
@@ -9988,7 +9988,18 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     const pmrProfTotalPdf = esPmrLayPdf ? (profLugarCmPdf > 0 ? profLugarCmPdf : (pmrDivPanelCmPdf + 90 + 30)) : 0;
     const extraPmrPdf = esPmrLayPdf ? Math.max(0, cabDepth * (pmrProfTotalPdf - pmrCabPanelCmPdf) / pmrCabPanelCmPdf) : 0;
     let panelBaseCmPdf = 150;
-    {
+    if (!esPmrLayPdf && N === 1) {
+        const anchosLat = [];
+        (areaCfg.paneles || []).forEach(pc => {
+            const pz = pc ? CATALOGO.piezas.find(p => p.codigo === pc) : null;
+            if (pz && pz.familia === "PN") anchosLat.push(pz.ancho)
+        });
+        if (areaCfg.panelCierreIzq) {
+            const pzc = CATALOGO.piezas.find(p => p.codigo === areaCfg.panelCierreIzq);
+            if (pzc && pzc.familia === "PN") anchosLat.push(pzc.ancho)
+        }
+        if (anchosLat.length) panelBaseCmPdf = Math.max.apply(null, anchosLat)
+    } else {
         const counts = {};
         (areaCfg.paneles || []).forEach((pc, idx) => {
             if (esPmrLayPdf && idx === 0) return;
