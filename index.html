@@ -5196,6 +5196,17 @@ function actualizarValidacionModulacion() {
         el.textContent = `⚠ Falta(n) ${faltantes.length} pieza(s): ${faltantes.slice(0,3).join(", ")}${faltantes.length>3?"…":""}`;
         return
     }
+    if (N === 1 && suma > 0) {
+        a.largo = String(Math.round(suma));
+        const lgEl = document.getElementById("cfg-largo");
+        if (lgEl) lgEl.value = a.largo;
+        el.style.display = "block";
+        el.style.background = "#dcfce7";
+        el.style.color = "#166534";
+        el.style.border = "1px solid #bbf7d0";
+        el.textContent = `✓ Un solo cubículo — el largo del lugar se adapta a la pieza (${Math.round(suma)} cm)`;
+        return
+    }
     const esLayoutE = layout.codigo === "E" || layout.codigo === "E+";
     const esLayoutL = layout.codigo === "L" || layout.codigo === "L+";
     const esDosMuros = leftWall && rightWall && !esPmrCuartoVal;
