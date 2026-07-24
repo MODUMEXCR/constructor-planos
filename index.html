@@ -4633,20 +4633,29 @@ function updateAltura() {
 function actualizarCurvaMingit() {
     const row = document.getElementById("cfg-curva-row");
     const sel = document.getElementById("cfg-curva-mingit");
-    const on = +((document.getElementById("cfg-mingitorios") || {}).value || 0) === 1;
     const a = (typeof activeAreaCfg === "function") ? activeAreaCfg() : null;
+    if (cfg.soloOrinal) {
+        if (row) row.style.display = "none";
+        return
+    }
+    const layoutCurva = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
+    const esPmrPanelCurva = !!layoutCurva.pmrPanel;
+    const contMing = a ? (a.tiposCabina || []).filter(t => t === "Mingitorio").length : 0;
+    if (a && !esPmrPanelCurva) a.nMingitorios = contMing;
+    const nOri = esPmrPanelCurva ? (a ? a.nMingitorios || 0 : 0) : contMing;
+    const on = esPmrPanelCurva ? nOri > 0 : +((document.getElementById("cfg-mingitorios") || {}).value || 0) === 1;
+    const incSel = document.getElementById("cfg-mingitorios");
+    if (incSel && esPmrPanelCurva) incSel.value = on ? "1" : "0";
     const nmRow = document.getElementById("cfg-nmingit-row");
     const nmInp = document.getElementById("cfg-n-mingitorios");
     const mgRow = document.getElementById("cfg-mg-tipo-row");
     const mgSel = document.getElementById("cfg-mg-tipo");
-    const contMing = a ? (a.tiposCabina || []).filter(t => t === "Mingitorio").length : 0;
-    if (a) a.nMingitorios = contMing;
     if (nmRow) nmRow.style.display = on ? "" : "none";
-    if (nmInp) nmInp.value = on ? contMing : 0;
+    if (nmInp) nmInp.value = on ? nOri : 0;
     if (mgRow) mgRow.style.display = on ? "" : "none";
     if (mgSel && a) mgSel.value = a.mgTipo || "MG60120";
     if (a) {
-        const banos = Math.max(0, (a.cabinas || 0) - contMing);
+        const banos = esPmrPanelCurva ? (a.cabinas || 0) : Math.max(0, (a.cabinas || 0) - contMing);
         const sl = document.getElementById("cfg-cabinas"),
             slv = document.getElementById("cfg-cabinas-val");
         if (sl) sl.value = banos;
