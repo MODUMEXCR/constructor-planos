@@ -1018,8 +1018,8 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
             <datalist id="cfg-hoja-list"></datalist>
           </div>
 
-          <div class="form-row" style="margin-bottom:14px;">
-            <label class="form-label">Número de cabinas · baños cerrados (1 - 15)</label>
+          <div class="form-row" style="margin-bottom:14px;" id="cfg-cabinas-row">
+            <label class="form-label" id="cfg-cabinas-label">Número de cabinas · baños cerrados (1 - 15)</label>
             <div class="slider-row">
               <input type="range" id="cfg-cabinas" min="1" max="15" value="3">
               <span class="val" id="cfg-cabinas-val">3</span>
@@ -1027,7 +1027,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           </div>
 
           
-          <div class="modulacion-box">
+          <div class="modulacion-box" id="cfg-modulacion-box">
             <div class="modulacion-row" style="grid-template-columns: 1fr 1fr auto;">
               <label>
                 <span>Largo del lugar (cm) — claro interior</span>
@@ -1134,7 +1134,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
                 <option value="1">Sí</option>
               </select>
             </div>
-            <div class="form-row">
+            <div class="form-row" id="cfg-incluye-orinales-row">
               <label class="form-label">Incluye orinales</label>
               <select class="form-select" id="cfg-mingitorios">
                 <option value="0">No</option>
@@ -1791,6 +1791,16 @@ const CATALOGO = {
         nombre: "PMR + panel de cierre",
         acc: true,
         pmrPanel: true
+    }, {
+        codigo: "OL",
+        nombre: "Orinales L",
+        soloOrinal: true,
+        base: "L"
+    }, {
+        codigo: "OU",
+        nombre: "Orinales U",
+        soloOrinal: true,
+        base: "U"
     }],
     posicionesPilastra: ["Esquina", "Central", "Muro", "Baño"],
     direccionesPuerta: ["Der. afuera", "Der. adentro", "Izq. afuera", "Izq. adentro"],
@@ -3912,15 +3922,26 @@ function initConfigurador() {
     fillDistribuidorSelect();
     actualizarBotonSugerirSegunLinea();
     const lc = document.getElementById("cfg-layouts");
-    lc.innerHTML = CATALOGO.layouts.map(l => `\n    <div class="layout-option ${cfg.layout===l.codigo?"selected":""}" data-layout="${l.codigo}">\n      ${layoutIconSvg(l)}\n      <div class="lbl">${l.nombre}</div>\n    </div>`).join("");
+    lc.innerHTML = CATALOGO.layouts.map(l => {
+        const sel = l.soloOrinal ? (cfg.layout === l.base && cfg.soloOrinal) : (cfg.layout === l.codigo && !cfg.soloOrinal);
+        return `\n    <div class="layout-option ${sel?"selected":""}" data-layout="${l.codigo}">\n      ${layoutIconSvg(l)}\n      <div class="lbl">${l.nombre}</div>\n    </div>`
+    }).join("");
     lc.querySelectorAll(".layout-option").forEach(opt => {
         opt.addEventListener("click", () => {
             const a = activeAreaCfg();
-            const nuevoCodigo = opt.dataset.layout;
-            const cambioLayout = cfg.layout !== nuevoCodigo;
-            if (a) a.layout = nuevoCodigo;
+            const wasSolo = !!cfg.soloOrinal;
+            const clicked = opt.dataset.layout;
+            const optObj = CATALOGO.layouts.find(l => l.codigo === clicked) || {};
+            const soloOri = !!optObj.soloOrinal;
+            const nuevoCodigo = soloOri ? optObj.base : clicked;
+            const cambioLayout = cfg.layout !== nuevoCodigo || !!cfg.soloOrinal !== soloOri;
+            if (a) {
+                a.layout = nuevoCodigo;
+                a.soloOrinal = soloOri
+            }
             if (cambioLayout && a && Array.isArray(a.panelesExtras)) a.panelesExtras = a.panelesExtras.filter(ex => !(ex.descripcion || "").toLowerCase().includes("relleno fin de pared"));
             cfg.layout = nuevoCodigo;
+            cfg.soloOrinal = soloOri;
             const layoutObj = CATALOGO.layouts.find(l => l.codigo === nuevoCodigo);
             if (layoutObj && layoutObj.fixedCabinas) {
                 if (a) a.cabinas = layoutObj.fixedCabinas;
@@ -3931,6 +3952,12 @@ function initConfigurador() {
                 if (slval) slval.textContent = layoutObj.fixedCabinas
             }
             lc.querySelectorAll(".layout-option").forEach(o => o.classList.toggle("selected", o === opt));
+            if (soloOri) recomputarCabinas(cfg.cabinas, 0);
+            else if (wasSolo) {
+                if (a) a.nMingitorios = 0;
+                recomputarCabinas(cfg.cabinas, 0)
+            }
+            actualizarInputSoloOrinal();
             sincronizarMurosConLayout();
             actualizarInputPmrCuarto();
             renderPreview();
@@ -3975,6 +4002,33 @@ function initConfigurador() {
     actualizarInputPmrCuarto();
     renderAreaList();
     renderPreview()
+}
+
+function actualizarInputSoloOrinal() {
+    const on = !!cfg.soloOrinal;
+    const hide = (id, oculto) => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = oculto ? "none" : ""
+    };
+    hide("cfg-cabinas-row", on);
+    hide("cfg-modulacion-box", on);
+    hide("cfg-incluye-orinales-row", on);
+    const nmRow = document.getElementById("cfg-nmingit-row");
+    const mgRow = document.getElementById("cfg-mg-tipo-row");
+    if (on) {
+        if (nmRow) nmRow.style.display = "";
+        if (mgRow) mgRow.style.display = "";
+        const a = activeAreaCfg();
+        const nm = document.getElementById("cfg-n-mingitorios");
+        if (nm && a) nm.value = a.cabinas || 0;
+        const lblN = document.querySelector("#cfg-nmingit-row .form-label");
+        if (lblN) lblN.textContent = "¿Cuántos orinales?"
+    } else {
+        const incVal = (document.getElementById("cfg-mingitorios") || {}).value;
+        const show = incVal === "1";
+        if (nmRow) nmRow.style.display = show ? "" : "none";
+        if (mgRow) mgRow.style.display = show ? "" : "none"
+    }
 }
 
 function actualizarInputPmrCuarto() {
@@ -4435,6 +4489,12 @@ function bindCfg() {
     };
     const inpNMingit = document.getElementById("cfg-n-mingitorios");
     if (inpNMingit) inpNMingit.onchange = () => {
+        if (cfg.soloOrinal) {
+            const v = Math.max(1, Math.min(parseInt(inpNMingit.value, 10) || 1, 15));
+            recomputarCabinas(v, 0);
+            inpNMingit.value = v;
+            return
+        }
         const n = aplicarNMingitorios(inpNMingit.value);
         inpNMingit.value = n != null ? n : 0
     };
@@ -4621,6 +4681,35 @@ function recomputarCabinas(banos, orinales) {
     banos = Math.max(1, parseInt(banos, 10) || 1);
     orinales = Math.max(0, Math.min(parseInt(orinales, 10) || 0, 15));
     const layoutRc = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
+    if (cfg.soloOrinal || a.soloOrinal) {
+        const nOri = Math.max(1, Math.min(banos, 15));
+        a.cabinas = nOri;
+        cfg.cabinas = nOri;
+        a.soloOrinal = true;
+        a.nMingitorios = nOri;
+        ["tiposCabina", "puertas", "paneles", "pilastras", "aperturas", "bisagras", "puertaSubTipo", "panelSubTipo", "pilastraSubTipo", "canaletas", "centrosDescarga"].forEach(k => {
+            if (Array.isArray(a[k]) && a[k].length > nOri) a[k].length = nOri
+        });
+        colocarMingitorios(a, nOri);
+        asegurarCierreMingit(a, cfg.layout, cfg.invertir);
+        a.largo = String(nOri * 60);
+        if (!a.ancho || +a.ancho <= 0) a.ancho = "80";
+        const lgR = document.getElementById("cfg-largo"),
+            anR = document.getElementById("cfg-ancho"),
+            nmR = document.getElementById("cfg-n-mingitorios"),
+            slR = document.getElementById("cfg-cabinas"),
+            slvR = document.getElementById("cfg-cabinas-val");
+        if (lgR) lgR.value = a.largo;
+        if (anR) anR.value = a.ancho;
+        if (nmR) nmR.value = nOri;
+        if (slR) slR.value = nOri;
+        if (slvR) slvR.textContent = nOri;
+        if (typeof sincronizarMurosConLayout === "function") sincronizarMurosConLayout();
+        if (typeof renderPreview === "function") renderPreview();
+        if (typeof renderPreviewControls === "function") renderPreviewControls(activeTab);
+        if (typeof recalcularSugerencia === "function") recalcularSugerencia();
+        return
+    }
     if (layoutRc.pmrPanel) {
         a.cabinas = banos;
         cfg.cabinas = banos;
@@ -4748,7 +4837,8 @@ function makeDefaultAreaCfg() {
         curvaMingitorio: "No tiene",
         nMingitorios: 0,
         mgTipo: "MG60120",
-        altoRegadera: 180
+        altoRegadera: 180,
+        soloOrinal: false
     }
 }
 
@@ -4766,6 +4856,7 @@ function activarArea(idx) {
         cfg.cabinas = a.cabinas;
         cfg.layout = a.layout;
         cfg.invertir = a.invertir;
+        cfg.soloOrinal = !!a.soloOrinal;
         const slider = document.getElementById("cfg-cabinas");
         const slval = document.getElementById("cfg-cabinas-val");
         const inv = document.getElementById("cfg-invertir");
@@ -4777,11 +4868,16 @@ function activarArea(idx) {
         const anchoEl = document.getElementById("cfg-ancho");
         if (largoEl) largoEl.value = a.largo != null ? a.largo : "";
         if (anchoEl) anchoEl.value = a.ancho != null ? a.ancho : "";
-        document.querySelectorAll(".layout-option").forEach(o => o.classList.toggle("selected", o.dataset.layout === a.layout));
+        document.querySelectorAll(".layout-option").forEach(o => {
+            const lo = CATALOGO.layouts.find(l => l.codigo === o.dataset.layout) || {};
+            const sel = lo.soloOrinal ? (lo.base === a.layout && !!a.soloOrinal) : (o.dataset.layout === a.layout && !a.soloOrinal);
+            o.classList.toggle("selected", sel)
+        });
         if (a.anchoPmrCuarto === undefined) a.anchoPmrCuarto = 162;
         if (a.hoja === undefined) a.hoja = "";
         renderHojaOptions()
     }
+    if (typeof actualizarInputSoloOrinal === "function") actualizarInputSoloOrinal();
     if (typeof actualizarInputPmrCuarto === "function") actualizarInputPmrCuarto();
     renderAreaList();
     renderPreview();
@@ -4853,6 +4949,20 @@ function layoutIconSvg(l) {
     const xL = 6,
         xR = w - 2;
     let walls = "";
+    if (l.soloOrinal) {
+        walls += `<line x1="${xL}" y1="${top}" x2="${xR}" y2="${top}" stroke="#0a1f3d" stroke-width="1.6"/>`;
+        walls += `<line x1="${xL}" y1="${top}" x2="${xL}" y2="${bot}" stroke="#0a1f3d" stroke-width="2"/>`;
+        if (l.base === "U") walls += `<line x1="${xR}" y1="${top}" x2="${xR}" y2="${bot}" stroke="#0a1f3d" stroke-width="2"/>`;
+        for (let i = 0; i < 3; i++) {
+            const cx = xL + (xR - xL) * (i + 0.5) / 3;
+            walls += `<ellipse cx="${cx}" cy="${(top+bot)/2+2}" rx="4" ry="5" fill="none" stroke="#0a1f3d" stroke-width="1.1"/>`
+        }
+        for (let i = 1; i < 3; i++) {
+            const dx = xL + (xR - xL) * i / 3;
+            walls += `<line x1="${dx}" y1="${top}" x2="${dx}" y2="${(top+bot)/2}" stroke="#0a1f3d" stroke-width="1.3"/>`
+        }
+        return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${walls}</svg>`
+    }
     if (l.codigo === "I" || l.codigo === "K" || l.codigo === "LP") {
         walls += `<line x1="${xL}" y1="${top}" x2="${xR}" y2="${top}" stroke="#0a1f3d" stroke-width="1.6"/>`;
         if (l.codigo === "I" || l.codigo === "K" || l.codigo === "LP") {
