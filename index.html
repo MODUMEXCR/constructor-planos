@@ -5072,6 +5072,21 @@ function aperturaInteriorBloqueada(a, i) {
     // no a una cabina angosta, y el panel divisor va contra el cuarto/pared.
     const layoutAB = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
     if (layoutAB.pmrCuarto && i === (cfg.invertir ? cfg.cabinas - 1 : 0)) return false;
+    const N = cfg.cabinas;
+    // El panel de la última cabina es de cierre (extremo abierto) o queda contra el muro:
+    // en ambos casos no define la profundidad de la cabina (esa es la base), así que la
+    // puerta sí puede abrir hacia adentro salvo que la propia base sea < 135.
+    if (N > 1 && i === N - 1 && !layoutAB.pmrCuarto && !layoutAB.pmrPanel) {
+        let base = 0;
+        (a.paneles || []).forEach((c, idx) => {
+            if (idx === i) return;
+            const p = c ? CATALOGO.piezas.find(x => x.codigo === c) : null;
+            if (p && p.familia === "PN") base = Math.max(base, p.ancho)
+        });
+        const cIzq = a.panelCierreIzq ? CATALOGO.piezas.find(x => x.codigo === a.panelCierreIzq) : null;
+        if (cIzq && cIzq.familia === "PN") base = Math.max(base, cIzq.ancho);
+        return base > 0 ? base < 135 : false
+    }
     const pcode = (a.paneles || [])[i];
     const pz = pcode ? CATALOGO.piezas.find(p => p.codigo === pcode) : null;
     return !!(pz && pz.familia === "PN" && pz.ancho < 135)
