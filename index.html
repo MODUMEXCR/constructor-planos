@@ -5223,7 +5223,7 @@ function actualizarValidacionModulacion() {
     const esLayoutE = layout.codigo === "E" || layout.codigo === "E+";
     const esLayoutL = layout.codigo === "L" || layout.codigo === "L+";
     const esDosMuros = leftWall && rightWall && !esPmrCuartoVal;
-    const claroAjustado = esLayoutE || esDosMuros ? claro : claro - nPilMuro + 1.5 * nPuertas;
+    const claroAjustado = esLayoutE ? claro : claro - nPilMuro + 1.5 * nPuertas;
     const diff = claroAjustado - suma;
     const absDiff = Math.abs(diff);
     const rawGap = claro - suma;
@@ -5266,18 +5266,18 @@ function actualizarValidacionModulacion() {
             el.textContent = `✕ Se pasa ${absDiff.toFixed(1)} cm de la medida dada (suma ${suma} cm vs claro ${claro} cm). Reducí una pieza.`
         }
     } else if (esDosMuros) {
-        if (rawGap < -.05) {
+        if (diff < -.05) {
             rojo();
-            el.textContent = `✕ NO CABE — las piezas suman ${suma} cm y el claro es ${claro} cm: se pasan ${(suma-claro).toFixed(1)} cm entre los dos muros. Reducí una pieza.`
-        } else if (rawGap <= tolHerraje) {
-            verde();
-            el.textContent = rawGap > .05 ? `✓ Modulación calza — ajuste de instalación de ${rawGap.toFixed(1)} cm (suma ${suma} cm vs claro ${claro} cm)` : `✓ Modulación calza exacta — suma ${suma} cm vs claro ${claro} cm`
-        } else if (rawGap <= 5) {
+            el.textContent = `✕ NO CABE — las piezas suman ${suma} cm y no caben entre los dos muros (claro ${claro} cm; con la holgura de herraje de las puertas el máximo es ${claroAjustado.toFixed(1)} cm): se pasan ${absDiff.toFixed(1)} cm. Reducí una pieza.`
+        } else if (rawGap > 5) {
+            rojo();
+            el.textContent = `✕ NO CALZA — falta material: hueco de ${rawGap.toFixed(1)} cm (excede el rango de canaletas de 5 cm). Suma ${suma} cm, claro ${claro} cm. Agrandá una pieza o presioná 💡 Sugerir.`
+        } else if (rawGap > tolHerraje) {
             amarillo();
             el.textContent = `⚠ Calza con canaleta de ${rawGap.toFixed(1)} cm para rellenar el hueco a la pared (suma ${suma} cm vs claro ${claro} cm)`
         } else {
-            rojo();
-            el.textContent = `✕ NO CALZA — falta material: hueco de ${rawGap.toFixed(1)} cm (excede el rango de canaletas de 5 cm). Suma ${suma} cm, claro ${claro} cm. Agrandá una pieza o presioná 💡 Sugerir.`
+            verde();
+            el.textContent = rawGap < -.05 ? `✓ Modulación calza — la holgura de herraje de las puertas absorbe ${(-rawGap).toFixed(1)} cm (suma ${suma} cm vs claro ${claro} cm)` : rawGap > .05 ? `✓ Modulación calza — ajuste de instalación de ${rawGap.toFixed(1)} cm (suma ${suma} cm vs claro ${claro} cm)` : `✓ Modulación calza exacta — suma ${suma} cm vs claro ${claro} cm`
         }
     } else if (absDiff <= tolHerraje) {
         verde();
@@ -7101,7 +7101,7 @@ function sugerirModulacion({
     const PMR_PENALTY = .1;
     const esLayoutE = layoutCodigo === "E" || layoutCodigo === "E+";
     const esDosMuros = leftWallEff && rightWallEff && !esPmrCuarto;
-    const claroAjustado = esLayoutE || esDosMuros ? claro : claro - nPilastrasAMuro + 1.5 * nPuertas;
+    const claroAjustado = esLayoutE ? claro : claro - nPilastrasAMuro + 1.5 * nPuertas;
     let best = null;
     const aCfgAcc = (typeof activeAreaCfg === "function" ? activeAreaCfg() : null) || {};
     const anchoAccesible = Math.max(90, aCfgAcc.anchoAccesible || 150);
@@ -7148,7 +7148,7 @@ function sugerirModulacion({
                             const cierreAccBlk = pmrEnDer ? apE2 : apE1;
                             const blkErr = Math.abs(cierreAccBlk + accAncho + apAcc - anchoAccesible);
                             const scoreAcc = usarAccDivisor ? (blkErr <= 5 ? blkErr * .1 : .5 + (blkErr - 5) * ACC_BLOCK_PREF) : esSoloAcc ? Math.abs(apE1 - apE2) * .02 : 0;
-                            const score = Math.abs(diff) + (nAcc > 0 ? Math.abs(accAncho - PMR_PREF) * PMR_PENALTY : 0) + (nEstandar > 0 ? Math.abs(ap - PT_PREF) * PT_PENALTY : 0) + (esPmrCuarto ? Math.abs(apRelleno - RELLENO_PREF) * RELLENO_PENALTY : 0) + (esDosMuros && total > claro ? (total - claro) * 100 : 0) + scoreAcc;
+                            const score = Math.abs(diff) + (nAcc > 0 ? Math.abs(accAncho - PMR_PREF) * PMR_PENALTY : 0) + (nEstandar > 0 ? Math.abs(ap - PT_PREF) * PT_PENALTY : 0) + (esPmrCuarto ? Math.abs(apRelleno - RELLENO_PREF) * RELLENO_PENALTY : 0) + (esDosMuros && total > claroAjustado ? (total - claroAjustado) * 100 : 0) + scoreAcc;
                             if (!best || score < best.score) {
                                 best = {
                                     anchoPuerta: ap,
@@ -7185,7 +7185,7 @@ function sugerirModulacion({
     const absDiffReal = Math.abs(diffReal);
     const margenHerraje = .5 * nPilastrasAMuro;
     const esLayoutL = layoutCodigo === "L" || layoutCodigo === "L+";
-    const tolExacto = esLayoutE || esLayoutL ? 5 : esDosMuros ? .5 : margenHerraje;
+    const tolExacto = esLayoutE || esLayoutL ? 5 : margenHerraje;
     let ajuste;
     if (absDiffReal <= tolExacto) {
         const msgHerraje = esLayoutL ? absDiffReal > .5 ? ` (layout L: el extremo abierto absorbe ${absDiffReal.toFixed(1)} cm — tolerancia ±5 cm)` : "" : margenHerraje > 0 && absDiffReal > .5 ? ` (ajuste de ${absDiffReal.toFixed(1)} cm absorbido por el herraje de ${nPilastrasAMuro} pilastra(s) a muro)` : "";
