@@ -8070,7 +8070,13 @@ async function guardarProyectoActual(descargar) {
     if (!soloDescarga) {
         if (conectado) {
             try {
-                await guardarProyectoSupabase(proyecto)
+                await guardarProyectoSupabase(proyecto);
+                const verificado = await verificarGuardadoNube(proyecto);
+                if (!verificado) {
+                    guardadoOk = false;
+                    toast("El proyecto no se guardó bien, reintentá", "danger");
+                    if (!descargar) return
+                }
             } catch (e) {
                 guardadoOk = false;
                 toast("No se pudo guardar en la nube: " + (e.message || e), "danger");
@@ -11512,6 +11518,29 @@ async function renderProyectos() {
         toast("Proyecto eliminado", "ok")
     })
 } ["proy-fecha-desde", "proy-fecha-hasta", "proy-buscar", "proy-filtro-distribuidor"].forEach(id => document.getElementById(id).addEventListener("input", renderProyectos));
+async function verificarGuardadoNube(proyecto) {
+    try {
+        if (!SB || proyecto.id == null) return true;
+        const {
+            data: data,
+            error: error
+        } = await SB.from("proyecto").select("app_json").eq("proyecto_id", proyecto.id).single();
+        if (error || !data || !data.app_json) return false;
+        const remoto = data.app_json.configByArea || {};
+        const local = proyecto.configByArea || {};
+        const campos = ["aperturas", "puertas", "paneles", "pilastras", "tiposCabina"];
+        for (const nombre of (proyecto.areas || [])) {
+            const l = local[nombre] || {},
+                r = remoto[nombre] || {};
+            for (const c of campos) {
+                if (JSON.stringify(l[c] || []) !== JSON.stringify(r[c] || [])) return false
+            }
+        }
+        return true
+    } catch (e) {
+        return false
+    }
+}
 async function guardarProyectoSupabase(p) {
     const u = currentUser();
     let distribuidorId = null;
