@@ -8500,7 +8500,8 @@ function exportarCSV(proyecto) {
             if (r.kchl > 0) lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell("KCHL"), r.kchl, csvCell("TUBING-KIT"), "", csvCell(nombreDeArea(r.area)), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
         })
     }
-    const csv = lines.join("\n");
+    const lineaCsvVal = csvCell(nombreLinea(proyecto.linea));
+    const csv = lines.map((ln, i) => ln + "," + (i === 0 ? "Linea" : lineaCsvVal)).join("\n");
     const blob = new Blob([csv], {
         type: "text/csv;charset=utf-8;"
     });
