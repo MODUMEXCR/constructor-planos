@@ -9336,14 +9336,16 @@ function drawCajetinEsen(doc, proyecto, opts) {
     const m = 10;
     const x0 = m,
         x1 = W - m;
-    const yTop = H - m - 22,
+    const cajNarrow = (x1 - x0) < 260;
+    const yTop = H - m - (cajNarrow ? 30 : 22),
         yBot = H - m;
     doc.setDrawColor(10, 31, 61);
     doc.setLineWidth(.5);
     doc.rect(x0, yTop, x1 - x0, yBot - yTop);
-    const cx1 = x0 + 85;
-    const cx2 = cx1 + 70;
-    const cx3 = cx2 + 88;
+    const cajF = (x1 - x0) / 277;
+    const cx1 = x0 + 85 * cajF;
+    const cx2 = cx1 + 70 * cajF;
+    const cx3 = cx2 + 88 * cajF;
     [cx1, cx2, cx3].forEach(cx => doc.line(cx, yTop, cx, yBot));
     const modeloNom = (CATALOGO.modelos.find(mm => mm.codigo === proyecto.modelo) || {}).nombre || proyecto.modelo || "—";
     const termMap = {
@@ -9359,10 +9361,10 @@ function drawCajetinEsen(doc, proyecto, opts) {
     const color = proyecto.colorSecundarioActivo && proyecto.colorSecundario ? `${proyecto.color}, ${proyecto.colorSecundario} (${etiquetaPiezasColorSecundario(proyecto)})` : proyecto.color || "—";
     const obs = proyecto.observaciones || "Las medidas de la estructura indicadas en este plano son generadas a partir del proyecto " + "arquitectónico y deben asegurarse para garantizar una correcta instalación de las mamparas, " + "paneles, mingitorios y/o puertas.";
     const areaLbl = opts.cantidad && opts.cantidad > 1 ? `${opts.area} (cantidad ${opts.cantidad})` : opts.area;
-    const SP = 3;
+    const SP = cajNarrow ? 4.2 : 3;
     const drawPairs = (pares, colX, colRight) => {
         let yy = yTop + 5;
-        doc.setFontSize(6.2);
+        doc.setFontSize(cajNarrow ? 5.6 : 6.2);
         pares.forEach(([k, v]) => {
             doc.setFont("helvetica", "bold");
             doc.setTextColor(10, 31, 61);
@@ -9785,22 +9787,23 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     const rx = region.x,
         rw = region.w;
     const banded = region.height !== undefined;
+    const stackedHdr = !!region.stacked;
     const rtop = region.top !== undefined ? region.top : m;
     const narrow = rw < (W - 2 * m) * .7;
     const compact = narrow || banded;
-    const hAreaY = rtop + (banded ? 5 : 12);
-    const hLayY = rtop + (banded ? 9.5 : 19);
-    const hBanY = rtop + (banded ? 11 : 24);
-    const hBanH = banded ? 4.5 : 10;
-    const hModY = rtop + (banded ? 14.2 : 30);
-    const headerH = banded ? 18 : 58;
+    const hAreaY = rtop + (stackedHdr ? 6 : banded ? 5 : 12);
+    const hLayY = rtop + (stackedHdr ? 11.5 : banded ? 9.5 : 19);
+    const hBanY = rtop + (stackedHdr ? 14.5 : banded ? 11 : 24);
+    const hBanH = stackedHdr ? 7 : banded ? 4.5 : 10;
+    const hModY = rtop + (stackedHdr ? 19.5 : banded ? 14.2 : 30);
+    const headerH = stackedHdr ? 26 : banded ? 18 : 58;
     if (!region.measure) {
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(banded ? 8 : narrow ? 12 : 18);
+    doc.setFontSize(stackedHdr ? 12 : banded ? 8 : narrow ? 12 : 18);
     doc.setTextColor(10, 31, 61);
     doc.text(`ÁREA: ${nombreDeArea(areaName).toUpperCase()}`, rx + 6, hAreaY);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(banded ? 6.5 : narrow ? 8 : 11);
+    doc.setFontSize(stackedHdr ? 8 : banded ? 6.5 : narrow ? 8 : 11);
     doc.setTextColor(60, 60, 60);
     doc.text(`Layout ${areaLayout}${areaInvertir?" (invertido)":""} · ${areaCabinas} cabinas`, rx + 6, hLayY);
     const altTL = (areaCfg || {}).altoTouchless || proyecto.altoTouchless;
@@ -9813,7 +9816,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     doc.rect(rx + 6, hBanY, rw - 12, hBanH, "F");
     doc.setTextColor(10, 31, 61);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(banded ? 6 : narrow ? 9 : 11);
+    doc.setFontSize(stackedHdr ? 9 : banded ? 6 : narrow ? 9 : 11);
     doc.text(`MODELO: ${modeloNombreArea}`, rx + 10, hModY);
     if (!compact) {
         doc.setFont("helvetica", "normal");
@@ -10698,27 +10701,66 @@ function drawAreaPlanView(doc, proyecto, areaIdx, pageInfo) {
 }
 
 function drawSheet(doc, proyecto, areaIdxs, pageInfo, hojaLabel) {
+    const m = 10;
+    const k = areaIdxs.length;
+    // Dimensiones de la hoja horizontal (actual) y de una hoja girada a vertical.
+    const Wl = doc.internal.pageSize.getWidth();
+    const Hl = doc.internal.pageSize.getHeight();
+    const Wp = Hl,
+        Hp = Wl;
+    // Pasada de MEDICIÓN: footprint real (ancho×profundidad) de cada área.
+    const meds = areaIdxs.map(ai => renderAreaInto(doc, proyecto, ai, { x: 0, w: 0, measure: true }) || { totalCm: 100, profTotalCm: 150 });
+    const sumTot = meds.reduce((s, md) => s + Math.max(1, md.totalCm), 0);
+    const maxProf = Math.max.apply(null, meds.map(md => Math.max(1, md.profTotalCm)));
+    const sumProf = meds.reduce((s, md) => s + Math.max(1, md.profTotalCm), 0);
+    const maxTot = Math.max.apply(null, meds.map(md => Math.max(1, md.totalCm)));
+    const gap = 8;
+    // Escala compartida en COLUMNAS (lado a lado, hoja horizontal).
+    const colScaleW = (Wl - 2 * m - 28 * k - gap * (k - 1)) / sumTot;
+    const colScaleH = ((Hl - m) - (m + 58) - 40) / maxProf;
+    const colScale = Math.max(.05, Math.min(colScaleW, colScaleH));
+    // Escala compartida APILANDO en hoja vertical (arriba/abajo).
+    const vgapS = 8,
+        OH = 52,
+        topStart = m + 6;
+    const budgetV = (Hp - m - 36 - topStart) - OH * k - vgapS * (k - 1);
+    const stackScale = Math.max(.05, Math.min(budgetV / sumProf, ((Wp - 2 * m) - 28) / maxTot));
+    // Los cuartos PMR (P+/PP/PR) tienen su propio render → no se apilan.
+    const anyPmrPanel = areaIdxs.some(ai => {
+        const lay = ((proyecto.configByArea || {})[proyecto.areas[ai]] || {}).layout || proyecto.layout || "L";
+        return !!(CATALOGO.layouts.find(l => l.codigo === lay) || {}).pmrPanel;
+    });
+    // Automático: apilar en vertical solo si agranda las cabinas (>3%).
+    const useStack = k <= 3 && !anyPmrPanel && stackScale > colScale * 1.03;
+    if (useStack) doc.addPage("a4", "portrait");
+    else doc.addPage();
     const W = doc.internal.pageSize.getWidth();
     const H = doc.internal.pageSize.getHeight();
-    const m = 10;
-    doc.addPage();
     doc.setLineWidth(.6);
     doc.setDrawColor(10, 31, 61);
     doc.rect(m, m, W - 2 * m, H - 2 * m);
-    const k = areaIdxs.length;
     const regionBottom = H - m - 32;
-    if (k <= 3) {
-        const gap = 8;
-        // Pasada de MEDICIÓN: footprint real (ancho×profundidad) de cada área,
-        // para elegir UNA escala compartida y anchos proporcionales (no deforme).
-        const meds = areaIdxs.map(ai => renderAreaInto(doc, proyecto, ai, { x: 0, w: 0, measure: true }) || { totalCm: 100, profTotalCm: 150 });
-        const sumTot = meds.reduce((s, md) => s + Math.max(1, md.totalCm), 0);
-        const maxProf = Math.max.apply(null, meds.map(md => Math.max(1, md.profTotalCm)));
-        const drawTopSheet = m + 58;
-        const availHSheet = (H - m) - drawTopSheet - 40;
-        const scaleW = (W - 2 * m - 28 * k - gap * (k - 1)) / sumTot;
-        const scaleH = availHSheet / maxProf;
-        const scale = Math.max(.05, Math.min(scaleW, scaleH));
+    if (useStack) {
+        let y = topStart;
+        areaIdxs.forEach((ai, j) => {
+            const h = OH + Math.max(1, meds[j].profTotalCm) * stackScale;
+            if (j > 0) {
+                doc.setDrawColor(10, 31, 61);
+                doc.setLineWidth(.4);
+                doc.line(m + 4, y - vgapS / 2, W - m - 4, y - vgapS / 2)
+            }
+            renderAreaInto(doc, proyecto, ai, {
+                x: m,
+                w: W - 2 * m,
+                top: y,
+                height: h,
+                scale: stackScale,
+                stacked: true
+            });
+            y += h + vgapS
+        })
+    } else if (k <= 3) {
+        const scale = colScale;
         const usedW = sumTot * scale + 28 * k + gap * (k - 1);
         let rx = m + Math.max(0, (W - 2 * m - usedW) / 2);
         areaIdxs.forEach((ai, j) => {
