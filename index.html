@@ -9234,9 +9234,17 @@ function tubingDeArea(proyecto, areaName) {
     };
     let claro = a.claroCliente && a.claroCliente > 0 ? +a.claroCliente : 0;
     if (!claro) {
+        // Claro AUTOMÁTICO = ancho total de pared (incluye mingitorios y cuarto PMR),
+        // igual que en refuerzosDeArea. El descuento de los mingitorios se hace después
+        // con anchoMingTotT; si acá no se sumaran, se restarían dos veces.
+        const esMingitT = i => ((a.tiposCabina || [])[i] || "Baño") === "Mingitorio";
+        const anchoSlotMingitT = () => a.mingitAncho && a.mingitAncho > 60 ? a.mingitAncho : 60;
+        const esPmrClaroT = layoutCodigo === "P+" || layoutCodigo === "PP";
         let sum = 0;
         for (let i = 0; i < N; i++) {
-            sum += anchoDe((a.puertas || [])[i]);
+            if (esMingitT(i)) sum += anchoSlotMingitT();
+            else if (esPmrClaroT && i === 0) sum += a.anchoPmrCuarto || 162;
+            else sum += anchoDe((a.puertas || [])[i]);
             if (i < N - 1) sum += anchoDe((a.pilastras || [])[i])
         }
         if (a.muroIzq && a.muroIzq.codigo) sum += anchoDe(a.muroIzq.codigo);
