@@ -7879,9 +7879,11 @@ function actualizarValidacionCentros() {
 const CABINA_MIN_MURO_CM = 62;
 const CABINA_MIN_PANEL_CM = 54;
 
-// Auto-modular desde los centros de descarga: reescribe SOLO el ancho de puerta de cada
-// baño para que quede centrado en su descarga (cascada de reflexión desde el muro izq).
-// Manda la descarga real; el 62/54 es el mínimo (default cuando la cabina no tiene descarga).
+// Auto-modular desde los centros de descarga: elige las puertas (y usa pilastras válidas por
+// modelo) para que cada PANEL/pilastra quede lo más centrado posible entre descarga y descarga
+// (divisor en el punto medio de dos descargas). Manda la descarga real; el 62/54 es el ancho
+// mínimo de cabina (default cuando esa cabina no tiene descarga). Respeta las reglas de
+// modulación (piezas permitidas por modelo) para puertas y pilastras.
 function modularDesdeDescargas() {
     const a = typeof activeAreaCfg === "function" ? activeAreaCfg() : null;
     if (!a) { toast("Agregá un área primero", "danger"); return }
@@ -7892,13 +7894,15 @@ function modularDesdeDescargas() {
     if (!hasLeft) { toast("Auto-modular: por ahora solo layouts con muro izquierdo (L/U/C…) de referencia.", "danger"); return }
     const hasRight = ["U", "U+", "C", "I", "K"].includes(cfg.layout);
     const N = a.cabinas || 0;
+    if (N < 1) { toast("Agregá cabinas primero.", "danger"); return }
     const tipos = a.tiposCabina || [];
     if (tipos.slice(0, N).some(t => t === "Mingitorio")) { toast("Auto-modular: por ahora solo baños (sin mingitorios). Modulá esos aparte.", "danger"); return }
     const centros = (a.centrosDescarga || []).map(c => c === "" || c == null ? null : Number(c));
     if (!centros.slice(0, N).some(c => c != null && !isNaN(c))) { toast("Cargá al menos un centro de descarga.", "danger"); return }
     const info = typeof leerDimensionesLugar === "function" ? leerDimensionesLugar() : null;
     const claro = info && info.paredCabinas ? info.paredCabinas : null;
-    // Puertas disponibles del catálogo (según modelo): {ancho, codigo}.
+    const isReforzado = cfg.modelo === "REFORZADO";
+    // Reglas de modulación: puertas válidas por modelo {ancho, codigo}.
     const puertasCat = CATALOGO.piezas
         .filter(p => p.familia === "PT" && !p.sufijo && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual()))
         .map(p => ({ ancho: p.ancho, codigo: p.codigo })).sort((x, y) => x.ancho - y.ancho);
@@ -7908,35 +7912,52 @@ function modularDesdeDescargas() {
         const pool = cand.length ? cand : puertasCat;
         return pool.reduce((best, p) => Math.abs(p.ancho - target) < Math.abs(best.ancho - target) ? p : best, pool[0])
     };
-    // Grosores del modelo base (para que la cascada coincida con el dibujo).
+    // Pilastra interna válida por modelo (reforzado → PI##R). Se conserva la del modelo base si
+    // ya está; si falta, la estándar (≥24 cm).
+    const pilCat = CATALOGO.piezas
+        .filter(p => p.familia === "PI" && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual()) && (isReforzado ? /R$/.test(p.codigo) : !p.sufijo))
+        .map(p => ({ ancho: p.ancho, codigo: p.codigo })).sort((x, y) => x.ancho - y.ancho);
+    const pilIntObj = pilCat.filter(p => p.ancho >= 24)[0] || pilCat[0] || { ancho: 24, codigo: isReforzado ? "PI24R" : "PI24" };
+    if (!Array.isArray(a.puertas)) a.puertas = [];
+    if (!Array.isArray(a.pilastras)) a.pilastras = [];
+    const pilW = i => { const w = anchoDePiezaCodigo(a.pilastras[i]); return w > 0 ? w : pilIntObj.ancho };
     const tMuro = a.muroIzq && a.muroIzq.codigo ? anchoDePiezaCodigo(a.muroIzq.codigo) : 0;
     const rClose = a.muroDer && a.muroDer.codigo ? anchoDePiezaCodigo(a.muroDer.codigo) : 0;
-    const pilInt = (a.pilastras || []).map(anchoDePiezaCodigo).find(w => w > 0) || 24;
-    if (!Array.isArray(a.puertas)) a.puertas = [];
-    let leftEdge = tMuro;      // borde interno tras la pilastra al muro izquierdo
+    const mid = i => {   // punto medio entre la descarga i y la i+1 (centro del divisor tras la cabina i)
+        const A = centros[i], B = centros[i + 1];
+        return A != null && !isNaN(A) && B != null && !isNaN(B) ? (A + B) / 2 : null
+    };
     const flags = [];
+    let leftEdge = tMuro;
     for (let i = 0; i < N; i++) {
         const contraMuro = i === 0 || (i === N - 1 && hasRight);
         const minW = contraMuro ? CABINA_MIN_MURO_CM : CABINA_MIN_PANEL_CM;
         const D = centros[i];
+        const pw = i < N - 1 ? pilW(i) : 0;
         let doorIdeal;
-        if (D == null || isNaN(D)) {
-            doorIdeal = minW;                    // sin descarga → ancho mínimo estándar
+        if (i === N - 1) {
+            // Última cabina: cierra contra el muro/lado derecho → llena hasta el vano.
+            if (claro != null) doorIdeal = claro - rClose - leftEdge;
+            else if (D != null && !isNaN(D)) doorIdeal = 2 * (D - leftEdge);
+            else doorIdeal = minW
         } else {
-            doorIdeal = 2 * (D - leftEdge);      // centrar la cabina en la descarga
-            if (doorIdeal < minW - .5) flags.push(`Cabina ${i+1}: la descarga en ${D} cm deja ${Math.max(0,doorIdeal).toFixed(0)} cm de ancho — menos del mínimo ${minW} cm`)
+            const m = mid(i);
+            if (m != null) doorIdeal = m - pw / 2 - leftEdge;       // divisor centrado entre descargas
+            else if (D != null && !isNaN(D)) doorIdeal = 2 * (D - leftEdge);
+            else doorIdeal = minW
         }
+        if (doorIdeal < minW - .5) flags.push(`Cabina ${i+1}: queda ${Math.max(0,doorIdeal).toFixed(0)} cm de ancho — menos del mínimo ${minW} cm`);
         const p = snapPuerta(Math.max(doorIdeal, minW), minW);
         a.puertas[i] = p.codigo;
-        leftEdge += p.ancho + (i < N - 1 ? pilInt : 0)
+        if (i < N - 1 && !anchoDePiezaCodigo(a.pilastras[i])) a.pilastras[i] = pilIntObj.codigo;
+        leftEdge += p.ancho + pw
     }
-    const usado = leftEdge + rClose;
-    const residual = claro != null ? claro - usado : null;
+    const residual = claro != null ? claro - (leftEdge + rClose) : null;
     if (typeof renderPreview === "function") renderPreview();
     if (typeof renderPreviewControls === "function") renderPreviewControls(activeTab);
     if (typeof renderCentrosDescarga === "function") renderCentrosDescarga();
     if (typeof actualizarValidacionModulacion === "function") actualizarValidacionModulacion();
-    let msg = "Modulado desde descargas: cada baño centrado en su descarga.";
+    let msg = "Modulado desde descargas: cada panel centrado entre las descargas (puertas y pilastras según las reglas del modelo).";
     if (residual != null && Math.abs(residual) >= 1) msg += ` Diferencia con el vano (${claro} cm): ${residual > 0 ? "faltan" : "sobran"} ${Math.abs(residual).toFixed(1)} cm — ajustá el vano o una canaleta.`;
     if (flags.length) msg += ` ⚠ ${flags.length} cabina(s) bajo el mínimo.`;
     toast(msg, flags.length ? "danger" : "ok")
