@@ -8774,6 +8774,9 @@ function refuerzosDeArea(proyecto, areaName) {
     const a = (proyecto.configByArea || {})[areaName] || {};
     const N = a.cabinas !== undefined ? a.cabinas : proyecto.cabinas || 0;
     if (!N) return null;
+    // Área de SOLO mingitorios (orinales): no lleva refuerzo. Los mingitorios nunca
+    // aportan refuerzo; solo cuentan las cabinas (baños/regaderas).
+    if ((a.tiposCabina || []).slice(0, N).filter(t => t === "Mingitorio").length >= N) return null;
     const layoutCodigo = a.layout || proyecto.layout || "L";
     const invertir = a.invertir !== undefined ? !!a.invertir : !!proyecto.invertir;
     const corteRf = v => Math.ceil((v + 10) / 5) * 5;
@@ -9147,6 +9150,11 @@ function tubingDeArea(proyecto, areaName) {
     const a = (proyecto.configByArea || {})[areaName] || {};
     const N = a.cabinas !== undefined ? a.cabinas : proyecto.cabinas || 0;
     if (!N) return null;
+    // Área de SOLO mingitorios: no lleva tubing. En áreas mixtas, el tubing solo
+    // corre sobre las cabinas (baños/regaderas), no sobre los mingitorios.
+    const nMingT = (a.tiposCabina || []).slice(0, N).filter(t => t === "Mingitorio").length;
+    if (nMingT >= N) return null;
+    const anchoMingTotT = nMingT * (a.mingitAncho && a.mingitAncho > 60 ? a.mingitAncho : 60) + Math.max(0, nMingT - 1) * 1.27;
     const layoutCodigo = a.layout || proyecto.layout || "L";
     const invertir = a.invertir !== undefined ? !!a.invertir : !!proyecto.invertir;
     const anchoDe = c => {
@@ -9169,8 +9177,10 @@ function tubingDeArea(proyecto, areaName) {
     const hasRight = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
     const leftWallEff = invertir ? hasRight : hasLeft;
     const rightWallEff = invertir ? hasLeft : hasRight;
+    const claroCabinasT = Math.max(0, claro - anchoMingTotT);
+    if (claroCabinasT <= 0) return null;
     return {
-        corte: Math.round(claro + 10),
+        corte: Math.round(claroCabinasT + 10),
         kchl: (leftWallEff ? 1 : 0) + (rightWallEff ? 1 : 0)
     }
 }
