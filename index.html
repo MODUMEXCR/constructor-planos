@@ -1062,6 +1062,10 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
             </p>
             <div id="cfg-centros-inputs" style="display:flex; flex-direction:column; gap:6px;"></div>
             <div id="cfg-centros-validacion" style="margin-top: 10px; font-size: 12px;"></div>
+            <button class="btn btn-secondary" id="btn-modular-descargas" style="margin-top:10px; width:100%; justify-content:center;"
+              title="Coloca los paneles centrando cada baño en su descarga. Mínimos: 62 cm contra muro, 54 cm entre paneles.">
+              📍 Modular desde descargas (centrar baños)
+            </button>
           </div>
 
           <div class="form-grid">
@@ -4622,7 +4626,9 @@ function bindCfg() {
     });
     $("btn-generar").onclick = generarPlanos;
     const btnGuardar = document.getElementById("btn-guardar");
-    if (btnGuardar) btnGuardar.onclick = guardarSinDescargar
+    if (btnGuardar) btnGuardar.onclick = guardarSinDescargar;
+    const btnModDesc = document.getElementById("btn-modular-descargas");
+    if (btnModDesc) btnModDesc.onclick = modularDesdeDescargas
 }
 
 function updateAltura() {
@@ -7869,6 +7875,73 @@ function actualizarValidacionCentros() {
     }
 }
 
+// Ancho libre mínimo de cabina (para que quepa el inodoro): contra muro vs entre paneles.
+const CABINA_MIN_MURO_CM = 62;
+const CABINA_MIN_PANEL_CM = 54;
+
+// Auto-modular desde los centros de descarga: reescribe SOLO el ancho de puerta de cada
+// baño para que quede centrado en su descarga (cascada de reflexión desde el muro izq).
+// Manda la descarga real; el 62/54 es el mínimo (default cuando la cabina no tiene descarga).
+function modularDesdeDescargas() {
+    const a = typeof activeAreaCfg === "function" ? activeAreaCfg() : null;
+    if (!a) { toast("Agregá un área primero", "danger"); return }
+    const layout = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
+    if (layout.pmrCuarto || layout.pmrPanel) { toast("Auto-modular desde descargas: por ahora solo layouts de baños (sin cuarto PMR).", "danger"); return }
+    if (cfg.invertir) { toast("Auto-modular: por ahora solo sin invertir (muro izquierdo como referencia de las descargas).", "danger"); return }
+    const hasLeft = ["L", "U", "C", "I", "K", "LP", "L+", "U+"].includes(cfg.layout);
+    if (!hasLeft) { toast("Auto-modular: por ahora solo layouts con muro izquierdo (L/U/C…) de referencia.", "danger"); return }
+    const hasRight = ["U", "U+", "C", "I", "K"].includes(cfg.layout);
+    const N = a.cabinas || 0;
+    const tipos = a.tiposCabina || [];
+    if (tipos.slice(0, N).some(t => t === "Mingitorio")) { toast("Auto-modular: por ahora solo baños (sin mingitorios). Modulá esos aparte.", "danger"); return }
+    const centros = (a.centrosDescarga || []).map(c => c === "" || c == null ? null : Number(c));
+    if (!centros.slice(0, N).some(c => c != null && !isNaN(c))) { toast("Cargá al menos un centro de descarga.", "danger"); return }
+    const info = typeof leerDimensionesLugar === "function" ? leerDimensionesLugar() : null;
+    const claro = info && info.paredCabinas ? info.paredCabinas : null;
+    // Puertas disponibles del catálogo (según modelo): {ancho, codigo}.
+    const puertasCat = CATALOGO.piezas
+        .filter(p => p.familia === "PT" && !p.sufijo && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual()))
+        .map(p => ({ ancho: p.ancho, codigo: p.codigo })).sort((x, y) => x.ancho - y.ancho);
+    if (!puertasCat.length) puertasCat.push({ ancho: 60, codigo: "PT60" });
+    const snapPuerta = (target, minW) => {
+        const cand = puertasCat.filter(p => p.ancho >= minW - .01);
+        const pool = cand.length ? cand : puertasCat;
+        return pool.reduce((best, p) => Math.abs(p.ancho - target) < Math.abs(best.ancho - target) ? p : best, pool[0])
+    };
+    // Grosores del modelo base (para que la cascada coincida con el dibujo).
+    const tMuro = a.muroIzq && a.muroIzq.codigo ? anchoDePiezaCodigo(a.muroIzq.codigo) : 0;
+    const rClose = a.muroDer && a.muroDer.codigo ? anchoDePiezaCodigo(a.muroDer.codigo) : 0;
+    const pilInt = (a.pilastras || []).map(anchoDePiezaCodigo).find(w => w > 0) || 24;
+    if (!Array.isArray(a.puertas)) a.puertas = [];
+    let leftEdge = tMuro;      // borde interno tras la pilastra al muro izquierdo
+    const flags = [];
+    for (let i = 0; i < N; i++) {
+        const contraMuro = i === 0 || (i === N - 1 && hasRight);
+        const minW = contraMuro ? CABINA_MIN_MURO_CM : CABINA_MIN_PANEL_CM;
+        const D = centros[i];
+        let doorIdeal;
+        if (D == null || isNaN(D)) {
+            doorIdeal = minW;                    // sin descarga → ancho mínimo estándar
+        } else {
+            doorIdeal = 2 * (D - leftEdge);      // centrar la cabina en la descarga
+            if (doorIdeal < minW - .5) flags.push(`Cabina ${i+1}: la descarga en ${D} cm deja ${Math.max(0,doorIdeal).toFixed(0)} cm de ancho — menos del mínimo ${minW} cm`)
+        }
+        const p = snapPuerta(Math.max(doorIdeal, minW), minW);
+        a.puertas[i] = p.codigo;
+        leftEdge += p.ancho + (i < N - 1 ? pilInt : 0)
+    }
+    const usado = leftEdge + rClose;
+    const residual = claro != null ? claro - usado : null;
+    if (typeof renderPreview === "function") renderPreview();
+    if (typeof renderPreviewControls === "function") renderPreviewControls(activeTab);
+    if (typeof renderCentrosDescarga === "function") renderCentrosDescarga();
+    if (typeof actualizarValidacionModulacion === "function") actualizarValidacionModulacion();
+    let msg = "Modulado desde descargas: cada baño centrado en su descarga.";
+    if (residual != null && Math.abs(residual) >= 1) msg += ` Diferencia con el vano (${claro} cm): ${residual > 0 ? "faltan" : "sobran"} ${Math.abs(residual).toFixed(1)} cm — ajustá el vano o una canaleta.`;
+    if (flags.length) msg += ` ⚠ ${flags.length} cabina(s) bajo el mínimo.`;
+    toast(msg, flags.length ? "danger" : "ok")
+}
+
 function recalcularSugerencia() {
     actualizarInfoPared();
     renderCentrosDescarga();
@@ -10375,8 +10448,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 const cDescB = (areaCfg.centrosDescarga || [])[s.indiceCabina - 1];
                 const wcBX = esPmrLayPdf && areaInvertir ? floorEndX - Number(cDescB) * scale : floorStartX + Number(cDescB) * scale;
                 const wcCx = cDescB !== "" && cDescB != null && !isNaN(cDescB) ? Math.max(x + 8, Math.min(x + w - 8, wcBX)) : cx;
-                const ihB = Math.min(cabDepth * .5, 20, w * .6 / .67), iwB = ihB * .67;
-                doc.addImage(WC_IMG_B64, "PNG", wcCx - iwB / 2, drawTop + cabDepth * .12, iwB, ihB, undefined, "FAST");
+                const ihB = Math.min(65 * scale, cabDepth - 4, w * .82 / .67), iwB = ihB * .67;
+                doc.addImage(WC_IMG_B64, "PNG", wcCx - iwB / 2, drawTop + 2, iwB, ihB, undefined, "FAST");
                 if (s.esAccesible) {
                     doc.setFillColor(93, 176, 224);
                     doc.circle(cx, drawTop + cabDepth * .66, 3.6, "F");
