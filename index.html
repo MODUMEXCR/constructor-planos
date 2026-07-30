@@ -7889,10 +7889,13 @@ function modularDesdeDescargas() {
     if (!a) { toast("Agregá un área primero", "danger"); return }
     const layout = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
     if (layout.pmrCuarto || layout.pmrPanel) { toast("Auto-modular desde descargas: por ahora solo layouts de baños (sin cuarto PMR).", "danger"); return }
-    if (cfg.invertir) { toast("Auto-modular: por ahora solo sin invertir (muro izquierdo como referencia de las descargas).", "danger"); return }
-    const hasLeft = ["L", "U", "C", "I", "K", "LP", "L+", "U+"].includes(cfg.layout);
-    if (!hasLeft) { toast("Auto-modular: por ahora solo layouts con muro izquierdo (L/U/C…) de referencia.", "danger"); return }
-    const hasRight = ["U", "U+", "C", "I", "K"].includes(cfg.layout);
+    const hasLeftBase = ["L", "U", "C", "I", "K", "LP", "L+", "U+"].includes(cfg.layout);
+    const hasRightBase = ["U", "U+", "C", "I", "K"].includes(cfg.layout);
+    if (!hasLeftBase && !hasRightBase) { toast("Auto-modular: el layout necesita al menos un muro de referencia (L/U/C…). El E (isla) no aplica.", "danger"); return }
+    // Al invertir, el muro cambia de lado; las descargas SIEMPRE se miden izquierda→derecha
+    // (no se invierten) y las cabinas 0..N-1 van físicamente de izq a der, igual que muroIzq/muroDer.
+    const leftWallEff = cfg.invertir ? hasRightBase : hasLeftBase;
+    const rightWallEff = cfg.invertir ? hasLeftBase : hasRightBase;
     const N = a.cabinas || 0;
     if (N < 1) { toast("Agregá cabinas primero.", "danger"); return }
     const tipos = a.tiposCabina || [];
@@ -7930,7 +7933,7 @@ function modularDesdeDescargas() {
     const flags = [];
     let leftEdge = tMuro;
     for (let i = 0; i < N; i++) {
-        const contraMuro = i === 0 || (i === N - 1 && hasRight);
+        const contraMuro = (i === 0 && leftWallEff) || (i === N - 1 && rightWallEff);
         const minW = contraMuro ? CABINA_MIN_MURO_CM : CABINA_MIN_PANEL_CM;
         const D = centros[i];
         const pw = i < N - 1 ? pilW(i) : 0;
