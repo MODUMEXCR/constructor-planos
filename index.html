@@ -9282,10 +9282,10 @@ function tubingDeProyecto(proyecto) {
 }
 
 function drawCuadroCantidades(doc, proyecto) {
+    const m = 10;
+    doc.addPage("a4", "portrait");
     const W = doc.internal.pageSize.getWidth();
     const H = doc.internal.pageSize.getHeight();
-    const m = 10;
-    doc.addPage();
     doc.setLineWidth(.6);
     doc.setDrawColor(10, 31, 61);
     doc.rect(m, m, W - 2 * m, H - 2 * m);
@@ -9424,7 +9424,7 @@ function drawCuadroCantidades(doc, proyecto) {
     let familiaActual = null;
     filas.forEach((f, i) => {
         if (ty > H - m - 28) {
-            doc.addPage();
+            doc.addPage("a4", "portrait");
             doc.setLineWidth(.6);
             doc.setDrawColor(10, 31, 61);
             doc.rect(m, m, W - 2 * m, H - 2 * m);
@@ -10849,10 +10849,11 @@ function drawLeyenda(doc) {
 }
 
 function drawAreaPlanView(doc, proyecto, areaIdx, pageInfo) {
+    const m = 10;
+    // Un área sola SIEMPRE va en hoja horizontal.
+    doc.addPage("a4", "landscape");
     const W = doc.internal.pageSize.getWidth();
     const H = doc.internal.pageSize.getHeight();
-    const m = 10;
-    doc.addPage();
     doc.setLineWidth(.6);
     doc.setDrawColor(10, 31, 61);
     doc.rect(m, m, W - 2 * m, H - 2 * m);
@@ -10876,10 +10877,11 @@ function drawSheet(doc, proyecto, areaIdxs, pageInfo, hojaLabel) {
     const m = 10;
     const k = areaIdxs.length;
     // Dimensiones de la hoja horizontal (actual) y de una hoja girada a vertical.
-    const Wl = doc.internal.pageSize.getWidth();
-    const Hl = doc.internal.pageSize.getHeight();
-    const Wp = Hl,
-        Hp = Wl;
+    // Dimensiones A4 FIJAS en mm (no depender de la orientación de la página actual).
+    const Wl = 297,
+        Hl = 210;
+    const Wp = 210,
+        Hp = 297;
     // Pasada de MEDICIÓN: footprint real (ancho×profundidad) de cada área.
     const meds = areaIdxs.map(ai => renderAreaInto(doc, proyecto, ai, { x: 0, w: 0, measure: true }) || { totalCm: 100, profTotalCm: 150 });
     const sumTot = meds.reduce((s, md) => s + Math.max(1, md.totalCm), 0);
@@ -10902,10 +10904,11 @@ function drawSheet(doc, proyecto, areaIdxs, pageInfo, hojaLabel) {
         const lay = ((proyecto.configByArea || {})[proyecto.areas[ai]] || {}).layout || proyecto.layout || "L";
         return !!(CATALOGO.layouts.find(l => l.codigo === lay) || {}).pmrPanel;
     });
-    // Automático: apilar en vertical solo si agranda las cabinas (>3%).
-    const useStack = k <= 3 && !anyPmrPanel && stackScale > colScale * 1.03;
+    // 2–3 áreas por hoja SIEMPRE se apilan arriba/abajo (hoja vertical). Solo caen a
+    // columnas/grilla horizontal los cuartos PMR (render propio) o las hojas de 4+ áreas.
+    const useStack = k <= 3 && !anyPmrPanel;
     if (useStack) doc.addPage("a4", "portrait");
-    else doc.addPage();
+    else doc.addPage("a4", "landscape");
     const W = doc.internal.pageSize.getWidth();
     const H = doc.internal.pageSize.getHeight();
     doc.setLineWidth(.6);
