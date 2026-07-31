@@ -10304,16 +10304,37 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     const sinAng = Math.sin(angPuerta);
     const leafLenDe = wMm => Math.min(wMm - 3, cabDepth * .78);
     let swingEff = swingExtra;
+    let nDoorInt = 0,
+        nDoorExt = 0;
     seq.forEach(s => {
         if (s.tipo === "puerta" && !s.cuartoPmr) {
             const apS = (areaCfg.aperturas || [])[s.indiceCabina - 1] || "";
             const sentS = (apS.split("_")[1] || "EXT").toUpperCase();
-            if (sentS !== "INT") {
+            if (sentS === "INT") nDoorInt++;
+            else {
+                nDoorExt++;
                 const leaf = leafLenDe(s.ancho * scale);
                 if (leaf > 0) swingEff = Math.max(swingEff, leaf * sinAng + 3)
             }
         }
     });
+    // Si TODAS las puertas del área abren hacia adentro, la hoja sube al cubículo y taparía
+    // la banda de cotas y las etiquetas (que van arriba del piso) → las bajamos al lado del
+    // corredor (debajo del piso), que queda libre. Además cada cota/etiqueta lleva halo
+    // blanco para leerse aunque una hoja la cruce (áreas mixtas o cabinas profundas).
+    const dimsBelowFloor = nDoorInt > 0 && nDoorExt === 0 && !esPmrLayPdf && !banded;
+    const haloText = (txt, cx, ty, fs) => {
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(fs);
+        const tw = doc.getTextWidth(txt),
+            hh = fs * 0.36;
+        doc.setFillColor(255, 255, 255);
+        doc.rect(cx - tw / 2 - 0.6, ty - hh, tw + 1.2, hh + 1, "F");
+        doc.setTextColor(10, 31, 61);
+        doc.text(txt, cx, ty, {
+            align: "center"
+        })
+    };
     if (sobraProfMm > 0) {
         doc.setDrawColor(148, 163, 184);
         doc.setLineWidth(.3);
@@ -10578,12 +10599,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 const dirY = sentido === "EXT" ? 1 : -1;
                 doorRect(hingeX, floorY, hingeX + dirX * leafLen * cosAng, floorY + dirY * leafLen * sinAng);
                 doc.setLineWidth(.55);
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(9);
-                doc.setTextColor(10, 31, 61);
-                doc.text(`C${s.indiceCabina}`, cx, floorY - 3, {
-                    align: "center"
-                })
+                haloText(`C${s.indiceCabina}`, cx, dimsBelowFloor ? floorY + 3.5 : floorY - 3, 9)
             }
         } else if (s.tipo === "mingitorio") {
             const cx = x + w / 2;
@@ -10592,30 +10608,20 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
             const uX = esPmrLayPdf && areaInvertir ? floorEndX - Number(cDescU) * scale : floorStartX + Number(cDescU) * scale;
             const fxCx = cDescU !== "" && cDescU != null && !isNaN(cDescU) ? Math.max(x + uw / 2 + 1, Math.min(x + w - uw / 2 - 1, uX)) : cx;
             doc.addImage(ORINAL_IMG_B64, "PNG", fxCx - uw / 2, drawTop + 1.2, uw, uh, undefined, "FAST");
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(9);
-            doc.setTextColor(10, 31, 61);
-            doc.text(`M${s.indiceCabina}`, cx, floorY - 3, {
-                align: "center"
-            })
+            haloText(`M${s.indiceCabina}`, cx, dimsBelowFloor ? floorY + 3.5 : floorY - 3, 9)
         }
         if (s.tipo !== "muro" && s.tipo !== "mamparaCierreMingit" && s.ancho >= 1) {
-            const dimYb = Math.min(esPmrLayPdf ? floorLugar + extraPmrPdf : floorY + swingEff, cotaClampY) + 5;
+            const dimYb = dimsBelowFloor ? Math.min(floorY + 9, H - m - 16) : (Math.min(esPmrLayPdf ? floorLugar + extraPmrPdf : floorY + swingEff, cotaClampY) + 5);
             doc.setDrawColor(10, 31, 61);
             doc.setLineWidth(.3);
             doc.line(x, dimYb, x + w, dimYb);
             doc.line(x, dimYb - 1.2, x, dimYb + 1.2);
             doc.line(x + w, dimYb - 1.2, x + w, dimYb + 1.2);
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(6);
-            doc.setTextColor(10, 31, 61);
-            doc.text(`${s.ancho.toFixed(0)}`, x + w / 2, dimYb - 1.4, {
-                align: "center"
-            })
+            haloText(`${s.ancho.toFixed(0)}`, x + w / 2, dimYb - 1.4, 6)
         }
         x += w
     });
-    const dimTotalY = Math.min(floorLugar + (esPmrLayPdf ? extraPmrPdf : swingEff), cotaClampY) + 22;
+    const dimTotalY = dimsBelowFloor ? Math.min(floorY + 15, H - m - 10) : (Math.min(floorLugar + (esPmrLayPdf ? extraPmrPdf : swingEff), cotaClampY) + 22);
     const murosTotCm = seq.filter(s => s.tipo === "muro").reduce((t, s) => t + s.ancho, 0);
     const claroTotalCm = areaCfg.claroCliente && areaCfg.claroCliente > 0 ? areaCfg.claroCliente : totalCm - murosTotCm;
     const xT1 = drawX + (seq[0] && seq[0].tipo === "muro" ? 15 * scale : 0);
