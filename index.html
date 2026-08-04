@@ -10018,12 +10018,15 @@ function drawAreaPro(doc, o) {
         doc.setFont("helvetica", "normal"); doc.setFontSize(6.4); doc.setTextColor(0, 0, 0);
         doc.text(txt, (xa + xb) / 2, y - 1, { align: "center" });
     };
-    const dimV = (x, ya, yb, txt, extTo) => {
+    const dimV = (x, ya, yb, txt, extTo, halo) => {
         doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.2);
         if (extTo != null) { doc.line(extTo, ya, x + 1, ya); doc.line(extTo, yb, x + 1, yb); }
         doc.line(x, ya, x, yb); arrow(x, ya, Math.PI / 2); arrow(x, yb, -Math.PI / 2);
-        doc.setFont("helvetica", "normal"); doc.setFontSize(6.4); doc.setTextColor(0, 0, 0);
-        doc.text(txt, x - 1, (ya + yb) / 2, { align: "center", angle: 90 });
+        doc.setFont("helvetica", "normal"); doc.setFontSize(6.4);
+        const my = (ya + yb) / 2;
+        if (halo) { const tw = doc.getTextWidth(txt); doc.setFillColor(255, 255, 255); doc.rect(x - 1 - 1.6, my - tw / 2 - 0.8, 3.2, tw + 1.6, "F"); }
+        doc.setTextColor(0, 0, 0);
+        doc.text(txt, x - 1, my, { align: "center", angle: 90 });
     };
     const arc = (cx, cy, r, a0, a1) => {
         doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.25); doc.setLineDashPattern([1, 0.9], 0);
@@ -10044,7 +10047,9 @@ function drawAreaPro(doc, o) {
     // MURO trasero (arriba), rayado, termina donde arrancan los cierres
     hatch(floorStartX - tM / 2, yWall - tW, (floorEndX - floorStartX) + tM, tW);
     // Paneles de CIERRE en extremos ABIERTOS (sin muro/terminal): L (der), E (ambos).
-    const closedT = { "muro": 1, "pilastra-muro": 1, "pilastra-terminal": 1 };
+    // Los mingitorios NO cierran con panel de altura completa: su propio divisor (60) los
+    // remata, así que se tratan como "ya cerrados" para no dibujar un panel de 135 de más.
+    const closedT = { "muro": 1, "pilastra-muro": 1, "pilastra-terminal": 1, "mingitorio": 1, "panelMingit": 1, "mamparaCierreMingit": 1 };
     if (!closedT[(seq[0] || {}).tipo]) panelV(floorStartX);
     if (!closedT[(seq[seq.length - 1] || {}).tipo]) panelV(floorEndX);
     // recorrer seq
@@ -10052,8 +10057,15 @@ function drawAreaPro(doc, o) {
     const segsFront = [];
     const mgDivs = [];
     const cabDivs = [];
+    const cabMgBoundaries = [];
+    const mgT = { "mingitorio": 1, "panelMingit": 1, "mamparaCierreMingit": 1 };
+    let prevTipo = null;
     seq.forEach(s => {
         const w = (s.ancho || 0) * sc, xa = x, xb = x + w, cx = (xa + xb) / 2;
+        // Panel de cierre SOLO cuando un baño (puerta) colinda directo con un mingitorio
+        // (el baño quedó sin divisor de cierre). Una pilastra/panel ya cierra por sí sola.
+        if (prevTipo && ((prevTipo === "puerta" && mgT[s.tipo]) || (mgT[prevTipo] && s.tipo === "puerta"))) cabMgBoundaries.push(xa);
+        prevTipo = s.tipo;
         if (s.tipo === "muro") { hatch(xa, yWall - tW, w + (s === seq[0] ? 0 : 0), floorY - yWall + tW); }
         else if (s.tipo === "pilastra" || s.tipo === "panelCompleto") { pilBar(xa, xb, cx); segsFront.push([xa, xb, s.ancho]); cabDivs.push({ cx: cx, interior: true }); }
         else if (s.tipo === "pilastra-terminal" || s.tipo === "pilastra-muro") { const lat = s.lado === "izq" ? xa : xb; pilBar(xa, xb, lat); segsFront.push([xa, xb, s.ancho]); cabDivs.push({ cx: lat, interior: false }); }
@@ -10103,14 +10115,29 @@ function drawAreaPro(doc, o) {
         }
         x = xb;
     });
+    // Panel de CIERRE de altura completa donde el grupo de cabinas colinda con los
+    // mingitorios (el baño necesita su panel; el mingitorio arranca detrás de él).
+    cabMgBoundaries.forEach(bx => panelV(bx));
     // linea de piso punteada
     doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.2); doc.setLineDashPattern([1.4, 1], 0); doc.line(floorStartX, floorY, floorEndX, floorY); doc.setLineDashPattern([], 0);
     // Profundidad del PANEL divisor y proyección del DIVISOR de mingitorio, acotadas sobre
     // la pieza (como el plano real), además de la profundidad general a la izquierda.
+    // Halo blanco detrás del texto para que se lea aunque cruce el panel/divisor.
     const panelDepthCm = Math.round(cabDepth / sc);
-    const cabRep = cabDivs.find(d => d.interior);
-    if (cabRep) dimV(cabRep.cx + 5, yWall, floorY, panelDepthCm.toFixed(1), null);
-    mgDivs.forEach(d => { if (d.mgD > 5) dimV(d.cx + 6.5, yWall, yWall + d.mgD, d.depthCm.toFixed(1), null); });
+    // Cota de profundidad pegada a su pieza: la línea va a 3 mm del panel/divisor y el
+    // número va SOBRE la línea (halo blanco). Se dimensiona CADA panel y CADA mingitorio.
+    const depthDim = (cx, yb, txt, toRight) => {
+        const lx = cx + (toRight ? 3.2 : -3.2);
+        doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.2);
+        doc.line(lx, yWall, lx, yb); arrow(lx, yWall, Math.PI / 2); arrow(lx, yb, -Math.PI / 2);
+        doc.setFont("helvetica", "normal"); doc.setFontSize(6);
+        const my = (yWall + yb) / 2, tw = doc.getTextWidth(txt);
+        doc.setFillColor(255, 255, 255); doc.rect(lx - 1.4, my - tw / 2 - 0.7, 2.8, tw + 1.4, "F");
+        doc.setTextColor(0, 0, 0); doc.text(txt, lx, my, { align: "center", angle: 90 });
+    };
+    const panelXs = cabDivs.filter(d => d.interior).map(d => d.cx).concat(cabMgBoundaries);
+    panelXs.forEach(px => depthDim(px, floorY, panelDepthCm.toFixed(1), true));
+    mgDivs.forEach(d => { if (d.mgD > 5) depthDim(d.cx, yWall + d.mgD, d.depthCm.toFixed(1), d.cx + 8 < floorEndX); });
     // COTAS: parciales (segmentos) + total + altura. La banda va debajo del barrido
     // hacia afuera (o cerca del piso si todas abren adentro).
     let maxOutSwing = 0;
