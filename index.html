@@ -11043,8 +11043,8 @@ function drawLeyenda(doc) {
 
 function drawAreaPlanView(doc, proyecto, areaIdx, pageInfo) {
     const m = 10;
-    // Todos los planos van en hoja VERTICAL.
-    doc.addPage("a4", "portrait");
+    // Un área sola SIEMPRE va en hoja horizontal.
+    doc.addPage("a4", "landscape");
     const W = doc.internal.pageSize.getWidth();
     const H = doc.internal.pageSize.getHeight();
     doc.setLineWidth(.6);
@@ -11082,9 +11082,9 @@ function drawSheet(doc, proyecto, areaIdxs, pageInfo, hojaLabel) {
     const sumProf = meds.reduce((s, md) => s + Math.max(1, md.profTotalCm), 0);
     const maxTot = Math.max.apply(null, meds.map(md => Math.max(1, md.totalCm)));
     const gap = 8;
-    // Escala compartida en COLUMNAS (lado a lado). Ahora en hoja VERTICAL.
-    const colScaleW = (Wp - 2 * m - 28 * k - gap * (k - 1)) / sumTot;
-    const colScaleH = ((Hp - m) - (m + 58) - 40) / maxProf;
+    // Escala compartida en COLUMNAS (lado a lado, hoja horizontal).
+    const colScaleW = (Wl - 2 * m - 28 * k - gap * (k - 1)) / sumTot;
+    const colScaleH = ((Hl - m) - (m + 58) - 40) / maxProf;
     const colScale = Math.max(.05, Math.min(colScaleW, colScaleH));
     // Escala compartida APILANDO en hoja vertical (arriba/abajo).
     const vgapS = 8,
@@ -11100,7 +11100,8 @@ function drawSheet(doc, proyecto, areaIdxs, pageInfo, hojaLabel) {
     // 2–3 áreas por hoja SIEMPRE se apilan arriba/abajo (hoja vertical). Solo caen a
     // columnas/grilla horizontal los cuartos PMR (render propio) o las hojas de 4+ áreas.
     const useStack = k <= 3 && !anyPmrPanel;
-    doc.addPage("a4", "portrait");
+    if (useStack) doc.addPage("a4", "portrait");
+    else doc.addPage("a4", "landscape");
     const W = doc.internal.pageSize.getWidth();
     const H = doc.internal.pageSize.getHeight();
     doc.setLineWidth(.6);
