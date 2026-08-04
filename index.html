@@ -10124,18 +10124,21 @@ function drawAreaPro(doc, o) {
     // la pieza (como el plano real), además de la profundidad general a la izquierda.
     // Halo blanco detrás del texto para que se lea aunque cruce el panel/divisor.
     const panelDepthCm = Math.round(cabDepth / sc);
-    // La cota de profundidad va SOBRE la propia línea del panel/divisor (que ya recorre
-    // wall→piso mostrando esa profundidad); solo se rotula el número con halo blanco para
-    // leerlo sobre la línea. Se rotula CADA panel de cabina y CADA divisor de mingitorio.
-    const depthLabel = (cx, yb, txt) => {
+    // Cota de profundidad: línea propia (separada del panel/divisor) con flechas en muro y
+    // frente, y el número CENTRADO SOBRE esa línea de cota (baseline:middle evita que el
+    // texto rotado se corra hacia el panel). Se acota CADA panel y CADA mingitorio.
+    const depthDim = (cx, yb, txt, toRight) => {
+        const lx = cx + (toRight ? 5 : -5);
+        doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.2);
+        doc.line(lx, yWall, lx, yb); arrow(lx, yWall, Math.PI / 2); arrow(lx, yb, -Math.PI / 2);
         doc.setFont("helvetica", "normal"); doc.setFontSize(6);
         const my = (yWall + yb) / 2, tw = doc.getTextWidth(txt);
-        doc.setFillColor(255, 255, 255); doc.rect(cx - 1.5, my - tw / 2 - 0.8, 3, tw + 1.6, "F");
-        doc.setTextColor(0, 0, 0); doc.text(txt, cx, my, { align: "center", angle: 90 });
+        doc.setFillColor(255, 255, 255); doc.rect(lx - 1.5, my - tw / 2 - 0.8, 3, tw + 1.6, "F");
+        doc.setTextColor(0, 0, 0); doc.text(txt, lx, my, { align: "center", baseline: "middle", angle: 90 });
     };
     const panelXs = cabDivs.filter(d => d.interior).map(d => d.cx).concat(cabMgBoundaries);
-    panelXs.forEach(px => depthLabel(px, floorY, panelDepthCm.toFixed(1)));
-    mgDivs.forEach(d => { if (d.mgD > 5) depthLabel(d.cx, yWall + d.mgD, d.depthCm.toFixed(1)); });
+    panelXs.forEach(px => depthDim(px, floorY, panelDepthCm.toFixed(1), true));
+    mgDivs.forEach(d => { if (d.mgD > 5) depthDim(d.cx, yWall + d.mgD, d.depthCm.toFixed(1), d.cx + 9 < floorEndX); });
     // COTAS: parciales (segmentos) + total + altura. La banda va debajo del barrido
     // hacia afuera (o cerca del piso si todas abren adentro).
     let maxOutSwing = 0;
