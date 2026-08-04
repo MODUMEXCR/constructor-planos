@@ -10050,16 +10050,21 @@ function drawAreaPro(doc, o) {
     // recorrer seq
     let x = drawX;
     const segsFront = [];
+    const mgDivs = [];
+    const cabDivs = [];
     seq.forEach(s => {
         const w = (s.ancho || 0) * sc, xa = x, xb = x + w, cx = (xa + xb) / 2;
         if (s.tipo === "muro") { hatch(xa, yWall - tW, w + (s === seq[0] ? 0 : 0), floorY - yWall + tW); }
-        else if (s.tipo === "pilastra" || s.tipo === "panelCompleto") { pilBar(xa, xb, cx); segsFront.push([xa, xb, s.ancho]); }
-        else if (s.tipo === "pilastra-terminal" || s.tipo === "pilastra-muro") { const lat = s.lado === "izq" ? xa : xb; pilBar(xa, xb, lat); segsFront.push([xa, xb, s.ancho]); }
+        else if (s.tipo === "pilastra" || s.tipo === "panelCompleto") { pilBar(xa, xb, cx); segsFront.push([xa, xb, s.ancho]); cabDivs.push({ cx: cx, interior: true }); }
+        else if (s.tipo === "pilastra-terminal" || s.tipo === "pilastra-muro") { const lat = s.lado === "izq" ? xa : xb; pilBar(xa, xb, lat); segsFront.push([xa, xb, s.ancho]); cabDivs.push({ cx: lat, interior: false }); }
         else if (s.tipo === "panelMingit" || s.tipo === "mamparaCierreMingit") {
-            const mgD = (floorY - yWall) * 0.78;
+            const mgPz = s.mgCode ? CATALOGO.piezas.find(p => p.codigo === s.mgCode) : null;
+            const mgDepthCm = mgPz && mgPz.familia === "MG" ? mgPz.ancho : 60;
+            const mgD = Math.min(mgDepthCm * sc, floorY - yWall);
             doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35);
             doc.line(cx - tM / 2, yWall, cx - tM / 2, yWall + mgD); doc.line(cx + tM / 2, yWall, cx + tM / 2, yWall + mgD);
             doc.line(cx - tM / 2, yWall, cx + tM / 2, yWall); doc.line(cx - tM / 2, yWall + mgD, cx + tM / 2, yWall + mgD);
+            mgDivs.push({ cx: cx, mgD: mgD, depthCm: mgDepthCm });
             if (w > 0.3) segsFront.push([xa, xb, s.ancho]);
         }
         else if (s.tipo === "panelRelleno") { doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.3); doc.setLineDashPattern([1, 0.8], 0); doc.rect(xa, yWall, w, floorY - yWall); doc.setLineDashPattern([], 0); segsFront.push([xa, xb, s.ancho]); }
@@ -10100,6 +10105,12 @@ function drawAreaPro(doc, o) {
     });
     // linea de piso punteada
     doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.2); doc.setLineDashPattern([1.4, 1], 0); doc.line(floorStartX, floorY, floorEndX, floorY); doc.setLineDashPattern([], 0);
+    // Profundidad del PANEL divisor y proyección del DIVISOR de mingitorio, acotadas sobre
+    // la pieza (como el plano real), además de la profundidad general a la izquierda.
+    const panelDepthCm = Math.round(cabDepth / sc);
+    const cabRep = cabDivs.find(d => d.interior);
+    if (cabRep) dimV(cabRep.cx + 5, yWall, floorY, panelDepthCm.toFixed(1), null);
+    mgDivs.forEach(d => { if (d.mgD > 5) dimV(d.cx + 6.5, yWall, yWall + d.mgD, d.depthCm.toFixed(1), null); });
     // COTAS: parciales (segmentos) + total + altura. La banda va debajo del barrido
     // hacia afuera (o cerca del piso si todas abren adentro).
     let maxOutSwing = 0;
