@@ -10129,12 +10129,16 @@ function drawAreaPro(doc, o) {
     // texto rotado se corra hacia el panel). Se acota CADA panel y CADA mingitorio.
     const depthDim = (cx, yb, txt, toRight) => {
         const lx = cx + (toRight ? 5 : -5);
+        const my = (yWall + yb) / 2;
+        doc.setFont("helvetica", "normal"); doc.setFontSize(5.5);
+        const tw = doc.getTextWidth(txt), gap = 2.4;
         doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.2);
-        doc.line(lx, yWall, lx, yb); arrow(lx, yWall, Math.PI / 2); arrow(lx, yb, -Math.PI / 2);
-        doc.setFont("helvetica", "normal"); doc.setFontSize(6);
-        const my = (yWall + yb) / 2, tw = doc.getTextWidth(txt);
-        doc.setFillColor(255, 255, 255); doc.rect(lx - 1.5, my - tw / 2 - 0.8, 3, tw + 1.6, "F");
-        doc.setTextColor(0, 0, 0); doc.text(txt, lx, my, { align: "center", baseline: "middle", angle: 90 });
+        // Línea de cota con HUECO en el medio para el número (número horizontal centrado
+        // exacto en lx,my — el centrado horizontal de jsPDF sí es fiable, el rotado no).
+        doc.line(lx, yWall, lx, my - gap); doc.line(lx, my + gap, lx, yb);
+        arrow(lx, yWall, Math.PI / 2); arrow(lx, yb, -Math.PI / 2);
+        doc.setFillColor(255, 255, 255); doc.rect(lx - tw / 2 - 0.6, my - gap, tw + 1.2, gap * 2, "F");
+        doc.setTextColor(0, 0, 0); doc.text(txt, lx, my, { align: "center", baseline: "middle" });
     };
     const panelXs = cabDivs.filter(d => d.interior).map(d => d.cx).concat(cabMgBoundaries);
     panelXs.forEach(px => depthDim(px, floorY, panelDepthCm.toFixed(1), true));
