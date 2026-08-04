@@ -10002,7 +10002,8 @@ function drawAreaPro(doc, o) {
         areaCfg = o.areaCfg,
         areaInvertir = o.areaInvertir,
         leftWallEff = o.leftWallEff,
-        rightWallEff = o.rightWallEff;
+        rightWallEff = o.rightWallEff,
+        stacked = o.stacked;
     const NAVY = [10, 31, 61];
     const tM = 1.0,
         tW = 4.2;
@@ -10106,7 +10107,10 @@ function drawAreaPro(doc, o) {
     const dimY = maxOutSwing > 0 ? floorY + maxOutSwing + 5 : floorY + 16;
     segsFront.forEach(sg => dimH(sg[0], sg[1], dimY, (sg[2]).toFixed(1), floorY));
     const claroTot = segsFront.reduce((t, s) => t + s[2], 0);
-    dimH(floorStartX, floorEndX, yWall - 9, (claroTot / 100).toFixed(2) + " m", yWall - tW);
+    // En hoja apilada el encabezado toca el muro (no hay aire arriba): la cota de ancho
+    // total va DEBAJO de la cadena de parciales; en hoja normal va sobre el muro.
+    if (stacked) dimH(floorStartX, floorEndX, dimY + 7, (claroTot / 100).toFixed(2) + " m", null);
+    else dimH(floorStartX, floorEndX, yWall - 9, (claroTot / 100).toFixed(2) + " m", yWall - tW);
     const profCm = Math.round(cabDepth / sc);
     dimV(floorStartX - 14, yWall, floorY, profCm.toFixed(1), floorStartX - 2);
 }
@@ -10396,11 +10400,27 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     // ajusta para que el área quepa en ancho Y profundidad, centrada en su columna.
     const basePanelCm = esPmrLayPdf ? pmrCabPanelCmPdf : panelBaseCmPdf;
     const profTotalCm = esPmrLayPdf ? pmrProfTotalPdf : (profLugarCmPdf > 0 ? profLugarCmPdf : panelBaseCmPdf);
-    if (region.measure) return { totalCm, profTotalCm };
-    const anyOutPro = window.CDP_PRO_STYLE && (areaCfg.aperturas || []).some(a => a && (a.split("_")[1] || "EXT").toUpperCase() !== "INT");
-    const bottomBudgetMm = banded ? (anyOutPro ? 40 : 20) : (anyOutPro ? 62 : 40);
-    const availHmm = (banded ? rtop + region.height : H - m) - drawTop - bottomBudgetMm;
-    const scale = region.scale || Math.max(.05, Math.min(availW / (totalCm || 1), availHmm / Math.max(1, profTotalCm)));
+    let outSwingCm = 0;
+    if (window.CDP_PRO_STYLE) seq.forEach(s => {
+        if (s.tipo !== "puerta" || s.cuartoPmr) return;
+        const ap = (areaCfg.aperturas || [])[s.indiceCabina - 1] || "";
+        const sent = (ap.split("_")[1] || "EXT").toUpperCase();
+        if (sent !== "INT") outSwingCm = Math.max(outSwingCm, s.ancho || 60);
+    });
+    if (region.measure) return { totalCm, profTotalCm, outSwingCm };
+    // El barrido de la puerta hacia AFUERA (radio = ancho de puerta) cuelga por debajo
+    // del piso. En cabinas poco profundas ese arco supera el fondo y chocaba el cajetín.
+    // Se pliega dentro del alto que ajusta la escala (mide "fondo + barrido"), no como
+    // presupuesto fijo, para que el dibujo completo (arco incluido) quepa sobre el cajetín.
+    const depthToFloorCm = Math.min(basePanelCm, profTotalCm);
+    const vExtentCm = Math.max(profTotalCm, depthToFloorCm + outSwingCm);
+    // Reserva bajo el dibujo para la cadena de cotas: con puerta AFUERA queda debajo del
+    // barrido (que ya está en vExtent); con puerta ADENTRO la cadena se dibuja a floorY+16
+    // y necesita más aire para no meterse en el cajetín.
+    const dimReserveMm = outSwingCm > 0 ? 14 : 20;
+    const bottomLimit = banded ? (rtop + region.height) : (H - m - 24);
+    const availHmm = bottomLimit - drawTop - dimReserveMm;
+    const scale = region.scale || Math.max(.05, Math.min(availW / (totalCm || 1), availHmm / Math.max(1, vExtentCm)));
     const drawW = totalCm * scale;
     const drawX = drawX0 + Math.max(0, (availW - drawW) / 2);
     let cabDepth = Math.min(basePanelCm, profTotalCm) * scale;
@@ -10416,7 +10436,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     const floorY = drawTop + cabDepth;
     const floorLugar = floorY + sobraProfMm;
     if (window.CDP_PRO_STYLE) {
-        drawAreaPro(doc, { seq: seq, scale: scale, drawX: drawX, drawW: drawW, drawTop: drawTop, cabDepth: cabDepth, floorY: floorY, areaCfg: areaCfg, N: N, areaInvertir: areaInvertir, layoutCodigo: layoutCodigo, leftWallEff: leftWallEff, rightWallEff: rightWallEff, esPmrLayPdf: esPmrLayPdf });
+        drawAreaPro(doc, { seq: seq, scale: scale, drawX: drawX, drawW: drawW, drawTop: drawTop, cabDepth: cabDepth, floorY: floorY, areaCfg: areaCfg, N: N, areaInvertir: areaInvertir, layoutCodigo: layoutCodigo, leftWallEff: leftWallEff, rightWallEff: rightWallEff, esPmrLayPdf: esPmrLayPdf, stacked: stackedHdr });
         return;
     }
     (() => {
@@ -11082,16 +11102,20 @@ function drawSheet(doc, proyecto, areaIdxs, pageInfo, hojaLabel) {
     const sumProf = meds.reduce((s, md) => s + Math.max(1, md.profTotalCm), 0);
     const maxTot = Math.max.apply(null, meds.map(md => Math.max(1, md.totalCm)));
     const gap = 8;
+    // Alto real de cada área = fondo + barrido de puerta hacia afuera (radio del arco).
+    const vExt = md => Math.max(1, md.profTotalCm) + Math.max(0, md.outSwingCm || 0);
+    const maxV = Math.max.apply(null, meds.map(vExt));
+    const sumV = meds.reduce((s, md) => s + vExt(md), 0);
     // Escala compartida en COLUMNAS (lado a lado, hoja horizontal).
     const colScaleW = (Wl - 2 * m - 28 * k - gap * (k - 1)) / sumTot;
-    const colScaleH = ((Hl - m) - (m + 58) - 40) / maxProf;
+    const colScaleH = ((Hl - m) - (m + 58) - 26) / maxV;
     const colScale = Math.max(.05, Math.min(colScaleW, colScaleH));
     // Escala compartida APILANDO en hoja vertical (arriba/abajo).
     const vgapS = 8,
-        OH = 52,
+        OH = 56,
         topStart = m + 6;
     const budgetV = (Hp - m - 36 - topStart) - OH * k - vgapS * (k - 1);
-    const stackScale = Math.max(.05, Math.min(budgetV / sumProf, ((Wp - 2 * m) - 28) / maxTot));
+    const stackScale = Math.max(.05, Math.min(budgetV / sumV, ((Wp - 2 * m) - 28) / maxTot));
     // Los cuartos PMR (P+/PP/PR) tienen su propio render → no se apilan.
     const anyPmrPanel = areaIdxs.some(ai => {
         const lay = ((proyecto.configByArea || {})[proyecto.areas[ai]] || {}).layout || proyecto.layout || "L";
@@ -11111,7 +11135,7 @@ function drawSheet(doc, proyecto, areaIdxs, pageInfo, hojaLabel) {
     if (useStack) {
         let y = topStart;
         areaIdxs.forEach((ai, j) => {
-            const h = OH + Math.max(1, meds[j].profTotalCm) * stackScale;
+            const h = OH + vExt(meds[j]) * stackScale;
             if (j > 0) {
                 doc.setDrawColor(10, 31, 61);
                 doc.setLineWidth(.4);
