@@ -9626,7 +9626,7 @@ function drawPrPro(doc, o) {
             const ap = (aperturas[it.idx] || "DER_EXT").split("_"); const isIzq = ap[0] === "IZQ"; const inward = ap[1] === "INT";
             const hx = isIzq ? it.x0 : it.x0 + it.wmm; const dir = isIzq ? 1 : -1; const sgnY = inward ? -1 : 1;
             const wv = Math.min(it.wmm, (inward ? fy - yWall : floorY - fy) * 0.9);
-            doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.5); doc.line(hx, fy, hx, fy + sgnY * wv);
+            doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.9); doc.line(hx, fy, hx, fy + sgnY * wv);
             doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255); doc.roundedRect(hx - 0.9, fy + sgnY * wv - (inward ? 1.6 : 0), 1.8, 1.8, 0.5, 0.5, "S");
             arc(hx, fy, wv, inward ? -Math.PI / 2 : Math.PI / 2, dir === 1 ? 0 : (inward ? -Math.PI : Math.PI));
             doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35); doc.rect(it.x0, fy - tM / 2, it.wmm, tM);
@@ -10088,7 +10088,7 @@ function drawAreaPro(doc, o) {
                 const sent = (ap.split("_")[1] || "EXT").toUpperCase();
                 const inward = sent === "INT";
                 const hx = lado === "IZQ" ? xa : xb, dir = lado === "IZQ" ? 1 : -1, sgnY = inward ? -1 : 1;
-                doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.5); doc.line(hx, floorY, hx, floorY + sgnY * w);
+                doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.9); doc.line(hx, floorY, hx, floorY + sgnY * w);
                 doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255); doc.roundedRect(hx - 0.9, floorY + sgnY * w - (inward ? 1.6 : 0), 1.8, 1.8, 0.5, 0.5, "S");
                 const a0 = inward ? -Math.PI / 2 : Math.PI / 2, a1 = dir === 1 ? 0 : (inward ? -Math.PI : Math.PI);
                 arc(hx, floorY, w, a0, a1);
