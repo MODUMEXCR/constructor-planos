@@ -9629,12 +9629,11 @@ function drawPrPro(doc, o) {
             doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.9); doc.line(hx, fy, hx, fy + sgnY * wv);
             doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255); doc.roundedRect(hx - 0.9, fy + sgnY * wv - (inward ? 1.6 : 0), 1.8, 1.8, 0.5, 0.5, "S");
             arc(hx, fy, wv, inward ? -Math.PI / 2 : Math.PI / 2, dir === 1 ? 0 : (inward ? -Math.PI : Math.PI));
-            doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35); doc.rect(it.x0, fy - tM / 2, it.wmm, tM);
         } else if (it.kind === "pil" || it.kind === "muro") {
-            if (it.wmm <= 0.2 && it.dp !== "divcub") { if (it.wmm <= 0.2) { const cxp = it.x0; doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35); doc.line(cxp, yWall, cxp, fy); } return; }
-            const cxp = it.x0 + it.wmm / 2; doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35);
-            doc.line(cxp - tM / 2, yWall, cxp - tM / 2, fy); doc.line(cxp + tM / 2, yWall, cxp + tM / 2, fy); doc.line(cxp - tM / 2, yWall, cxp + tM / 2, yWall);
-            if (it.wmm > 0.2) { doc.rect(it.x0, fy - tM / 2, it.wmm, tM); }
+            // Como la previsualización: la pilastra/muro es SOLO una barra al frente (al piso
+            // de su zona), sin líneas verticales (esas eran las que sobraban). Ancho 0 = nada.
+            if (it.wmm <= 0.2) return;
+            doc.setFillColor(0, 0, 0); doc.rect(it.x0, fy - tM / 2, it.wmm, tM, "F");
         }
     });
     // linea de piso
@@ -9649,11 +9648,10 @@ function drawPrPro(doc, o) {
         const slotP = (floorY - recessY) / nOri, mgLenP = Math.min((cbX1 - cbX0) * 0.55, 18);
         for (let k = 0; k < nOri; k++) {
             const cy = recessY + (k + 0.5) * slotP;
-            const rl = Math.max(2.2, Math.min(slotP * 0.3, 6)), rp = Math.max(2, rl * 0.62);
-            const ecx = wallXp - sgnP * (rp + 0.6);
-            doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35); doc.setFillColor(255, 255, 255);
-            doc.ellipse(ecx, cy, rp, rl, "FD");
-            doc.setFillColor(120, 120, 120); doc.circle(wallXp - sgnP * 1, cy, 0.55, "F");
+            // imagen del orinal (orinal.png es 4.49:1) rotada 90/270 para quedar vertical
+            // contra la pared, con aspecto correcto (ancho = alto/4.49 → no se deforma).
+            const oL = Math.max(7, Math.min(slotP * 0.62, 15)), oD = oL / 4.49;
+            try { doc.addImage(ORINAL_IMG_B64, "PNG", inv ? wallXp + 1 : wallXp - 1, cy - oL / 2, oL, oD, undefined, "FAST", inv ? 270 : 90); } catch (e) {}
         }
         for (let k = 1; k <= nOri; k++) {
             const dy = recessY + k * slotP;
@@ -9677,7 +9675,8 @@ function drawPrPro(doc, o) {
     // COTAS: la banda va debajo del piso; si alguna puerta barre por debajo del piso
     // (accesible del cuarto), se baja para no cruzar el arco.
     const dimYY = floorY + (o.swingBelowMm > 0 ? o.swingBelowMm + 7 : 11);
-    seq.forEach(it => { if (it.w > 0) dimH(it.x0, it.x0 + it.wmm, dimYY, it.w.toFixed(1), floorY); });
+    // Ticks cortos (no líneas largas hasta el piso, que cruzaban el barrido y ensuciaban).
+    seq.forEach(it => { if (it.w > 0) dimH(it.x0, it.x0 + it.wmm, dimYY, it.w.toFixed(1), dimYY - 4.5); });
     const totalCmv = seq.reduce((s, x) => s + x.w, 0);
     dimH(drawX, drawX + drawW, yWall - 9, (totalCmv / 100).toFixed(2) + " m", yWall - tW);
     dimV(drawX - 14, yWall, floorY, Math.round(o.prof).toFixed(1), drawX - tW);
