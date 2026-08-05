@@ -9656,7 +9656,9 @@ function drawPrPro(doc, o) {
             // imagen del orinal (orinal.png es 4.49:1) rotada 90/270 para quedar de pie contra
             // la pared. A escala de slot el aspecto puro (proy = largo/4.49) queda invisible
             // (~3mm), así que se le da más proyección para que se lea el orinal.
-            const oL = Math.max(9, Math.min(slotP * 0.78, 16)), oD = oL * 0.5;
+            // aspecto FIEL de orinal.png (4.49:1): proyección = largo/4.49 (no se estira);
+            // se maximiza el largo dentro del slot para que sea lo más grande posible.
+            const oL = Math.max(10, Math.min(slotP * 0.88, 18)), oD = oL / 4.49;
             try { doc.addImage(ORINAL_IMG_B64, "PNG", inv ? wallXp : wallXp - oD, cy - oL / 2, oL, oD, undefined, "FAST", inv ? 270 : 90); } catch (e) {}
         }
         for (let k = 1; k <= nOri; k++) {
