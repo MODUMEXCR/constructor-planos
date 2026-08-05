@@ -9639,6 +9639,33 @@ function drawPrPro(doc, o) {
     });
     // linea de piso
     doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.2); doc.setLineDashPattern([1.4, 1], 0); doc.line(drawX, floorY, drawX + drawW, floorY); doc.setLineDashPattern([], 0);
+    // Orinales en el espacio libre del cubículo (columna contra la pared) + mamparas MG
+    const aCfg = o.a || {};
+    const nOri = Math.max(0, parseInt(aCfg.nMingitorios, 10) || 0);
+    if (recessY < floorY - 0.5 && nOri > 0) {
+        const wallXp = inv ? cbX0 : cbX1, sgnP = inv ? 1 : -1;
+        const slotP = (floorY - recessY) / nOri, mgLenP = Math.min((cbX1 - cbX0) * 0.5, 15);
+        const uw = Math.min(9, slotP * 0.6), uh = uw * 1.2;
+        for (let k = 0; k < nOri; k++) {
+            const cy = recessY + (k + 0.5) * slotP;
+            try { doc.addImage(ORINAL_IMG_B64, "PNG", inv ? wallXp + 1 : wallXp - 1 - uh, cy + (inv ? -uw / 2 : uw / 2), uh, uw, undefined, "FAST", inv ? 270 : 90); } catch (e) {}
+        }
+        doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35);
+        for (let k = 1; k <= nOri; k++) {
+            const dy = recessY + k * slotP;
+            doc.line(wallXp, dy - tM / 2, wallXp + sgnP * mgLenP, dy - tM / 2);
+            doc.line(wallXp, dy + tM / 2, wallXp + sgnP * mgLenP, dy + tM / 2);
+            doc.line(wallXp + sgnP * mgLenP, dy - tM / 2, wallXp + sgnP * mgLenP, dy + tM / 2);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(5); doc.setTextColor(60, 60, 60);
+            doc.text((aCfg.mgTipo || "MG") + (k === nOri ? " (cierre)" : ""), wallXp + sgnP * (mgLenP + 1.5), dy - 1, { align: inv ? "left" : "right" });
+        }
+        doc.setFont("helvetica", "bold"); doc.setFontSize(5.5); doc.setTextColor(...NAVY);
+        doc.text(nOri + " orinal" + (nOri > 1 ? "es" : ""), wallXp + sgnP * 18, recessY + 5, { align: inv ? "left" : "right" });
+    }
+    // "espacio libre" en las zonas recesadas / con sobra de fondo
+    doc.setFont("helvetica", "normal"); doc.setFontSize(5.5); doc.setTextColor(138, 149, 163);
+    if (recessY < floorY - 3 && nOri === 0) doc.text("espacio libre", (cbX0 + cbX1) / 2, (recessY + floorY) / 2, { align: "center" });
+    if (cuartoFloorYp < floorY - 5) doc.text("espacio libre", (cuX0 + cuX1) / 2, (cuartoFloorYp + floorY) / 2 + 1, { align: "center" });
     // Etiquetas de zona (como el plano real): CUARTO PMR y CUBÍCULO(s)
     doc.setFont("helvetica", "bold"); doc.setFontSize(6.5); doc.setTextColor(...NAVY);
     doc.text("CUARTO PMR", (cuX0 + cuX1) / 2, cuartoFloorYp - 3, { align: "center" });
@@ -9651,6 +9678,12 @@ function drawPrPro(doc, o) {
     const totalCmv = seq.reduce((s, x) => s + x.w, 0);
     dimH(drawX, drawX + drawW, yWall - 9, (totalCmv / 100).toFixed(2) + " m", yWall - tW);
     dimV(drawX - 14, yWall, floorY, Math.round(o.prof).toFixed(1), drawX - tW);
+    // Cotas de receso / espacio libre a la derecha, cuando el cubículo está recesado
+    if (recessY < floorY - 0.5) {
+        const rec = Math.max(0, parseFloat((o.a || {}).recesoPmr) || 0);
+        dimV(drawX + drawW + 12, yWall, recessY, "receso " + Math.round(rec || (recessY - yWall) / Math.max(0.01, o.pxCm)));
+        dimV(drawX + drawW + 12, recessY, floorY, "libre " + Math.round((floorY - recessY) / Math.max(0.01, o.pxCm)));
+    }
 }
 
 function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
