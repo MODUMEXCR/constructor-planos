@@ -9662,7 +9662,9 @@ function drawPrPro(doc, o) {
             // imagen FIEL de orinal.png (4.49:1) girada contra la pared; jsPDF rota respecto al
             // origen, así que x=wallXp deja el borde pegado a la pared (no flotando).
             const oL = Math.max(10, Math.min(slotP * 0.9, 20)), oD = oL / 4.49;
-            const oy = inv ? cy + oL / 2 : cy - oL / 2;
+            // jsPDF con rotación coloca el centro en y_pasado + oD ∓ oL/2 (medido);
+            // se invierte para que el centro de la imagen caiga EXACTO en cy (centro del slot).
+            const oy = inv ? cy - oD - oL / 2 : cy - oD + oL / 2;
             try { doc.addImage(ORINAL_IMG_B64, "PNG", wallXp, oy, oL, oD, undefined, "FAST", inv ? 270 : 90); } catch (e) {}
         }
         for (let k = 1; k <= nOri; k++) {
