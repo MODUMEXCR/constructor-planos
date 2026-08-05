@@ -9639,9 +9639,14 @@ function drawPrPro(doc, o) {
     });
     // linea de piso
     doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.2); doc.setLineDashPattern([1.4, 1], 0); doc.line(drawX, floorY, drawX + drawW, floorY); doc.setLineDashPattern([], 0);
-    // COTAS
-    let maxOut = 0; seq.forEach(it => { if (it.kind === "door") { const ap = (aperturas[it.idx] || "DER_EXT").split("_"); if (ap[1] !== "INT") maxOut = Math.max(maxOut, it.wmm); } });
-    const dimYY = floorY + (maxOut > 0 ? maxOut + 5 : 12);
+    // Etiquetas de zona (como el plano real): CUARTO PMR y CUBÍCULO(s)
+    doc.setFont("helvetica", "bold"); doc.setFontSize(6.5); doc.setTextColor(...NAVY);
+    doc.text("CUARTO PMR", (cuX0 + cuX1) / 2, cuartoFloorYp - 3, { align: "center" });
+    doc.setTextColor(60, 60, 60); doc.setFontSize(6);
+    doc.text((cbX1 - cbX0) > 40 ? "CUBÍCULO" : "CUB.", (cbX0 + cbX1) / 2, (o.recessY < floorY - 3 ? o.recessY : floorY) - 3, { align: "center" });
+    // COTAS: la banda va justo debajo del piso (en PR el barrido de puerta se dibuja
+    // adentro del plano, no cuelga por debajo, así que no hay que bajar la cota).
+    const dimYY = floorY + 11;
     seq.forEach(it => { if (it.w > 0) dimH(it.x0, it.x0 + it.wmm, dimYY, it.w.toFixed(1), floorY); });
     const totalCmv = seq.reduce((s, x) => s + x.w, 0);
     dimH(drawX, drawX + drawW, yWall - 9, (totalCmv / 100).toFixed(2) + " m", yWall - tW);
@@ -9731,9 +9736,8 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
         push("muro", cierreCuartoCode)
     }
     const totalCm = seq.reduce((s, x) => s + x.w, 0) || 337;
-    const drawX = rx + 14,
-        drawW = rw - 28,
-        scale = drawW / totalCm;
+    const drawXFull = rx + 14,
+        drawWFull = rw - 28;
     const drawTop = rtop + headerH;
     let prof = 190;
     {
@@ -9745,10 +9749,15 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
             prof = a.preferCorta ? M : mn
         }
     }
-    const prOutPro = window.CDP_PRO_STYLE && (aperturas || []).some(ap => ap && (ap.split("_")[1] || "EXT").toUpperCase() !== "INT");
-    const availH = (banded ? region.height - headerH - 22 : H - drawTop - 26) - (prOutPro ? (banded ? 14 : 40) : 0);
-    const depthMm = Math.max(38, Math.min(availH, prof * scale * 0.7));
-    const pxCm = depthMm / prof;
+    // Escala UNIFORME (misma mm/cm en ancho y profundidad → el plano NO sale deformado) y
+    // centrada. El barrido de puerta del PR se dibuja DENTRO del plano (capado al espacio
+    // libre), no por debajo del piso, así que no se reserva alto extra por las puertas.
+    const availHmm = (banded ? region.height - headerH - 24 : H - drawTop - 46);
+    const scale = Math.max(0.05, Math.min(drawWFull / totalCm, availHmm / Math.max(1, prof)));
+    const drawW = totalCm * scale;
+    const drawX = drawXFull + Math.max(0, (drawWFull - drawW) / 2);
+    const pxCm = scale;
+    const depthMm = prof * scale;
     const floorY = drawTop + depthMm;
     const receso = Math.max(0, parseFloat(a.recesoPmr) || 0);
     const recessY = receso > 0 ? drawTop + Math.min(receso, prof) * pxCm : floorY;
