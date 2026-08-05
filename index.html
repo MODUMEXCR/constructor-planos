@@ -9601,7 +9601,7 @@ function drawPrPro(doc, o) {
     const arrow = (x, y, a) => { const s = 1.4; doc.setFillColor(0, 0, 0); doc.triangle(x, y, x - s * Math.cos(a - 0.32), y - s * Math.sin(a - 0.32), x - s * Math.cos(a + 0.32), y - s * Math.sin(a + 0.32), "F"); };
     const dimH = (xa, xb, y, txt, extTo) => { if (Math.abs(xb - xa) < 0.3) return; doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.2); if (extTo != null) { doc.line(xa, extTo, xa, y + (y > extTo ? -1 : 1)); doc.line(xb, extTo, xb, y + (y > extTo ? -1 : 1)); } doc.line(xa, y, xb, y); arrow(xa, y, 0); arrow(xb, y, Math.PI); doc.setFont("helvetica", "normal"); doc.setFontSize(6.4); doc.setTextColor(0, 0, 0); doc.text(txt, (xa + xb) / 2, y - 1, { align: "center" }); };
     const dimV = (x, ya, yb, txt, extTo) => { doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.2); if (extTo != null) { doc.line(extTo, ya, x + 1, ya); doc.line(extTo, yb, x + 1, yb); } doc.line(x, ya, x, yb); arrow(x, ya, Math.PI / 2); arrow(x, yb, -Math.PI / 2); doc.setFont("helvetica", "normal"); doc.setFontSize(6.4); doc.setTextColor(0, 0, 0); doc.text(txt, x - 1, (ya + yb) / 2, { align: "center", angle: 90 }); };
-    const arc = (cx, cy, r, a0, a1) => { doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.25); doc.setLineDashPattern([1, 0.9], 0); let pv = null; for (let i = 0; i <= 24; i++) { const aa = a0 + (a1 - a0) * i / 24, px = cx + r * Math.cos(aa), py = cy + r * Math.sin(aa); if (pv) doc.line(pv[0], pv[1], px, py); pv = [px, py]; } doc.setLineDashPattern([], 0); };
+    const arc = (cx, cy, r, a0, a1) => { doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.25); doc.setLineDashPattern([1, 0.9], 0); const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0); let px = x0, py = y0; const segs = []; for (let i = 1; i <= 40; i++) { const aa = a0 + (a1 - a0) * i / 40, nx = cx + r * Math.cos(aa), ny = cy + r * Math.sin(aa); segs.push([nx - px, ny - py]); px = nx; py = ny; } doc.lines(segs, x0, y0, [1, 1], "S"); doc.setLineDashPattern([], 0); };
     const hatch = (x, y, w, h) => { doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.5); doc.rect(x, y, w, h); doc.setLineWidth(0.22); doc.setDrawColor(70, 70, 70); for (let d = -h; d < w; d += 2.0) { const ax = x + d, ay = y + h, bx = x + d + h; const cxA = Math.max(ax, x), cyA = ay - (cxA - ax), cxB = Math.min(bx, x + w), cyB = ay - (cxB - ax); if (cxA < cxB) doc.line(cxA, Math.min(Math.max(cyA, y), y + h), cxB, Math.min(Math.max(cyB, y), y + h)); } };
     // MUROS: superior + laterales (rayados)
     hatch(drawX - tM / 2, yWall - tW, drawW + tM, tW);
@@ -9625,7 +9625,7 @@ function drawPrPro(doc, o) {
         if (it.kind === "door") {
             const ap = (aperturas[it.idx] || "DER_EXT").split("_"); const isIzq = ap[0] === "IZQ"; const inward = ap[1] === "INT";
             const hx = isIzq ? it.x0 : it.x0 + it.wmm; const dir = isIzq ? 1 : -1; const sgnY = inward ? -1 : 1;
-            const wv = Math.min(it.wmm, (inward ? fy - yWall : floorY - fy) * 0.9);
+            const wv = inward ? Math.min(it.wmm, (fy - yWall) * 0.9) : it.wmm;
             doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.9); doc.line(hx, fy, hx, fy + sgnY * wv);
             doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255); doc.roundedRect(hx - 0.9, fy + sgnY * wv - (inward ? 1.6 : 0), 1.8, 1.8, 0.5, 0.5, "S");
             arc(hx, fy, wv, inward ? -Math.PI / 2 : Math.PI / 2, dir === 1 ? 0 : (inward ? -Math.PI : Math.PI));
@@ -9639,28 +9639,31 @@ function drawPrPro(doc, o) {
     });
     // linea de piso
     doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.2); doc.setLineDashPattern([1.4, 1], 0); doc.line(drawX, floorY, drawX + drawW, floorY); doc.setLineDashPattern([], 0);
-    // Orinales en el espacio libre del cubículo (columna contra la pared) + mamparas MG
+    // Orinales en el espacio libre del cubículo (columna contra la pared) + mamparas MG.
+    // Óvalo vectorial limpio (como la previsualización); la imagen se deformaba. Cada orinal
+    // va CENTRADO en su slot (entre dos mamparas), la mampara divide los slots.
     const aCfg = o.a || {};
     const nOri = Math.max(0, parseInt(aCfg.nMingitorios, 10) || 0);
     if (recessY < floorY - 0.5 && nOri > 0) {
         const wallXp = inv ? cbX0 : cbX1, sgnP = inv ? 1 : -1;
-        const slotP = (floorY - recessY) / nOri, mgLenP = Math.min((cbX1 - cbX0) * 0.5, 15);
-        const uw = Math.min(9, slotP * 0.6), uh = uw * 1.2;
+        const slotP = (floorY - recessY) / nOri, mgLenP = Math.min((cbX1 - cbX0) * 0.55, 18);
         for (let k = 0; k < nOri; k++) {
             const cy = recessY + (k + 0.5) * slotP;
-            try { doc.addImage(ORINAL_IMG_B64, "PNG", inv ? wallXp + 1 : wallXp - 1 - uh, cy + (inv ? -uw / 2 : uw / 2), uh, uw, undefined, "FAST", inv ? 270 : 90); } catch (e) {}
+            const rl = Math.max(2.2, Math.min(slotP * 0.3, 6)), rp = Math.max(2, rl * 0.62);
+            const ecx = wallXp - sgnP * (rp + 0.6);
+            doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35); doc.setFillColor(255, 255, 255);
+            doc.ellipse(ecx, cy, rp, rl, "FD");
+            doc.setFillColor(120, 120, 120); doc.circle(wallXp - sgnP * 1, cy, 0.55, "F");
         }
-        doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35);
         for (let k = 1; k <= nOri; k++) {
             const dy = recessY + k * slotP;
-            doc.line(wallXp, dy - tM / 2, wallXp + sgnP * mgLenP, dy - tM / 2);
-            doc.line(wallXp, dy + tM / 2, wallXp + sgnP * mgLenP, dy + tM / 2);
-            doc.line(wallXp + sgnP * mgLenP, dy - tM / 2, wallXp + sgnP * mgLenP, dy + tM / 2);
+            const mxa = Math.min(wallXp, wallXp + sgnP * mgLenP);
+            doc.setFillColor(0, 0, 0); doc.rect(mxa, dy - tM / 2, mgLenP, tM, "F");
             doc.setFont("helvetica", "normal"); doc.setFontSize(5); doc.setTextColor(60, 60, 60);
-            doc.text((aCfg.mgTipo || "MG") + (k === nOri ? " (cierre)" : ""), wallXp + sgnP * (mgLenP + 1.5), dy - 1, { align: inv ? "left" : "right" });
+            doc.text((aCfg.mgTipo || "MG") + (k === nOri ? " (cierre)" : ""), wallXp + sgnP * (mgLenP + 1.5), dy + 0.8, { align: inv ? "left" : "right" });
         }
         doc.setFont("helvetica", "bold"); doc.setFontSize(5.5); doc.setTextColor(...NAVY);
-        doc.text(nOri + " orinal" + (nOri > 1 ? "es" : ""), wallXp + sgnP * 18, recessY + 5, { align: inv ? "left" : "right" });
+        doc.text(nOri + " orinal" + (nOri > 1 ? "es" : ""), wallXp - sgnP * (mgLenP + 1.5), recessY + 5, { align: inv ? "left" : "right" });
     }
     // "espacio libre" en las zonas recesadas / con sobra de fondo
     doc.setFont("helvetica", "normal"); doc.setFontSize(5.5); doc.setTextColor(138, 149, 163);
@@ -9671,9 +9674,9 @@ function drawPrPro(doc, o) {
     doc.text("CUARTO PMR", (cuX0 + cuX1) / 2, cuartoFloorYp - 3, { align: "center" });
     doc.setTextColor(60, 60, 60); doc.setFontSize(6);
     doc.text((cbX1 - cbX0) > 40 ? "CUBÍCULO" : "CUB.", (cbX0 + cbX1) / 2, (o.recessY < floorY - 3 ? o.recessY : floorY) - 3, { align: "center" });
-    // COTAS: la banda va justo debajo del piso (en PR el barrido de puerta se dibuja
-    // adentro del plano, no cuelga por debajo, así que no hay que bajar la cota).
-    const dimYY = floorY + 11;
+    // COTAS: la banda va debajo del piso; si alguna puerta barre por debajo del piso
+    // (accesible del cuarto), se baja para no cruzar el arco.
+    const dimYY = floorY + (o.swingBelowMm > 0 ? o.swingBelowMm + 7 : 11);
     seq.forEach(it => { if (it.w > 0) dimH(it.x0, it.x0 + it.wmm, dimYY, it.w.toFixed(1), floorY); });
     const totalCmv = seq.reduce((s, x) => s + x.w, 0);
     dimH(drawX, drawX + drawW, yWall - 9, (totalCmv / 100).toFixed(2) + " m", yWall - tW);
@@ -9783,15 +9786,28 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
         }
     }
     // Escala UNIFORME (misma mm/cm en ancho y profundidad → el plano NO sale deformado) y
-    // centrada. El barrido de puerta del PR se dibuja DENTRO del plano (capado al espacio
-    // libre), no por debajo del piso, así que no se reserva alto extra por las puertas.
-    const availHmm = (banded ? region.height - headerH - 24 : H - drawTop - 46);
-    const scale = Math.max(0.05, Math.min(drawWFull / totalCm, availHmm / Math.max(1, prof)));
+    // centrada. Se reserva el barrido de las puertas que abren AFUERA y sobresalen del piso
+    // (la accesible del cuarto barre su ancho completo hacia el corredor).
+    const recesoTmpPR = Math.max(0, parseFloat(a.recesoPmr) || 0);
+    const panelWTmp = Wc(panelCode) || prof;
+    let swingBelowCm = 0;
+    seq.forEach(it => {
+        if (it.kind !== "door") return;
+        const ap = (aperturas[it.idx] || "DER_EXT").split("_");
+        if (ap[1] === "INT") return;
+        const fyDepthCm = it.zona === "cub" ? (recesoTmpPR > 0 ? Math.min(recesoTmpPR, prof) : Math.min(panelWTmp, prof)) : Math.min(panelWTmp, prof);
+        swingBelowCm = Math.max(swingBelowCm, fyDepthCm + it.w - prof);
+    });
+    swingBelowCm = Math.max(0, swingBelowCm);
+    const vExtCm = prof + swingBelowCm;
+    const availHmm = (banded ? region.height - headerH - 24 : H - drawTop - 30) - (swingBelowCm > 0 ? 12 : 6);
+    const scale = Math.max(0.05, Math.min(drawWFull / totalCm, availHmm / Math.max(1, vExtCm)));
     const drawW = totalCm * scale;
     const drawX = drawXFull + Math.max(0, (drawWFull - drawW) / 2);
     const pxCm = scale;
     const depthMm = prof * scale;
     const floorY = drawTop + depthMm;
+    const swingBelowMm = swingBelowCm * scale;
     const receso = Math.max(0, parseFloat(a.recesoPmr) || 0);
     const recessY = receso > 0 ? drawTop + Math.min(receso, prof) * pxCm : floorY;
     let x = drawX,
@@ -9810,7 +9826,7 @@ function renderPmrPanelInto(doc, proyecto, areaIdx, region) {
     const panelW = Wc(panelCode) || prof;
     const cuartoFloorYp = drawTop + Math.min(panelW, prof) * pxCm;
     if (window.CDP_PRO_STYLE) {
-        drawPrPro(doc, { seq: seq, scale: scale, drawX: drawX, drawW: drawW, drawTop: drawTop, floorY: floorY, cuartoFloorYp: cuartoFloorYp, recessY: recessY, boundaryX: boundaryX, cuX0: cuX0, cuX1: cuX1, cbX0: cbX0, cbX1: cbX1, panelW: panelW, pxCm: pxCm, prof: prof, inv: inv, aperturas: aperturas, a: a, panelCode: panelCode, cuartoIdx: cuartoIdx, N: N });
+        drawPrPro(doc, { seq: seq, scale: scale, drawX: drawX, drawW: drawW, drawTop: drawTop, floorY: floorY, cuartoFloorYp: cuartoFloorYp, recessY: recessY, boundaryX: boundaryX, cuX0: cuX0, cuX1: cuX1, cbX0: cbX0, cbX1: cbX1, panelW: panelW, pxCm: pxCm, prof: prof, inv: inv, aperturas: aperturas, a: a, panelCode: panelCode, cuartoIdx: cuartoIdx, N: N, swingBelowMm: swingBelowMm });
         return;
     }
     doc.setFillColor(240, 243, 247);
@@ -10072,8 +10088,9 @@ function drawAreaPro(doc, o) {
     };
     const arc = (cx, cy, r, a0, a1) => {
         doc.setDrawColor(120, 120, 120); doc.setLineWidth(0.25); doc.setLineDashPattern([1, 0.9], 0);
-        let pv = null; for (let i = 0; i <= 24; i++) { const a = a0 + (a1 - a0) * i / 24, px = cx + r * Math.cos(a), py = cy + r * Math.sin(a); if (pv) doc.line(pv[0], pv[1], px, py); pv = [px, py]; }
-        doc.setLineDashPattern([], 0);
+        const x0 = cx + r * Math.cos(a0), y0 = cy + r * Math.sin(a0); let px = x0, py = y0; const segs = [];
+        for (let i = 1; i <= 40; i++) { const a = a0 + (a1 - a0) * i / 40, nx = cx + r * Math.cos(a), ny = cy + r * Math.sin(a); segs.push([nx - px, ny - py]); px = nx; py = ny; }
+        doc.lines(segs, x0, y0, [1, 1], "S"); doc.setLineDashPattern([], 0);
     };
     const hatch = (x, y, w, h) => {
         doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.5); doc.rect(x, y, w, h);
