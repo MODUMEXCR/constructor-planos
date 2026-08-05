@@ -9630,10 +9630,15 @@ function drawPrPro(doc, o) {
             doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255); doc.roundedRect(hx - 0.9, fy + sgnY * wv - (inward ? 1.6 : 0), 1.8, 1.8, 0.5, 0.5, "S");
             arc(hx, fy, wv, inward ? -Math.PI / 2 : Math.PI / 2, dir === 1 ? 0 : (inward ? -Math.PI : Math.PI));
         } else if (it.kind === "pil" || it.kind === "muro") {
-            // Como la previsualización: la pilastra/muro es SOLO una barra al frente (al piso
-            // de su zona), sin líneas verticales (esas eran las que sobraban). Ancho 0 = nada.
+            // Pilastra = barra al frente (contorno) + círculos de anclaje, IGUAL que los demás
+            // layouts (pilBar de drawAreaPro). El vertical lo da el panel PN180 / los muros, así
+            // que no se dibuja aquí (evita las líneas verticales sueltas que sobraban).
             if (it.wmm <= 0.2) return;
-            doc.setFillColor(0, 0, 0); doc.rect(it.x0, fy - tM / 2, it.wmm, tM, "F");
+            doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35); doc.setFillColor(255, 255, 255);
+            doc.rect(it.x0, fy - tM / 2, it.wmm, tM);
+            doc.setLineWidth(0.3);
+            doc.circle(it.x0 + 1.1, fy, 0.9, "S");
+            doc.circle(it.x0 + it.wmm - 1.1, fy, 0.9, "S");
         }
     });
     // linea de piso
@@ -9648,10 +9653,11 @@ function drawPrPro(doc, o) {
         const slotP = (floorY - recessY) / nOri, mgLenP = Math.min((cbX1 - cbX0) * 0.55, 18);
         for (let k = 0; k < nOri; k++) {
             const cy = recessY + (k + 0.5) * slotP;
-            // imagen del orinal (orinal.png es 4.49:1) rotada 90/270 para quedar vertical
-            // contra la pared, con aspecto correcto (ancho = alto/4.49 → no se deforma).
-            const oL = Math.max(7, Math.min(slotP * 0.62, 15)), oD = oL / 4.49;
-            try { doc.addImage(ORINAL_IMG_B64, "PNG", inv ? wallXp + 1 : wallXp - 1, cy - oL / 2, oL, oD, undefined, "FAST", inv ? 270 : 90); } catch (e) {}
+            // imagen del orinal (orinal.png es 4.49:1) rotada 90/270 para quedar de pie contra
+            // la pared. A escala de slot el aspecto puro (proy = largo/4.49) queda invisible
+            // (~3mm), así que se le da más proyección para que se lea el orinal.
+            const oL = Math.max(9, Math.min(slotP * 0.78, 16)), oD = oL * 0.5;
+            try { doc.addImage(ORINAL_IMG_B64, "PNG", inv ? wallXp : wallXp - oD, cy - oL / 2, oL, oD, undefined, "FAST", inv ? 270 : 90); } catch (e) {}
         }
         for (let k = 1; k <= nOri; k++) {
             const dy = recessY + k * slotP;
