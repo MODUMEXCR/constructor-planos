@@ -9630,16 +9630,12 @@ function drawPrPro(doc, o) {
             doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255); doc.roundedRect(hx - 0.9, fy + sgnY * wv - (inward ? 1.6 : 0), 1.8, 1.8, 0.5, 0.5, "S");
             arc(hx, fy, wv, inward ? -Math.PI / 2 : Math.PI / 2, dir === 1 ? 0 : (inward ? -Math.PI : Math.PI));
         } else if (it.kind === "pil" || it.kind === "muro") {
-            // Pilastra IGUAL que pilBar de los demás layouts: rayita del panel al medio
-            // (vertical del divisor, yWall→frente) + barra al frente + círculos de anclaje.
-            // Divisor interior → rayita al centro; cierre contra muro → rayita al borde del muro.
+            // Pilastra = SOLO barra al frente + círculos de anclaje (como la previsualización SVG
+            // del PR). El divisor vertical lo da el panel PN180 / los muros; dibujar un vertical
+            // por pilastra metía "paneles de más" (líneas verticales sobrantes) al lado del panel.
             if (it.wmm <= 0.2) return;
-            const panelX = it.kind === "muro" ? (it.x0 + it.wmm / 2 < drawX + drawW / 2 ? it.x0 : it.x0 + it.wmm) : it.x0 + it.wmm / 2;
-            doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35);
-            doc.line(panelX - tM / 2, yWall, panelX - tM / 2, fy);
-            doc.line(panelX + tM / 2, yWall, panelX + tM / 2, fy);
-            doc.line(panelX - tM / 2, yWall, panelX + tM / 2, yWall);
-            doc.setFillColor(255, 255, 255); doc.rect(it.x0, fy - tM / 2, it.wmm, tM);
+            doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35); doc.setFillColor(255, 255, 255);
+            doc.rect(it.x0, fy - tM / 2, it.wmm, tM);
             doc.setLineWidth(0.3);
             doc.circle(it.x0 + 1.1, fy, 0.9, "S");
             doc.circle(it.x0 + it.wmm - 1.1, fy, 0.9, "S");
