@@ -9630,12 +9630,16 @@ function drawPrPro(doc, o) {
             doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255); doc.roundedRect(hx - 0.9, fy + sgnY * wv - (inward ? 1.6 : 0), 1.8, 1.8, 0.5, 0.5, "S");
             arc(hx, fy, wv, inward ? -Math.PI / 2 : Math.PI / 2, dir === 1 ? 0 : (inward ? -Math.PI : Math.PI));
         } else if (it.kind === "pil" || it.kind === "muro") {
-            // Pilastra = barra al frente (contorno) + círculos de anclaje, IGUAL que los demás
-            // layouts (pilBar de drawAreaPro). El vertical lo da el panel PN180 / los muros, así
-            // que no se dibuja aquí (evita las líneas verticales sueltas que sobraban).
+            // Pilastra IGUAL que pilBar de los demás layouts: rayita del panel al medio
+            // (vertical del divisor, yWall→frente) + barra al frente + círculos de anclaje.
+            // Divisor interior → rayita al centro; cierre contra muro → rayita al borde del muro.
             if (it.wmm <= 0.2) return;
-            doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35); doc.setFillColor(255, 255, 255);
-            doc.rect(it.x0, fy - tM / 2, it.wmm, tM);
+            const panelX = it.kind === "muro" ? (it.x0 + it.wmm / 2 < drawX + drawW / 2 ? it.x0 : it.x0 + it.wmm) : it.x0 + it.wmm / 2;
+            doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35);
+            doc.line(panelX - tM / 2, yWall, panelX - tM / 2, fy);
+            doc.line(panelX + tM / 2, yWall, panelX + tM / 2, fy);
+            doc.line(panelX - tM / 2, yWall, panelX + tM / 2, yWall);
+            doc.setFillColor(255, 255, 255); doc.rect(it.x0, fy - tM / 2, it.wmm, tM);
             doc.setLineWidth(0.3);
             doc.circle(it.x0 + 1.1, fy, 0.9, "S");
             doc.circle(it.x0 + it.wmm - 1.1, fy, 0.9, "S");
@@ -9643,33 +9647,43 @@ function drawPrPro(doc, o) {
     });
     // linea de piso
     doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.2); doc.setLineDashPattern([1.4, 1], 0); doc.line(drawX, floorY, drawX + drawW, floorY); doc.setLineDashPattern([], 0);
-    // Orinales en el espacio libre del cubículo (columna contra la pared) + mamparas MG.
-    // Óvalo vectorial limpio (como la previsualización); la imagen se deformaba. Cada orinal
-    // va CENTRADO en su slot (entre dos mamparas), la mampara divide los slots.
+    // Orinales en el espacio libre del cubículo (columna contra la pared) + mamparas MG,
+    // como el plano real (mismo criterio que el mingitorio de drawAreaPro, girado a la pared):
+    // orinal = imagen orinal.png FIEL pegada a la pared y centrada entre mamparas; cada mampara
+    // proyecta su profundidad real (ancho MG del catálogo) y lleva su COTA de proyección.
     const aCfg = o.a || {};
     const nOri = Math.max(0, parseInt(aCfg.nMingitorios, 10) || 0);
     if (recessY < floorY - 0.5 && nOri > 0) {
         const wallXp = inv ? cbX0 : cbX1, sgnP = inv ? 1 : -1;
-        const slotP = (floorY - recessY) / nOri, mgLenP = Math.min((cbX1 - cbX0) * 0.55, 18);
+        const slotP = (floorY - recessY) / nOri;
+        let mgDepthCm = 60;
+        { const mgPz = aCfg.mgTipo ? CATALOGO.piezas.find(p => p.codigo === aCfg.mgTipo) : null;
+          if (mgPz && mgPz.familia === "MG" && mgPz.ancho) mgDepthCm = mgPz.ancho;
+          else { const mm = String(aCfg.mgTipo || "").match(/(\d{2})/); if (mm) mgDepthCm = parseFloat(mm[1]); } }
+        const mgLenP = Math.max(6, Math.min(mgDepthCm * sc, (cbX1 - cbX0) - 3));
         for (let k = 0; k < nOri; k++) {
             const cy = recessY + (k + 0.5) * slotP;
-            // imagen del orinal (orinal.png es 4.49:1) rotada 90/270 para quedar de pie contra
-            // la pared. A escala de slot el aspecto puro (proy = largo/4.49) queda invisible
-            // (~3mm), así que se le da más proyección para que se lea el orinal.
-            // aspecto FIEL de orinal.png (4.49:1): proyección = largo/4.49 (no se estira);
-            // se maximiza el largo dentro del slot para que sea lo más grande posible.
-            const oL = Math.max(10, Math.min(slotP * 0.88, 18)), oD = oL / 4.49;
-            try { doc.addImage(ORINAL_IMG_B64, "PNG", inv ? wallXp : wallXp - oD, cy - oL / 2, oL, oD, undefined, "FAST", inv ? 270 : 90); } catch (e) {}
+            // imagen FIEL de orinal.png (4.49:1) girada contra la pared; jsPDF rota respecto al
+            // origen, así que x=wallXp deja el borde pegado a la pared (no flotando).
+            const oL = Math.max(10, Math.min(slotP * 0.9, 20)), oD = oL / 4.49;
+            const oy = inv ? cy + oL / 2 : cy - oL / 2;
+            try { doc.addImage(ORINAL_IMG_B64, "PNG", wallXp, oy, oL, oD, undefined, "FAST", inv ? 270 : 90); } catch (e) {}
         }
         for (let k = 1; k <= nOri; k++) {
             const dy = recessY + k * slotP;
-            const mxa = Math.min(wallXp, wallXp + sgnP * mgLenP);
+            const mxa = inv ? wallXp : wallXp - mgLenP;
             doc.setFillColor(0, 0, 0); doc.rect(mxa, dy - tM / 2, mgLenP, tM, "F");
-            doc.setFont("helvetica", "normal"); doc.setFontSize(5); doc.setTextColor(60, 60, 60);
-            doc.text((aCfg.mgTipo || "MG") + (k === nOri ? " (cierre)" : ""), wallXp + sgnP * (mgLenP + 1.5), dy + 0.8, { align: inv ? "left" : "right" });
+            // cota de la proyección de la mampara (la "medida del mingitorio", como el plano real)
+            const cdy = dy + 3.4;
+            doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.2);
+            doc.line(mxa, cdy, wallXp, cdy); arrow(mxa, cdy, 0); arrow(wallXp, cdy, Math.PI);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(5.4); doc.setTextColor(0, 0, 0);
+            doc.text(mgDepthCm.toFixed(1), (mxa + wallXp) / 2, cdy - 0.9, { align: "center" });
+            doc.setFontSize(4.6); doc.setTextColor(90, 90, 90);
+            doc.text((aCfg.mgTipo || "MG") + (k === nOri ? " (cierre)" : ""), wallXp + sgnP * 1.5, dy - 1.2, { align: inv ? "left" : "right" });
         }
         doc.setFont("helvetica", "bold"); doc.setFontSize(5.5); doc.setTextColor(...NAVY);
-        doc.text(nOri + " orinal" + (nOri > 1 ? "es" : ""), wallXp - sgnP * (mgLenP + 1.5), recessY + 5, { align: inv ? "left" : "right" });
+        doc.text(nOri + " orinal" + (nOri > 1 ? "es" : ""), wallXp + sgnP * 1.5, recessY + 5, { align: inv ? "left" : "right" });
     }
     // "espacio libre" en las zonas recesadas / con sobra de fondo
     doc.setFont("helvetica", "normal"); doc.setFontSize(5.5); doc.setTextColor(138, 149, 163);
@@ -9683,8 +9697,8 @@ function drawPrPro(doc, o) {
     // COTAS: la banda va debajo del piso; si alguna puerta barre por debajo del piso
     // (accesible del cuarto), se baja para no cruzar el arco.
     const dimYY = floorY + (o.swingBelowMm > 0 ? o.swingBelowMm + 7 : 11);
-    // Ticks cortos (no líneas largas hasta el piso, que cruzaban el barrido y ensuciaban).
-    seq.forEach(it => { if (it.w > 0) dimH(it.x0, it.x0 + it.wmm, dimYY, it.w.toFixed(1), dimYY - 4.5); });
+    // Líneas de extensión hasta el piso (como los demás planos), no ticks cortos.
+    seq.forEach(it => { if (it.w > 0) dimH(it.x0, it.x0 + it.wmm, dimYY, it.w.toFixed(1), floorY); });
     const totalCmv = seq.reduce((s, x) => s + x.w, 0);
     dimH(drawX, drawX + drawW, yWall - 9, (totalCmv / 100).toFixed(2) + " m", yWall - tW);
     dimV(drawX - 14, yWall, floorY, Math.round(o.prof).toFixed(1), drawX - tW);
