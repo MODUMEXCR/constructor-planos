@@ -8406,8 +8406,12 @@ function determinarSubTipoModumex(pieza, ctx) {
     if (familia === "PN") {
         const tiposCabPN = areaCfg.tiposCabina || [];
         if (tiposCabPN[indiceCabina + 1] === "Mingitorio") return "PNLAT";
-        const esTerminalAbiertoDer = layoutCodigo === "E" && indiceCabina === totalCabinas - 1 && !rightWallEff;
-        return esEndMuro || esTerminalAbiertoDer ? "PNLAT" : "PNCEN"
+        // paneles[i] es el divisor a la DERECHA de la cabina i (hacia i+1) → es CENTRAL
+        // (entre 2 cabinas). Solo es LATERAL si es el panel TERMINAL de la última cabina
+        // (escuadra con el muro derecho, o cierre del extremo abierto en E). El muro IZQUIERDO
+        // de la cabina 0 NO lo vuelve lateral: su panel mira hacia el centro, no hacia el muro.
+        const esTerminalDer = indiceCabina === totalCabinas - 1 && (rightWallEff || layoutCodigo === "E");
+        return esTerminalDer ? "PNLAT" : "PNCEN"
     }
     if (familia === "PI") {
         if (layoutCodigo === "LP" && indiceCabina === totalCabinas - 1) return "PLLAT";
