@@ -11637,7 +11637,11 @@ function openCotizarModal(proyecto) {
     const ivaDefaultPct = normRegion(regionProy) === normRegion("Costa Rica") ? 13 : 0;
     const body = document.createElement("div");
     const productoDefault = proyecto.modelo || "ESTANDAR";
-    const tierColor = tierDeColor(proyecto.color);
+    // La tarifa Superior la define el ACABADO (Acero Inox / Antigrafiti); si es Laminado
+    // Compacto usa el tier del color (Línea/Especial). Compatible con proyectos viejos que
+    // ponían el acabado como color (tierDeColor sigue como respaldo).
+    const tierAcab = proyecto.linea === "Superior" ? tierDeAcabado(proyecto.acabado) : null;
+    const tierColor = tierAcab || tierDeColor(proyecto.color);
     const esSuperior = !!(CATALOGO.preciosPorM2[productoDefault] || {}).usdOnly;
     const tierOpts = esSuperior ? [
         ["linea", "C. de Línea"],
