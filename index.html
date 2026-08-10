@@ -3913,7 +3913,7 @@ function initConfigurador() {
         value: t.codigo,
         label: t.nombre
     })));
-    fillSelect("cfg-acabado", CATALOGO.acabados);
+    fillAcabadosPorLinea(cfg.linea);
     fillSelect("cfg-ubic-pais", [{
         value: "",
         label: "— Elegir país —"
@@ -4119,6 +4119,24 @@ function opcionesLineaUI() {
         value: l,
         label: nombreLinea(l)
     }))
+}
+// Acabado depende de la Línea: LEEDER y Touchless solo Laminado Compacto; Superior tiene
+// 3 (Laminado Compacto, Esmaltada Antigrafiti, Acero Inoxidable). Los dos últimos definen
+// la tarifa de Superior (antigrafiti / aceroInox) al cotizar; Laminado usa el tier del color.
+function acabadosDeLinea(l) {
+    return l === "Superior" ? ["Laminado Compacto", "Esmaltada Antigrafiti", "Acero Inoxidable"] : ["Laminado Compacto"];
+}
+function tierDeAcabado(acabado) {
+    return acabado === "Acero Inoxidable" ? "aceroInox" : acabado === "Esmaltada Antigrafiti" ? "antigrafiti" : null;
+}
+function fillAcabadosPorLinea(l) {
+    const sel = document.getElementById("cfg-acabado");
+    if (!sel) return;
+    const opts = acabadosDeLinea(l);
+    fillSelect("cfg-acabado", opts);
+    const val = opts.includes(cfg.acabado) ? cfg.acabado : opts[0];
+    sel.value = val;
+    cfg.acabado = val;
 }
 
 function etiquetaTier(tier) {
@@ -4409,6 +4427,7 @@ function bindCfg() {
     $("cfg-linea").onchange = e => {
         cfg.linea = e.target.value;
         fillModelosPorLinea(cfg.linea);
+        fillAcabadosPorLinea(cfg.linea);
         actualizarBotonSugerirSegunLinea();
         if (typeof actualizarInputTouchless === "function") actualizarInputTouchless();
         poblarColoresDatalist();
@@ -12228,7 +12247,7 @@ function cargarProyectoEnConfigurador(p) {
     set("cfg-linea", cfg.linea);
     set("cfg-modelo", cfg.modelo);
     set("cfg-terminacion", cfg.terminacion);
-    set("cfg-acabado", cfg.acabado);
+    fillAcabadosPorLinea(cfg.linea);
     set("cfg-color", cfg.color);
     if (typeof sincronizarColorUI === "function") sincronizarColorUI();
     if (typeof actualizarIndicadorTierColor === "function") actualizarIndicadorTierColor();
@@ -12657,12 +12676,14 @@ function refrescarSelectsCatalogo() {
         value: t.codigo,
         label: t.nombre
     })));
-    fillSelect("cfg-acabado", CATALOGO.acabados);
     poblarColoresDatalist();
     if (prev.linea && CATALOGO.lineas.includes(prev.linea)) elLinea.value = prev.linea;
     if (prev.modelo && CATALOGO.modelos.some(m => m.codigo === prev.modelo)) document.getElementById("cfg-modelo").value = prev.modelo;
     if (prev.terminacion && CATALOGO.terminaciones.some(t => t.codigo === prev.terminacion)) document.getElementById("cfg-terminacion").value = prev.terminacion;
-    if (prev.acabado && CATALOGO.acabados.includes(prev.acabado)) document.getElementById("cfg-acabado").value = prev.acabado;
+    // Acabado depende de la línea (ya restaurada arriba)
+    const acabOpts = acabadosDeLinea(elLinea.value);
+    fillSelect("cfg-acabado", acabOpts);
+    document.getElementById("cfg-acabado").value = (prev.acabado && acabOpts.includes(prev.acabado)) ? prev.acabado : acabOpts[0];
     if (prev.color) document.getElementById("cfg-color").value = prev.color;
     actualizarIndicadorTierColor()
 }
