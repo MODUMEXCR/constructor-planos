@@ -1792,7 +1792,7 @@ const CATALOGO = {
         cierrePanel: true
     }, {
         codigo: "PR",
-        nombre: "PMR + panel de cierre",
+        nombre: "PMR receso 1",
         acc: true,
         pmrPanel: true
     }, {
@@ -10172,7 +10172,7 @@ function drawAreaPro(doc, o) {
         prevTipo = s.tipo;
         if (s.tipo === "muro") { hatch(xa, yWall - tW, w + (s === seq[0] ? 0 : 0), floorY - yWall + tW); }
         else if (s.tipo === "pilastra" || s.tipo === "panelCompleto") { pilBar(xa, xb, cx); segsFront.push([xa, xb, s.ancho]); cabDivs.push({ cx: cx, interior: true }); }
-        else if (s.tipo === "pilastra-terminal" || s.tipo === "pilastra-muro") { const lat = s.lado === "izq" ? xa : xb; pilBar(xa, xb, lat); segsFront.push([xa, xb, s.ancho]); cabDivs.push({ cx: lat, interior: false }); }
+        else if (s.tipo === "pilastra-terminal" || s.tipo === "pilastra-muro") { const lat = s.lado === "izq" ? xa : xb; pilBar(xa, xb, lat); segsFront.push([xa, xb, s.ancho]); cabDivs.push({ cx: lat, interior: false, terminalDer: s.tipo === "pilastra-terminal" && s.lado === "der" }); }
         else if (s.tipo === "panelMingit" || s.tipo === "mamparaCierreMingit") {
             const mgPz = s.mgCode ? CATALOGO.piezas.find(p => p.codigo === s.mgCode) : null;
             const mgDepthCm = mgPz && mgPz.familia === "MG" ? mgPz.ancho : 60;
@@ -10247,6 +10247,7 @@ function drawAreaPro(doc, o) {
     const panelXs = cabDivs.filter(d => d.interior).map(d => d.cx).concat(cabMgBoundaries);
     panelXs.forEach(px => depthDim(px, floorY, panelDepthCm.toFixed(1), true));
     mgDivs.forEach(d => { if (d.mgD > 5) depthDim(d.cx, yWall + d.mgD, d.depthCm.toFixed(1), d.cx + 9 < floorEndX); });
+    if (o.layoutCodigo === "E" || o.layoutCodigo === "E+") { const rtDer = cabDivs.find(d => d.terminalDer); if (rtDer) depthDim(rtDer.cx, floorY, panelDepthCm.toFixed(1), true); }
     // COTAS: parciales (segmentos) + total + altura. La banda va debajo del barrido
     // hacia afuera (o cerca del piso si todas abren adentro).
     let maxOutSwing = 0;
