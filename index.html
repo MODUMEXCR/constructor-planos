@@ -4524,7 +4524,13 @@ function bindCfg() {
     };
     $("cfg-mingitorios").onchange = e => {
         cfg.mingitorios = +e.target.value;
-        if (cfg.mingitorios !== 1 && typeof aplicarNMingitorios === "function") aplicarNMingitorios(0);
+        if (cfg.mingitorios !== 1) {
+            if (typeof aplicarNMingitorios === "function") aplicarNMingitorios(0)
+        } else {
+            const aMg = typeof activeAreaCfg === "function" ? activeAreaCfg() : null;
+            const layMg = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
+            if (aMg && layMg.pmrPanel && !(aMg.nMingitorios > 0) && typeof aplicarNMingitorios === "function") aplicarNMingitorios(1)
+        }
         if (typeof actualizarCurvaMingit === "function") actualizarCurvaMingit()
     };
     const inpNMingit = document.getElementById("cfg-n-mingitorios");
@@ -4668,7 +4674,8 @@ function actualizarCurvaMingit() {
     const contMing = a ? (a.tiposCabina || []).filter(t => t === "Mingitorio").length : 0;
     if (a && !esPmrPanelCurva) a.nMingitorios = contMing;
     const nOri = esPmrPanelCurva ? (a ? a.nMingitorios || 0 : 0) : contMing;
-    const on = esPmrPanelCurva ? nOri > 0 : +((document.getElementById("cfg-mingitorios") || {}).value || 0) === 1;
+    const dropOn = +((document.getElementById("cfg-mingitorios") || {}).value || 0) === 1;
+    const on = esPmrPanelCurva ? (dropOn || nOri > 0) : dropOn;
     const incSel = document.getElementById("cfg-mingitorios");
     if (incSel && esPmrPanelCurva) incSel.value = on ? "1" : "0";
     const nmRow = document.getElementById("cfg-nmingit-row");
