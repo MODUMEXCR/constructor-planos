@@ -5893,7 +5893,8 @@ function buildBathroomSvg() {
             const mgAltoC = mgPzC && mgPzC.alto ? mgPzC.alto : 150;
             const fracC = Math.min(.8, Math.max(.35, mgAltoC / 150 * .6));
             const lineXC = s.lado === "izq" ? x + 2 : x - 2;
-            svg += `<g data-piece="panel-${s.idxCab}">`;
+            const _cierreColide = s.lado === "izq" && tiposCabina[s.idxCab + 1] === "Mingitorio";
+            svg += `<g data-piece="${_cierreColide ? `cierremg-${s.idxCab}` : `panel-${s.idxCab}`}">`;
             svg += `<line x1="${lineXC}" y1="20" x2="${lineXC}" y2="${20+cabHeight*fracC}" stroke="#0a1f3d" stroke-width="3" stroke-linecap="round"/>`;
             if (s.mgCode) svg += `<text x="${lineXC+(s.lado==="izq"?4:-46)}" y="33" font-size="8" fill="#1c2846" font-weight="600">${s.mgCode}</text>`;
             svg += `</g>`
