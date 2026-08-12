@@ -985,6 +985,13 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
               Opcional. Cuánto entra el frente del cubículo hacia el fondo (arranca desde la mitad del panel). 0 = sin receso (a la misma línea de frente que el cuarto).
             </div>
           </div>
+          <div id="cfg-nreceso-row" style="display:none; margin-top:10px; padding:10px 12px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px;">
+            <label class="form-label" style="font-size:12px; font-weight:600;">¿Cuántas cabinas con receso?</label>
+            <input class="form-input" id="cfg-nreceso" type="number" value="1" min="0" step="1" style="width:120px;">
+            <div class="form-help" style="margin-top:4px; font-size:11px;">
+              Las últimas cabinas (o las primeras, si invertís) se empujan al fondo por el receso; su panel sale más corto en la orden (CIP). El frente libre puede llevar orinales.
+            </div>
+          </div>
           <div id="cfg-accesible-row" style="display:none; margin-top:10px; padding:10px 12px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px;">
             <label class="form-label" style="font-size:12px; font-weight:600;">Ancho de la cabina accesible (cm)</label>
             <input class="form-input" id="cfg-ancho-accesible" type="number" value="150" min="90" max="300" step="1" style="width:120px;">
@@ -1795,6 +1802,10 @@ const CATALOGO = {
         nombre: "PMR receso 1",
         acc: true,
         pmrPanel: true
+    }, {
+        codigo: "RE",
+        nombre: "Receso",
+        receso: true
     }, {
         codigo: "OL",
         nombre: "Orinales L",
@@ -3995,6 +4006,14 @@ function initConfigurador() {
         renderPreview();
         recalcularSugerencia()
     };
+    const inpNRec = document.getElementById("cfg-nreceso");
+    if (inpNRec) inpNRec.oninput = () => {
+        const a = activeAreaCfg();
+        const v = Math.max(0, Math.min(parseInt(inpNRec.value, 10) || 0, cfg.cabinas || 1));
+        if (a) a.nReceso = v;
+        renderPreview();
+        recalcularSugerencia()
+    };
     const selTL = document.getElementById("cfg-alto-touchless");
     if (selTL) selTL.onchange = () => {
         const a = activeAreaCfg();
@@ -4066,11 +4085,23 @@ function actualizarInputPmrCuarto() {
     const recRow = document.getElementById("cfg-receso-row");
     const recInp = document.getElementById("cfg-receso-pmr");
     if (recRow && recInp) {
-        const recVisible = !!(layoutObj && layoutObj.pmrPanel);
+        const recVisible = !!(layoutObj && (layoutObj.pmrPanel || layoutObj.receso));
         recRow.style.display = recVisible ? "" : "none";
         if (recVisible) {
             const a = activeAreaCfg();
-            recInp.value = a && a.recesoPmr || 0
+            recInp.value = a && a.recesoPmr || 0;
+            const recLbl = recRow.querySelector(".form-label");
+            if (recLbl) recLbl.textContent = layoutObj.receso ? "Receso (cm)" : "Receso del cubículo (cm)"
+        }
+    }
+    const nrRow = document.getElementById("cfg-nreceso-row");
+    const nrInp = document.getElementById("cfg-nreceso");
+    if (nrRow && nrInp) {
+        const nrVisible = !!(layoutObj && layoutObj.receso);
+        nrRow.style.display = nrVisible ? "" : "none";
+        if (nrVisible) {
+            const a = activeAreaCfg();
+            nrInp.value = a && a.nReceso != null ? a.nReceso : 1
         }
     }
     if (typeof actualizarInputAccesible === "function") actualizarInputAccesible();
@@ -4353,8 +4384,8 @@ function sincronizarMurosConLayout() {
         codigo: "L"
     };
     if (layout.pmrCuarto) return;
-    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layout.codigo);
-    const hasRight = ["U", "U+", "C", "I", "K", "P+"].includes(layout.codigo);
+    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP", "RE"].includes(layout.codigo);
+    const hasRight = ["U", "U+", "C", "I", "K", "P+", "RE"].includes(layout.codigo);
     const leftWallEff = cfg.invertir ? hasRight : hasLeft;
     const rightWallEff = cfg.invertir ? hasLeft : hasRight;
     const N = (a.tiposCabina || []).length || cfg.cabinas || 0;
@@ -4889,6 +4920,7 @@ function makeDefaultAreaCfg() {
         anchoPanelDivisorPmr: 100,
         pilCentralPmr: false,
         recesoPmr: 0,
+        nReceso: 1,
         anchoAccesible: 150,
         altoTouchless: 180,
         centrosDescarga: [],
@@ -5062,6 +5094,17 @@ function layoutIconSvg(l) {
         const accIconP = `<text x="${xL+2}" y="${h-1}" font-size="9" fill="#5db0e0">♿</text>`;
         return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${walls}${accIconP}</svg>`
     }
+    if (l.receso) {
+        walls += `<line x1="${xL}" y1="${top}" x2="${xR}" y2="${top}" stroke="#0a1f3d" stroke-width="1.6"/>`;
+        walls += `<line x1="${xL}" y1="${top}" x2="${xL}" y2="${bot}" stroke="#0a1f3d" stroke-width="1.6"/>`;
+        const xd = xL + (xR - xL) * 2 / 3;
+        walls += `<line x1="${xL+(xR-xL)/3}" y1="${top}" x2="${xL+(xR-xL)/3}" y2="${bot}" stroke="#0a1f3d" stroke-width="1.3"/>`;
+        walls += `<line x1="${xd}" y1="${top}" x2="${xd}" y2="${bot}" stroke="#0a1f3d" stroke-width="1.3"/>`;
+        walls += `<line x1="${xR}" y1="${top}" x2="${xR}" y2="${bot}" stroke="#0a1f3d" stroke-width="1.6"/>`;
+        const recBot = top + (bot - top) * .5;
+        walls += `<line x1="${xd}" y1="${recBot}" x2="${xR}" y2="${recBot}" stroke="#0a1f3d" stroke-width="1.3"/>`;
+        return `<svg viewBox="0 0 ${w} ${h}" width="${w}" height="${h}">${walls}</svg>`
+    }
     for (let i = 1; i <= 2; i++) {
         const x = w / 3 * i + 4;
         walls += `<line x1="${x}" y1="${top}" x2="${x}" y2="${bot}" stroke="#0a1f3d" stroke-width="1.6"/>`
@@ -5163,8 +5206,8 @@ function actualizarValidacionModulacion() {
     const esPmrPanelVal = !!layout.pmrPanel;
     const esAccInlineVal = !!layout.acc && !esPmrCuartoVal && !esPmrPanelVal;
     const accCabinaIdxVal = cfg.invertir ? N - 1 : 0;
-    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP", "PR"].includes(layout.codigo);
-    const hasRight = ["U", "U+", "C", "I", "K", "P+", "PR"].includes(layout.codigo);
+    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP", "PR", "RE"].includes(layout.codigo);
+    const hasRight = ["U", "U+", "C", "I", "K", "P+", "PR", "RE"].includes(layout.codigo);
     const leftWall = cfg.invertir ? hasRight : hasLeft;
     const rightWall = cfg.invertir ? hasLeft : hasRight;
     const primeraEsMingit = (a.tiposCabina || [])[0] === "Mingitorio";
@@ -5552,8 +5595,8 @@ function buildBathroomSvg() {
     const aperturas = areaCfg.aperturas || [];
     const bisagrasOld = areaCfg.bisagras || [];
     const tiposCabina = areaCfg.tiposCabina || [];
-    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layout.codigo);
-    const hasRight = ["U", "U+", "C", "I", "K", "P+"].includes(layout.codigo);
+    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP", "RE"].includes(layout.codigo);
+    const hasRight = ["U", "U+", "C", "I", "K", "P+", "RE"].includes(layout.codigo);
     const leftWall = cfg.invertir ? hasRight : hasLeft;
     const rightWall = cfg.invertir ? hasLeft : hasRight;
     const esLayoutK = layout.codigo === "K";
@@ -5778,6 +5821,16 @@ function buildBathroomSvg() {
         const depth = pz && pz.familia === "PN" ? pz.ancho : panelBaseCm;
         return cabHeight * depth / panelBaseCm
     };
+    const esReceso = !!layout.receso;
+    const nRec = esReceso ? Math.max(0, Math.min(parseInt(areaCfg.nReceso, 10) || 0, N)) : 0;
+    const recesoCm = esReceso ? Math.max(0, parseFloat(areaCfg.recesoPmr) || 0) : 0;
+    const recSet = {};
+    if (nRec > 0 && recesoCm > 0)
+        for (let k = 0; k < nRec; k++) recSet[cfg.invertir ? k : N - 1 - k] = true;
+    const recFrontY = Math.min(floor - 8, 20 + recesoCm * cabHeight / (panelBaseCm || 150));
+    const frontYof = i => recSet[i] ? recFrontY : floor;
+    const divShort = i => !!(recSet[i] && recSet[i + 1]);
+    const panelLenPxRec = idxSlot => divShort(idxSlot) ? Math.max(6, recFrontY - 20) : panelLenPx(idxSlot);
     let svg = `<svg viewBox="0 0 ${displayW} ${totalH}" width="${displayW}" height="${totalH}">`;
     svg += `<defs><pattern id="wallHatch" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="6" stroke="#0a1f3d" stroke-width="0.7"/></pattern></defs>`;
     svg += `<rect x="${padding}" y="10" width="${drawW}" height="10" fill="white" stroke="#0a1f3d" stroke-width="1.2"/>`;
@@ -5855,12 +5908,14 @@ function buildBathroomSvg() {
             svg += `<rect x="${x}" y="${floor-3}" width="${w}" height="3" fill="#0a1f3d"/>`;
             svg += `</g>`
         } else if (s.tipo === "pilastra") {
+            const plR = panelLenPxRec(s.idxSlot);
+            const fbR = divShort(s.idxSlot) ? 20 + plR : floor;
             svg += `<g data-piece="panel-${s.idxSlot}">`;
-            svg += `<rect x="${cx-1.5}" y="20" width="3" height="${panelLenPx(s.idxSlot)}" fill="#0a1f3d"/>`;
+            svg += `<rect x="${cx-1.5}" y="20" width="3" height="${plR}" fill="#0a1f3d"/>`;
             svg += `</g>`;
             svg += `<g data-piece="pilastra-${s.idxSlot}">`;
             svg += `<rect x="${cx-4}" y="17" width="8" height="6" fill="#0a1f3d"/>`;
-            svg += `<rect x="${x}" y="${floor-3}" width="${w}" height="3" fill="#0a1f3d"/>`;
+            svg += `<rect x="${x}" y="${fbR-3}" width="${w}" height="3" fill="#0a1f3d"/>`;
             svg += `</g>`
         } else if (s.tipo === "panelRelleno") {
             svg += `<g data-piece="relleno">`;
@@ -5945,6 +6000,10 @@ function buildBathroomSvg() {
                 svg += cotaV(yDoorBot + frentePx / 2, wFrente);
                 svg += `<text x="${ccx}" y="${floorCuarto-28}" font-size="11" fill="#0a1f3d" font-weight="700" text-anchor="middle">C${i+1}</text>`
             } else {
+                if (recSet[i] && floor - recFrontY > 2) {
+                    svg += `<rect x="${x}" y="${recFrontY}" width="${w}" height="${floor-recFrontY}" fill="#eef5ff" stroke="#c7d0d8" stroke-width="0.5" stroke-dasharray="3,2"/>`;
+                    svg += `<text x="${cx}" y="${floor-4}" font-size="6.5" fill="#5a6472" text-anchor="middle">espacio libre</text>`
+                }
                 svg += `<g data-piece="cabina-${i}" data-cabina-idx="${i}">`;
                 svg += `<rect x="${x}" y="20" width="${w}" height="${cabHeight}" fill="transparent"/>`;
                 const cDescCl = (areaCfg.centrosDescarga || [])[i];
@@ -5969,12 +6028,13 @@ function buildBathroomSvg() {
                     const hingePx = isIzq ? x + 2 : x + w - 2;
                     const dirXsvg = isIzq ? 1 : -1;
                     const dirYsvg = isAfuera ? 1 : -1;
+                    const fyR = frontYof(i);
                     svg += `<g data-piece="puerta-${i}">`;
-                    svg += `<rect x="${hingePx-2}" y="${floor-2}" width="4" height="4" fill="#0a1f3d"/>`;
-                    svg += `<line x1="${hingePx}" y1="${floor}" x2="${hingePx+dirXsvg*leafPx*Math.cos(Math.PI/9)}" y2="${floor+dirYsvg*leafPx*Math.sin(Math.PI/9)}" stroke="#0a1f3d" stroke-width="3"/>`;
+                    svg += `<rect x="${hingePx-2}" y="${fyR-2}" width="4" height="4" fill="#0a1f3d"/>`;
+                    svg += `<line x1="${hingePx}" y1="${fyR}" x2="${hingePx+dirXsvg*leafPx*Math.cos(Math.PI/9)}" y2="${fyR+dirYsvg*leafPx*Math.sin(Math.PI/9)}" stroke="#0a1f3d" stroke-width="3"/>`;
                     svg += `</g>`
                 }
-                svg += `<text x="${cx}" y="${floor-6}" font-size="11" fill="#0a1f3d" font-weight="700" text-anchor="middle">${esMingit?"M":"C"}${i+1}</text>`
+                svg += `<text x="${cx}" y="${frontYof(i)-6}" font-size="11" fill="#0a1f3d" font-weight="700" text-anchor="middle">${esMingit?"M":"C"}${i+1}</text>`
             }
         }
         if (s.tipo !== "muro" && s.tipo !== "mamparaCierreMingit") {
@@ -6246,8 +6306,8 @@ function renderPreviewControls(tab) {
     const _layoutPC = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {
         codigo: "L"
     };
-    const _hasLeftWallPC = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP", "PR"].includes(_layoutPC.codigo);
-    const _hasRightWallPC = ["U", "U+", "C", "I", "K", "P+", "PR"].includes(_layoutPC.codigo);
+    const _hasLeftWallPC = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP", "PR", "RE"].includes(_layoutPC.codigo);
+    const _hasRightWallPC = ["U", "U+", "C", "I", "K", "P+", "PR", "RE"].includes(_layoutPC.codigo);
     const leftWallEff = cfg.invertir ? _hasRightWallPC : _hasLeftWallPC;
     const rightWallEff = cfg.invertir ? _hasLeftWallPC : _hasRightWallPC;
     const piezasFamilia = tab === "paneles" ? "PN" : tab === "puertas" ? "PT" : "PI";
@@ -6612,8 +6672,8 @@ function renderMurosYExtrasSection() {
     const layout = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {
         codigo: "L"
     };
-    const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layout.codigo);
-    const hasRightWall = ["U", "U+", "C", "I", "K", "P+"].includes(layout.codigo);
+    const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP", "RE"].includes(layout.codigo);
+    const hasRightWall = ["U", "U+", "C", "I", "K", "P+", "RE"].includes(layout.codigo);
     const leftWallEff = cfg.invertir ? hasRightWall : hasLeftWall;
     const rightWallEff = cfg.invertir ? hasLeftWall : hasRightWall;
     const a = typeof activeAreaCfg === "function" ? activeAreaCfg() || {} : {};
@@ -6807,8 +6867,8 @@ function sugerirModulacion({
     puertaFija: puertaFija
 }) {
     const layout = CATALOGO.layouts.find(l => l.codigo === layoutCodigo) || CATALOGO.layouts[0];
-    const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layoutCodigo);
-    const hasRightWall = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
+    const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP", "RE"].includes(layoutCodigo);
+    const hasRightWall = ["U", "U+", "C", "I", "K", "P+", "RE"].includes(layoutCodigo);
     const accLayout = layout.acc;
     const leftWallEff = cfg.invertir ? hasRightWall : hasLeftWall;
     const rightWallEff = cfg.invertir ? hasLeftWall : hasRightWall;
@@ -7507,8 +7567,8 @@ function aplicarSugerencia(s) {
     const mingitAlFinal = !cfg.invertir;
     const mingitDesde = mingitAlFinal ? N - s.nMingit : 0;
     const mingitHasta = mingitAlFinal ? N : s.nMingit;
-    const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layout.codigo);
-    const hasRightWall = ["U", "U+", "C", "I", "K", "P+"].includes(layout.codigo);
+    const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP", "RE"].includes(layout.codigo);
+    const hasRightWall = ["U", "U+", "C", "I", "K", "P+", "RE"].includes(layout.codigo);
     const leftWallEff = cfg.invertir ? hasRightWall : hasLeftWall;
     const rightWallEff = cfg.invertir ? hasLeftWall : hasRightWall;
     const dimsLugar = typeof leerDimensionesLugar === "function" ? leerDimensionesLugar() : null;
@@ -8395,7 +8455,7 @@ function asegurarCierreMingit(areaCfg, layoutCodigo, invertir) {
     const tc = areaCfg.tiposCabina || [];
     const N = areaCfg.cabinas != null ? areaCfg.cabinas : tc.length;
     if (!N) return;
-    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP"].includes(layoutCodigo);
+    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "RE"].includes(layoutCodigo);
     const hasRight = ["U", "U+", "C", "I", "K"].includes(layoutCodigo);
     const leftWallEff = invertir ? hasRight : hasLeft;
     const rightWallEff = invertir ? hasLeft : hasRight;
@@ -8414,8 +8474,8 @@ function determinarSubTipoModumex(pieza, ctx) {
         totalCabinas: totalCabinas
     } = ctx;
     const familia = pieza.familia;
-    const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layoutCodigo);
-    const hasRightWall = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
+    const hasLeftWall = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP", "RE"].includes(layoutCodigo);
+    const hasRightWall = ["U", "U+", "C", "I", "K", "P+", "RE"].includes(layoutCodigo);
     const leftWallEff = invertir ? hasRightWall : hasLeftWall;
     const rightWallEff = invertir ? hasLeftWall : hasRightWall;
     const esEndMuro = indiceCabina === 0 && leftWallEff || indiceCabina === totalCabinas - 1 && rightWallEff;
@@ -8970,7 +9030,7 @@ function refuerzosDeArea(proyecto, areaName) {
         k65++;
         k62++
     } else {
-        const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP"].includes(layoutCodigo);
+        const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "RE"].includes(layoutCodigo);
         const hasRight = ["U", "U+", "C", "I", "K"].includes(layoutCodigo);
         const leftWallEff = invertir ? hasRight : hasLeft;
         const rightWallEff = invertir ? hasLeft : hasRight;
@@ -9285,8 +9345,8 @@ function tubingDeArea(proyecto, areaName) {
         claro = Math.round(sum)
     }
     if (!claro) return null;
-    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layoutCodigo);
-    const hasRight = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
+    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP", "RE"].includes(layoutCodigo);
+    const hasRight = ["U", "U+", "C", "I", "K", "P+", "RE"].includes(layoutCodigo);
     const leftWallEff = invertir ? hasRight : hasLeft;
     const rightWallEff = invertir ? hasLeft : hasRight;
     const claroCabinasT = Math.max(0, claro - anchoMingTotT);
@@ -10171,6 +10231,15 @@ function drawAreaPro(doc, o) {
     const cabMgBoundaries = [];
     const mgT = { "mingitorio": 1, "panelMingit": 1, "mamparaCierreMingit": 1 };
     let prevTipo = null;
+    const _layRc = CATALOGO.layouts.find(l => l.codigo === o.layoutCodigo) || {};
+    const esRecPro = !!_layRc.receso;
+    const nRecP = esRecPro ? Math.max(0, Math.min(parseInt((areaCfg || {}).nReceso, 10) || 0, o.N || 0)) : 0;
+    const recCmP = esRecPro ? Math.max(0, parseFloat((areaCfg || {}).recesoPmr) || 0) : 0;
+    const recSetP = {};
+    if (nRecP > 0 && recCmP > 0)
+        for (let k = 0; k < nRecP; k++) recSetP[areaInvertir ? k : (o.N - 1) - k] = true;
+    const recFloorY = Math.min(floorY - 3, yWall + recCmP * sc);
+    let _cabRec = -1;
     seq.forEach(s => {
         const w = (s.ancho || 0) * sc, xa = x, xb = x + w, cx = (xa + xb) / 2;
         // Panel de cierre SOLO cuando un baño (puerta) colinda directo con un mingitorio
@@ -10195,6 +10264,7 @@ function drawAreaPro(doc, o) {
             if (typeof ORINAL_IMG_B64 !== "undefined") { const uw = Math.min(w * 0.5, 14), uh = uw / 4.49; doc.addImage(ORINAL_IMG_B64, "PNG", cx - uw / 2, yWall + 1.5, uw, uh, undefined, "FAST"); }
             segsFront.push([xa, xb, s.ancho]);
         } else if (s.tipo === "puerta") {
+            _cabRec++;
             if (s.cuartoPmr) {
                 const inv = areaInvertir;
                 const iw2 = Math.min(30 * sc, w * 0.4), ih2 = iw2 / 0.67;
@@ -10210,17 +10280,20 @@ function drawAreaPro(doc, o) {
                 segsFront.push([xa, xb, s.ancho]);
             }
             else {
-                const ih = Math.min(64 * sc, cabDepth - 6), iw = ih * 0.67;
+                const fyCab = recSetP[_cabRec] ? recFloorY : floorY;
+                if (recSetP[_cabRec] && floorY - fyCab > 1) { doc.setFillColor(238, 245, 255); doc.rect(xa, fyCab, w, floorY - fyCab, "F"); }
+                const ih = Math.min(64 * sc, (fyCab - yWall) - 6), iw = ih * 0.67;
                 if (typeof WC_IMG_B64 !== "undefined") doc.addImage(WC_IMG_B64, "PNG", cx - iw / 2, yWall + 3, iw, ih, undefined, "FAST");
                 const ap = (areaCfg.aperturas || [])[s.indiceCabina - 1] || "";
                 const lado = ap.split("_")[0] || (areaInvertir ? "DER" : "IZQ");
                 const sent = (ap.split("_")[1] || "EXT").toUpperCase();
                 const inward = sent === "INT";
                 const hx = lado === "IZQ" ? xa : xb, dir = lado === "IZQ" ? 1 : -1, sgnY = inward ? -1 : 1;
-                doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.9); doc.line(hx, floorY, hx, floorY + sgnY * w);
-                doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255); doc.roundedRect(hx - 0.9, floorY + sgnY * w - (inward ? 1.6 : 0), 1.8, 1.8, 0.5, 0.5, "S");
+                doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.9); doc.line(hx, fyCab, hx, fyCab + sgnY * w);
+                doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255); doc.roundedRect(hx - 0.9, fyCab + sgnY * w - (inward ? 1.6 : 0), 1.8, 1.8, 0.5, 0.5, "S");
                 const a0 = inward ? -Math.PI / 2 : Math.PI / 2, a1 = dir === 1 ? 0 : (inward ? -Math.PI : Math.PI);
-                arc(hx, floorY, w, a0, a1);
+                arc(hx, fyCab, w, a0, a1);
+                if (recSetP[_cabRec]) { doc.setDrawColor(148, 163, 184); doc.setLineWidth(0.25); doc.setLineDashPattern([1.2, 1], 0); doc.line(xa, fyCab, xb, fyCab); doc.setLineDashPattern([], 0); doc.setFont("helvetica", "normal"); doc.setFontSize(5.5); doc.setTextColor(90, 100, 114); doc.text("espacio libre", cx, floorY - 2, { align: "center" }); }
                 segsFront.push([xa, xb, s.ancho]);
             }
         }
@@ -10331,8 +10404,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     }
     }
     const layoutCodigo = areaLayout;
-    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP"].includes(layoutCodigo);
-    const hasRight = ["U", "U+", "C", "I", "K", "P+"].includes(layoutCodigo);
+    const hasLeft = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP", "RE"].includes(layoutCodigo);
+    const hasRight = ["U", "U+", "C", "I", "K", "P+", "RE"].includes(layoutCodigo);
     const leftWallEff = areaInvertir ? hasRight : hasLeft;
     const rightWallEff = areaInvertir ? hasLeft : hasRight;
     const N = areaCabinas;
