@@ -1189,7 +1189,12 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
                 <option value="170">170 cm</option>
                 <option value="180" selected>180 cm</option>
               </select>
-              <div class="form-help" style="margin-top:4px; font-size:11px;">Puertas y paneles de las regaderas se fabrican a esta altura (las pilastras siempre 180). Elegí cada cabina como Baño o Regadera abajo en el previsualizador.</div>
+              <div class="form-help" style="margin-top:4px; font-size:11px;">Puertas y paneles de las regaderas se fabrican a esta altura (las pilastras siempre 180).</div>
+            </div>
+            <div class="form-row" id="cfg-nregadera-row" style="display:none;">
+              <label class="form-label">¿Cuántas regaderas?</label>
+              <input type="number" class="form-input" id="cfg-n-regaderas" min="0" value="0">
+              <div class="form-help" style="margin-top:4px; font-size:11px;">Las regaderas se cuentan aparte de los baños; la app las acomoda solas en línea a un extremo. Cada una es una cabina completa (puerta y panel) dibujada con ducha. También podés marcar cabinas como Baño o Regadera abajo en el previsualizador.</div>
             </div>
             <div class="form-row">
               <label class="form-label">Altura pilastra (calculada)</label>
@@ -4603,7 +4608,8 @@ function bindCfg() {
         if (cfg.regaderas !== 1 && a) {
             (a.tiposCabina || []).forEach((t, i) => {
                 if (t === "Regadera") a.tiposCabina[i] = "Baño"
-            })
+            });
+            if (typeof aplicarNRegaderas === "function") aplicarNRegaderas(0)
         }
         if (typeof actualizarInputRegadera === "function") actualizarInputRegadera();
         if (typeof renderPreview === "function") renderPreview();
@@ -4617,6 +4623,11 @@ function bindCfg() {
         if (typeof renderPreview === "function") renderPreview();
         if (typeof renderPreviewControls === "function") renderPreviewControls(activeTab);
         if (typeof recalcularSugerencia === "function") recalcularSugerencia()
+    };
+    const inpNReg = document.getElementById("cfg-n-regaderas");
+    if (inpNReg) inpNReg.onchange = () => {
+        const n = aplicarNRegaderas(inpNReg.value);
+        inpNReg.value = n != null ? n : 0
     };
     $("cfg-invertir").onchange = e => {
         const a = activeAreaCfg();
@@ -4725,7 +4736,9 @@ function actualizarCurvaMingit() {
     if (mgRow) mgRow.style.display = on ? "" : "none";
     if (mgSel && a) mgSel.value = a.mgTipo || "MG60120";
     if (a) {
-        const banos = esPmrPanelCurva ? (a.cabinas || 0) : Math.max(0, (a.cabinas || 0) - contMing);
+        const contReg = (a.tiposCabina || []).filter(t => t === "Regadera").length;
+        if (!esPmrPanelCurva) a.nRegaderas = contReg;
+        const banos = esPmrPanelCurva ? (a.cabinas || 0) : Math.max(0, (a.cabinas || 0) - contMing - contReg);
         const sl = document.getElementById("cfg-cabinas"),
             slv = document.getElementById("cfg-cabinas-val");
         if (sl) sl.value = banos;
@@ -4742,7 +4755,11 @@ function actualizarInputRegadera() {
     const sel = document.getElementById("cfg-alto-regadera");
     const a = (typeof activeAreaCfg === "function") ? activeAreaCfg() : null;
     if (row) row.style.display = on ? "" : "none";
-    if (sel && a) sel.value = String(a.altoRegadera || 180)
+    if (sel && a) sel.value = String(a.altoRegadera || 180);
+    const nrRow = document.getElementById("cfg-nregadera-row");
+    const nrInp = document.getElementById("cfg-n-regaderas");
+    if (nrRow) nrRow.style.display = on ? "" : "none";
+    if (nrInp) nrInp.value = on ? (a ? a.nRegaderas || 0 : 0) : 0
 }
 
 function colocarMingitorios(a, n) {
@@ -4768,6 +4785,23 @@ function colocarMingitorios(a, n) {
             const nextMing = a.tiposCabina[i + 1] === "Mingitorio";
             a.paneles[i] = nextMing ? (a.mgTipo || "MG60120") : ""
         }
+    }
+}
+
+function colocarRegaderas(a, n) {
+    if (!a) return;
+    const N = cfg.cabinas;
+    const layout = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
+    const accIdx = cfg.invertir ? N - 1 : 0;
+    a.tiposCabina = a.tiposCabina || [];
+    const regaderaAlFinal = cfg.invertir;
+    let puestas = 0;
+    for (let k = 0; k < N && puestas < n; k++) {
+        const i = regaderaAlFinal ? N - 1 - k : k;
+        if (layout.acc && i === accIdx) continue;
+        if (a.tiposCabina[i] === "Mingitorio") continue;
+        a.tiposCabina[i] = "Regadera";
+        puestas++
     }
 }
 
@@ -4833,7 +4867,9 @@ function recomputarCabinas(banos, orinales) {
         if (typeof recalcularSugerencia === "function") recalcularSugerencia();
         return
     }
-    const total = banos + orinales;
+    const regaderas = Math.max(0, Math.min(parseInt(a.nRegaderas, 10) || 0, 15));
+    a.nRegaderas = regaderas;
+    const total = banos + orinales + regaderas;
     const prevTotal = cfg.cabinas;
     a.cabinas = total;
     cfg.cabinas = total;
@@ -4859,6 +4895,8 @@ function recomputarCabinas(banos, orinales) {
             nMingit: orinales
         });
         if (sug && !sug.error) {
+            colocarMingitorios(a, orinales);
+            colocarRegaderas(a, regaderas);
             aplicarSugerencia(sug);
             if (typeof actualizarCurvaMingit === "function") actualizarCurvaMingit();
             return
@@ -4866,6 +4904,7 @@ function recomputarCabinas(banos, orinales) {
     }
     if (total > prevTotal && cfg.areaActivaIdx >= 0 && typeof propagarCabinaUltima === "function") propagarCabinaUltima(prevTotal, total);
     colocarMingitorios(a, orinales);
+    colocarRegaderas(a, regaderas);
     if (typeof renderPreview === "function") renderPreview();
     if (typeof renderPreviewControls === "function") renderPreviewControls(activeTab);
     if (typeof recalcularSugerencia === "function") recalcularSugerencia();
@@ -4876,9 +4915,19 @@ function aplicarNMingitorios(n) {
     const a = typeof activeAreaCfg === "function" ? activeAreaCfg() : null;
     if (!a) return 0;
     const layoutM = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
-    const banos = (layoutM.pmrPanel || layoutM.receso) ? Math.max(1, a.cabinas || 1) : Math.max(1, (a.cabinas || 1) - (a.nMingitorios || 0));
+    const banos = (layoutM.pmrPanel || layoutM.receso) ? Math.max(1, a.cabinas || 1) : Math.max(1, (a.cabinas || 1) - (a.nMingitorios || 0) - (a.nRegaderas || 0));
     recomputarCabinas(banos, n);
     return (typeof activeAreaCfg === "function" ? activeAreaCfg() : {} || {}).nMingitorios || 0
+}
+
+function aplicarNRegaderas(n) {
+    const a = typeof activeAreaCfg === "function" ? activeAreaCfg() : null;
+    if (!a) return 0;
+    const layoutR = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
+    const banos = (layoutR.pmrPanel || layoutR.receso) ? Math.max(1, a.cabinas || 1) : Math.max(1, (a.cabinas || 1) - (a.nMingitorios || 0) - (a.nRegaderas || 0));
+    a.nRegaderas = Math.max(0, Math.min(parseInt(n, 10) || 0, 15));
+    recomputarCabinas(banos, a.nMingitorios || 0);
+    return (typeof activeAreaCfg === "function" ? activeAreaCfg() : {} || {}).nRegaderas || 0
 }
 
 function nombreDeArea(k) {
@@ -4935,6 +4984,7 @@ function makeDefaultAreaCfg() {
         nMingitorios: 0,
         mgTipo: "MG60120",
         altoRegadera: 180,
+        nRegaderas: 0,
         soloOrinal: false
     }
 }
