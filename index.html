@@ -5858,9 +5858,11 @@ function buildBathroomSvg() {
             }
         } else if (s.tipo === "pilastra-muro") {
             const muroSel = s.lado === "izq" ? "muroIzq" : "muroDer";
+            const cierreRecMuro = esReceso && ((s.lado === "der" && !!recSet[N - 1]) || (s.lado === "izq" && !!recSet[0])) && (floor - recFrontY > 2);
+            const footYmuro = cierreRecMuro ? recFrontY : floor;
             svg += `<g data-piece="${muroSel}">`;
             svg += `<rect x="${cx-4}" y="17" width="8" height="6" fill="#0a1f3d"/>`;
-            svg += `<rect x="${x}" y="${floor-3}" width="${w}" height="3" fill="#0a1f3d"/>`;
+            svg += `<rect x="${x}" y="${footYmuro-3}" width="${w}" height="3" fill="#0a1f3d"/>`;
             const sgn = s.lado === "izq" ? 1 : -1;
             svg += `<polygon points="${cx+sgn*2},19 ${cx+sgn*7},23 ${cx+sgn*2},27" fill="#f5c542" stroke="#0a1f3d" stroke-width="0.6"/>`;
             svg += `</g>`
@@ -5914,9 +5916,17 @@ function buildBathroomSvg() {
             svg += `<g data-piece="panel-${s.idxSlot}">`;
             svg += `<rect x="${cx-1.5}" y="20" width="3" height="${plR}" fill="#0a1f3d"/>`;
             svg += `</g>`;
+            const esEscalonRec = esReceso && (!!recSet[s.idxSlot] !== !!recSet[s.idxSlot + 1]) && (floor - recFrontY > 2);
             svg += `<g data-piece="pilastra-${s.idxSlot}">`;
-            svg += `<rect x="${cx-4}" y="17" width="8" height="6" fill="#0a1f3d"/>`;
-            svg += `<rect x="${x}" y="${fbR-3}" width="${w}" height="3" fill="#0a1f3d"/>`;
+            if (esEscalonRec) {
+                svg += `<rect x="${cx-7}" y="17" width="5" height="6" fill="#0a1f3d"/>`;
+                svg += `<rect x="${x}" y="${floor-3}" width="${Math.max(2,cx-1.5-x)}" height="3" fill="#0a1f3d"/>`;
+                svg += `<rect x="${cx+2}" y="17" width="5" height="6" fill="#0a1f3d"/>`;
+                svg += `<rect x="${cx+1.5}" y="${recFrontY-3}" width="${Math.max(2,x+w-cx-1.5)}" height="3" fill="#0a1f3d"/>`
+            } else {
+                svg += `<rect x="${cx-4}" y="17" width="8" height="6" fill="#0a1f3d"/>`;
+                svg += `<rect x="${x}" y="${fbR-3}" width="${w}" height="3" fill="#0a1f3d"/>`
+            }
             svg += `</g>`
         } else if (s.tipo === "panelRelleno") {
             svg += `<g data-piece="relleno">`;
@@ -8608,7 +8618,15 @@ function exportarCSV(proyecto) {
                 const cpi = (areaCfg.pilastras || [])[i];
                 if (cpi) {
                     const p = CATALOGO.piezas.find(x => x.codigo === cpi);
-                    if (p) agregar(p, determinarSubTipoModumex(p, ctx), areaName, altoDeCabina(p.familia, areaCfg, i))
+                    if (p) {
+                        let subPil = determinarSubTipoModumex(p, ctx);
+                        const layRecCsv = CATALOGO.layouts.find(l => l.codigo === areaLayout) || {};
+                        if (layRecCsv.receso && p.familia === "PI") {
+                            const nRc = Math.max(0, Math.min(parseInt(areaCfg.nReceso, 10) || 0, N));
+                            if (nRc > 0 && nRc < N && i === (areaInvertir ? nRc - 1 : N - nRc - 1)) subPil = "PLLAT";
+                        }
+                        agregar(p, subPil, areaName, altoDeCabina(p.familia, areaCfg, i))
+                    }
                 }
             }
         }
@@ -8686,6 +8704,17 @@ function exportarCSV(proyecto) {
                 };
                 const altoCub = altoDeCabina("PN", areaCfg, areaInvertir ? 0 : 1);
                 for (let d = 0; d < nCubDivCsv; d++) agregar(pCub, "PNCEN", areaName, altoCub != null ? altoCub : undefined)
+            }
+        }
+        if (layoutCsvPR.receso) {
+            const nRecCsv = Math.max(0, Math.min(parseInt(areaCfg.nReceso, 10) || 0, N));
+            if (nRecCsv > 0 && nRecCsv < N) {
+                const escIdx = areaInvertir ? nRecCsv - 1 : N - nRecCsv - 1;
+                const codIni = areaCfg.pilInicioReceso || (areaCfg.pilastras || [])[escIdx] || "";
+                if (codIni) {
+                    const pIni = CATALOGO.piezas.find(x => x.codigo === codIni) || (/^PI\d/.test(codIni) ? { codigo: codIni, familia: "PI", ancho: anchoDePiezaCodigo(codIni) } : null);
+                    if (pIni) { const altoIni = altoDeCabina(pIni.familia, areaCfg, escIdx); agregar(pIni, "PLLAT", areaName, altoIni != null ? altoIni : undefined) }
+                }
             }
         }
     });
@@ -10211,10 +10240,11 @@ function drawAreaPro(doc, o) {
         for (let d = -h; d < w; d += 2.0) { const ax = x + d, ay = y + h, bx = x + d + h; const cxA = Math.max(ax, x), cyA = ay - (cxA - ax), cxB = Math.min(bx, x + w), cyB = ay - (cxB - ax); if (cxA < cxB) doc.line(cxA, Math.min(Math.max(cyA, y), y + h), cxB, Math.min(Math.max(cyB, y), y + h)); }
     };
     const panelV = (px) => { doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35); doc.line(px - tM / 2, yWall, px - tM / 2, floorY); doc.line(px + tM / 2, yWall, px + tM / 2, floorY); doc.line(px - tM / 2, yWall, px + tM / 2, yWall); };
-    const pilBar = (xa, xb, panelX) => {
+    const pilBar = (xa, xb, panelX, footY) => {
         panelV(panelX);
-        doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35); doc.rect(xa, floorY - tM / 2, xb - xa, tM);
-        doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255); doc.circle(xa + 1.1, floorY, 0.9, "S"); doc.circle(xb - 1.1, floorY, 0.9, "S");
+        const fY = footY != null ? footY : floorY;
+        doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35); doc.rect(xa, fY - tM / 2, xb - xa, tM);
+        doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255); doc.circle(xa + 1.1, fY, 0.9, "S"); doc.circle(xb - 1.1, fY, 0.9, "S");
     };
     // MURO trasero (arriba), rayado, termina donde arrancan los cierres
     hatch(floorStartX - tM / 2, yWall - tW, (floorEndX - floorStartX) + tM, tW);
@@ -10248,8 +10278,8 @@ function drawAreaPro(doc, o) {
         if (prevTipo && ((prevTipo === "puerta" && mgT[s.tipo]) || (mgT[prevTipo] && s.tipo === "puerta"))) cabMgBoundaries.push(xa);
         prevTipo = s.tipo;
         if (s.tipo === "muro") { hatch(xa, yWall - tW, w + (s === seq[0] ? 0 : 0), floorY - yWall + tW); }
-        else if (s.tipo === "pilastra" || s.tipo === "panelCompleto") { pilBar(xa, xb, cx); segsFront.push([xa, xb, s.ancho]); cabDivs.push({ cx: cx, interior: true }); }
-        else if (s.tipo === "pilastra-terminal" || s.tipo === "pilastra-muro") { const lat = s.lado === "izq" ? xa : xb; pilBar(xa, xb, lat); segsFront.push([xa, xb, s.ancho]); cabDivs.push({ cx: lat, interior: false, terminalDer: s.tipo === "pilastra-terminal" && s.lado === "der" }); }
+        else if (s.tipo === "pilastra" || s.tipo === "panelCompleto") { const esEscPro = esRecPro && s.tipo === "pilastra" && s.idxSlot != null && (!!recSetP[s.idxSlot] !== !!recSetP[s.idxSlot + 1]) && (floorY - recFloorY > 1); if (esEscPro) { panelV(cx); doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.35); doc.rect(xa, floorY - tM / 2, Math.max(0.5, cx - tM / 2 - xa), tM); doc.rect(cx + tM / 2, recFloorY - tM / 2, Math.max(0.5, xb - cx - tM / 2), tM); doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255); doc.circle(xa + 1.1, floorY, 0.9, "S"); doc.circle(cx - 1.1, floorY, 0.9, "S"); doc.circle(cx + 1.1, recFloorY, 0.9, "S"); doc.circle(xb - 1.1, recFloorY, 0.9, "S"); } else { pilBar(xa, xb, cx); } segsFront.push([xa, xb, s.ancho]); cabDivs.push({ cx: cx, interior: true }); }
+        else if (s.tipo === "pilastra-terminal" || s.tipo === "pilastra-muro") { const lat = s.lado === "izq" ? xa : xb; const cierreRecT = esRecPro && ((s.lado === "der" && !!recSetP[o.N - 1]) || (s.lado === "izq" && !!recSetP[0])) && (floorY - recFloorY > 1); pilBar(xa, xb, lat, cierreRecT ? recFloorY : undefined); segsFront.push([xa, xb, s.ancho]); cabDivs.push({ cx: lat, interior: false, terminalDer: s.tipo === "pilastra-terminal" && s.lado === "der" }); }
         else if (s.tipo === "panelMingit" || s.tipo === "mamparaCierreMingit") {
             const mgPz = s.mgCode ? CATALOGO.piezas.find(p => p.codigo === s.mgCode) : null;
             const mgDepthCm = mgPz && mgPz.familia === "MG" ? mgPz.ancho : 60;
