@@ -1205,6 +1205,11 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
               Obtener Planos
             </button>
           </div>
+          <div style="display:flex; margin-top:8px;">
+            <button class="btn btn-ghost" id="btn-nuevo-proyecto" style="flex:1; justify-content:center;" title="Guarda el proyecto actual y deja todo en blanco para empezar uno nuevo.">
+              🆕 Crear nuevo proyecto
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -4683,6 +4688,8 @@ function bindCfg() {
     $("btn-generar").onclick = generarPlanos;
     const btnGuardar = document.getElementById("btn-guardar");
     if (btnGuardar) btnGuardar.onclick = guardarSinDescargar;
+    const btnNuevoProy = document.getElementById("btn-nuevo-proyecto");
+    if (btnNuevoProy) btnNuevoProy.onclick = crearNuevoProyecto;
     const btnModDesc = document.getElementById("btn-modular-descargas");
     if (btnModDesc) btnModDesc.onclick = modularDesdeDescargas
 }
@@ -8249,15 +8256,15 @@ function proximaAreaEnBlanco() {
 async function guardarProyectoActual(descargar) {
     if (!cfg.codigo) {
         toast("Falta el N° de plano", "danger");
-        return
+        return false
     }
     if (!cfg.nombre) {
         toast("Falta el nombre del proyecto", "danger");
-        return
+        return false
     }
     if (cfg.areas.length === 0) {
         toast("Agregá al menos un área", "danger");
-        return
+        return false
     }
     const conectado = !!(SB && sesionSupabase);
     const editando = conectado ? !!cfg.editandoId : !!(cfg.editandoId && db.proyectos.some(p => p.id === cfg.editandoId));
@@ -8278,12 +8285,12 @@ async function guardarProyectoActual(descargar) {
     }
     if (!crearRevision && !conectado && db.proyectos.some(p => p.codigo === codigoFinal && p.id !== cfg.editandoId)) {
         toast("Ya existe un proyecto con ese código", "danger");
-        return
+        return false
     }
     const piezas = piezasAgregadas();
     if (piezas.length === 0) {
         toast("Configurá al menos una pieza en alguna cabina", "danger");
-        return
+        return false
     }
     const ahora = new Date;
     const totalCabinas = (cfg.areas || []).reduce((sum, name) => {
@@ -8334,13 +8341,13 @@ async function guardarProyectoActual(descargar) {
                 if (!verificado) {
                     guardadoOk = false;
                     toast("El proyecto no se guardó bien, reintentá", "danger");
-                    if (!descargar) return
+                    if (!descargar) return false
                 }
             } catch (e) {
                 guardadoOk = false;
                 toast("No se pudo guardar en la nube: " + (e.message || e), "danger");
                 // Si es "Obtener Planos" igual se descarga el PDF aunque el guardado falle.
-                if (!descargar) return
+                if (!descargar) return false
             }
         } else {
             if (editando && !crearRevision) {
@@ -8365,7 +8372,7 @@ async function guardarProyectoActual(descargar) {
         } else {
             toast(`Proyecto ${accion} (sin descargar). Podés seguir configurando.`, "ok")
         }
-        return
+        return true
     }
     cfg.editandoId = null;
     // OBTENER PLANOS descarga SIEMPRE el PDF (haya o no revisión nueva, y aun si el guardado falló).
@@ -8405,6 +8412,18 @@ function resetConfiguradorNuevo() {
     if (typeof renderAreaList === "function") renderAreaList();
     if (typeof renderPreview === "function") renderPreview();
     sugerirConsecutivoSiVacio()
+}
+async function crearNuevoProyecto() {
+    const hayContenido = !!(cfg.codigo || cfg.nombre || (cfg.areas || []).length > 0);
+    if (!hayContenido) {
+        resetConfiguradorNuevo();
+        toast("Todo limpio para empezar un proyecto nuevo.", "ok");
+        return
+    }
+    const ok = await guardarProyectoActual(false);
+    if (ok !== true) return;
+    resetConfiguradorNuevo();
+    toast("Proyecto guardado. Todo limpio para empezar otro.", "ok")
 }
 const COLOR_ABREV_MODUMEX = {
     "FASHION WHITE": "FW",
