@@ -6034,7 +6034,7 @@ function buildBathroomSvg() {
                 const cDescClX = esPmrLay && cfg.invertir ? floorEndX - Number(cDescCl) * scale : floorStartX + Number(cDescCl) * scale;
                 const fxCenter = cDescCl !== "" && cDescCl != null && !isNaN(cDescCl) ? Math.max(x + 16, Math.min(x + w - 16, cDescClX)) : cx;
                 const esUrinalRec = hayOriRec && recSet[i];
-                const esRegaderaCab = (tiposCabina[i] || "") === "Regadera";
+                const esRegaderaCab = (tiposCabina[i] || "") === "Regadera" || cfg.modelo === "REGADERAS";
                 if (esUrinalRec) {} else if (esMingit) {
                     svg += `<g transform="translate(${fxCenter-14},36)">\n          <ellipse cx="14" cy="28" rx="14" ry="26" fill="#e3e6ec" stroke="#0a1f3d" stroke-width="2"/>\n          <ellipse cx="14" cy="28" rx="9" ry="20" fill="none" stroke="#0a1f3d" stroke-width="1.2"/>\n          <circle cx="14" cy="20" r="3" fill="#0a1f3d"/>\n        </g>`
                 } else if (esRegaderaCab) {
@@ -10383,7 +10383,7 @@ function drawAreaPro(doc, o) {
                 const esUrinalRecP = nOriRec > 0 && recSetP[_cabRec];
                 if (recSetP[_cabRec] && floorY - fyCab > 1) { doc.setFillColor(238, 245, 255); doc.rect(xa, fyCab, w, floorY - fyCab, "F"); }
                 const ih = Math.min(64 * sc, (fyCab - yWall) - 6), iw = ih * 0.67;
-                const esRegaderaPdf = ((areaCfg.tiposCabina || [])[s.indiceCabina - 1] || "") === "Regadera";
+                const esRegaderaPdf = ((areaCfg.tiposCabina || [])[s.indiceCabina - 1] || "") === "Regadera" || o.modelo === "REGADERAS";
                 if (esRegaderaPdf) {
                     if (typeof DUCHA_IMG_B64 !== "undefined") { const dhD = ih * 0.42, dwD = dhD * 0.612; doc.addImage(DUCHA_IMG_B64, "PNG", cx - dwD / 2, yWall + 3, dwD, dhD, undefined, "FAST"); }
                 } else if (typeof WC_IMG_B64 !== "undefined" && !esUrinalRecP) doc.addImage(WC_IMG_B64, "PNG", cx - iw / 2, yWall + 3, iw, ih, undefined, "FAST");
@@ -10800,7 +10800,7 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
     const floorY = drawTop + cabDepth;
     const floorLugar = floorY + sobraProfMm;
     if (window.CDP_PRO_STYLE) {
-        drawAreaPro(doc, { seq: seq, scale: scale, drawX: drawX, drawW: drawW, drawTop: drawTop, cabDepth: cabDepth, floorY: floorY, areaCfg: areaCfg, N: N, areaInvertir: areaInvertir, layoutCodigo: layoutCodigo, leftWallEff: leftWallEff, rightWallEff: rightWallEff, esPmrLayPdf: esPmrLayPdf, stacked: stackedHdr });
+        drawAreaPro(doc, { seq: seq, scale: scale, drawX: drawX, drawW: drawW, drawTop: drawTop, cabDepth: cabDepth, floorY: floorY, areaCfg: areaCfg, N: N, areaInvertir: areaInvertir, layoutCodigo: layoutCodigo, leftWallEff: leftWallEff, rightWallEff: rightWallEff, esPmrLayPdf: esPmrLayPdf, stacked: stackedHdr, modelo: proyecto.modelo });
         return;
     }
     (() => {
