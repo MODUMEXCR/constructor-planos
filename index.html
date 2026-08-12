@@ -5884,7 +5884,7 @@ function buildBathroomSvg() {
             const mgAlto = mgPz && mgPz.alto ? mgPz.alto : 150;
             const frac = Math.min(.8, Math.max(.35, mgAlto / 150 * .6));
             const midY = 20 + cabHeight * frac;
-            svg += `<g data-piece="pilastra-${s.idxSlot}">`;
+            svg += `<g data-piece="panel-${s.idxSlot}">`;
             svg += `<line x1="${cx}" y1="20" x2="${cx}" y2="${midY}" stroke="#0a1f3d" stroke-width="3" stroke-linecap="round"/>`;
             if (s.mgCode) svg += `<text x="${cx+5}" y="33" font-size="8" fill="#1c2846" font-weight="600">${s.mgCode}</text>`;
             svg += `</g>`
@@ -10481,7 +10481,8 @@ function renderAreaInto(doc, proyecto, areaIdx, region) {
                 panelDivCode: panelCode,
                 idxSlot: i,
                 latMingit: esBañoMixto && !esPmrDiv,
-                banoIzq: tipoCab === "Baño"
+                banoIzq: tipoCab === "Baño",
+                mgCode: ambosMingit ? panelCode || (areaCfg.paneles || [])[i + 1] || areaCfg.mgTipo || "MG60150" : null
             })
         }
     }
