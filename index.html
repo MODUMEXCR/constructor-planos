@@ -7023,7 +7023,7 @@ function sugerirModulacion({
         const cierreMingit = esCierrePanel && (nMingit || 0) > 0;
         const grosorMGtotal = cierreMingit ? (nMingit || 0) * 1.27 : Math.max(0, (nMingit || 0) - 1) * 1.27;
         const claroAjustadoH = claroHoriz - (esCierrePanel ? 0 : 1) + 1.5 * nEst;
-        const usarPilCentral = aCfg.pilCentralPmr === true || nEst > 0;
+        const usarPilCentral = aCfg.pilCentralPmr === true;
         let bestP = null;
         for (const ap of opcionesPuerta) {
             for (const apI of nDiv > 0 ? opcionesPilInt : [0]) {
@@ -8741,7 +8741,6 @@ function exportarCSV(proyecto) {
                             const nRc = Math.max(0, Math.min(parseInt(areaCfg.nReceso, 10) || 0, N));
                             if (nRc > 0 && nRc < N && i === (areaInvertir ? nRc - 1 : N - nRc - 1)) subPil = "PLLAT";
                         }
-                        if ((areaLayout === "P+" || areaLayout === "PP") && p.familia === "PI" && i === (areaInvertir ? N - 2 : 0)) subPil = "PLLAT";
                         agregar(p, subPil, areaName, altoDeCabina(p.familia, areaCfg, i))
                     }
                 }
