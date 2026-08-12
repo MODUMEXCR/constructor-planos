@@ -8633,6 +8633,12 @@ function exportarCSV(proyecto) {
         const _nRecLoop = Math.max(0, Math.min(parseInt(areaCfg.nReceso, 10) || 0, N));
         const _hayUrinalRecLoop = !!_layRecLoop.receso && _nMgLoop > 0 && (areaCfg.recesoPmr || 0) > 0 && _nRecLoop > 0;
         const esAlcobaUrinalCsv = i => _hayUrinalRecLoop && (areaInvertir ? i < _nRecLoop : i >= N - _nRecLoop);
+        const _hasLeftCsv = ["L", "U", "L+", "U+", "C", "I", "K", "LP", "P+", "PP", "RE"].includes(areaLayout);
+        const _hasRightCsv = ["U", "U+", "C", "I", "K", "P+", "RE"].includes(areaLayout);
+        const _rightWallCsv = areaInvertir ? _hasLeftCsv : _hasRightCsv;
+        // La última cabina apoyada contra un muro NO lleva panel derecho (lo cierra la pared);
+        // el dibujo no lo dibuja, así que el CSV/BOM tampoco debe contarlo. No aplica a PMR.
+        const _ultCabContraMuro = i => i === N - 1 && _rightWallCsv && !_layRecLoop.pmrCuarto && !_layRecLoop.pmrPanel;
         for (let i = 0; i < N; i++) {
             const tipoCab = (areaCfg.tiposCabina || [])[i] || "Baño";
             const ctx = {
@@ -8646,7 +8652,7 @@ function exportarCSV(proyecto) {
                     if (p) agregar(p, determinarSubTipoModumex(p, ctx), areaName, altoDeCabina(p.familia, areaCfg, i))
                 }
             }
-            const cp = (areaCfg.paneles || [])[i];
+            const cp = _ultCabContraMuro(i) ? "" : (areaCfg.paneles || [])[i];
             if (cp) {
                 // Pieza "a medida" que no está en el catálogo → sintético. Cubre el panel PMR
                 // (PN a medida) y la pilastra separadora del cuarto PMR (PI a medida).
