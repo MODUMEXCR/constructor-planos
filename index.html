@@ -6005,7 +6005,8 @@ function buildBathroomSvg() {
                 if (frenteExtraIdx >= 0) svg += `</g>`;
                 const apertV = aperturas[i] || "DER_EXT";
                 const [ladoP, sentP] = apertV.split("_");
-                const hingeTop = ladoP !== "IZQ";
+                const ladoEff = profPanel > 120 ? "IZQ" : ladoP;
+                const hingeTop = ladoEff !== "IZQ";
                 const hy = hingeTop ? yDoorTop : yDoorBot;
                 const freeY = hingeTop ? yDoorBot : yDoorTop;
                 const swingRight = sentP !== "INT";
@@ -7514,7 +7515,12 @@ function recomputarDivisorPmr(a) {
     const prof = (typeof leerDimensionesLugar === "function" ? (leerDimensionesLugar() || {}).paredOpuesta : 0) || 0;
     const frente = prof > 0 ? Math.max(0, Math.round(prof - panel - doorW)) : 45;
     if (!a.paneles) a.paneles = [];
-    a.paneles[cuartoIdx] = "PI" + panel + sufR;
+    a.paneles[cuartoIdx] = (panel > 120 ? "PN" : "PI") + panel + sufR;
+    if (panel > 120) {
+        if (!a.aperturas) a.aperturas = [];
+        const _sentDiv = ((a.aperturas[cuartoIdx] || (cfg.invertir ? "IZQ_EXT" : "DER_EXT")).split("_")[1]) || "EXT";
+        a.aperturas[cuartoIdx] = "IZQ_" + _sentDiv;
+    }
     if (!a.pilastrasExtras) a.pilastrasExtras = [];
     const fCode = "PI" + frente + sufR;
     const fx = a.pilastrasExtras.find(ex => (ex.descripcion || "").toLowerCase().includes("frente del cuarto pmr"));
@@ -7661,9 +7667,11 @@ function aplicarSugerencia(s) {
         if (cfg.invertir && s.cierreMingit && (s.nMingit || 0) > 0) a.paneles[(s.nMingit || 0) - 1] = s.codMGCierre || a.mgTipo || "MG60120";
         a.anchoPmrCuarto = s.anchoPmrCuarto || a.anchoPmrCuarto || 162;
         if (s.anchoPanelDivisor) a.anchoPanelDivisorPmr = s.anchoPanelDivisor;
-        a.paneles[accCabinaIdx] = s.codPanelDivisor || "PN150";
+        const _wDivSug = Math.max(30, parseInt(a.anchoPanelDivisorPmr, 10) || s.anchoPanelDivisor || 100);
+        const _sufRSug = cfg.modelo === "REFORZADO" ? "R" : "";
+        a.paneles[accCabinaIdx] = _wDivSug > 120 ? "PN" + _wDivSug + _sufRSug : (s.codPanelDivisor || "PI" + _wDivSug + _sufRSug);
         a.puertas[accCabinaIdx] = s.codPuertaAcc || "PT90";
-        a.aperturas[accCabinaIdx] = cfg.invertir ? "IZQ_EXT" : "DER_EXT";
+        a.aperturas[accCabinaIdx] = _wDivSug > 120 ? "IZQ_EXT" : (cfg.invertir ? "IZQ_EXT" : "DER_EXT");
         const yaTieneFrentePmr = a.pilastrasExtras && a.pilastrasExtras.some(ex => (ex.descripcion || "").toLowerCase().includes("frente del cuarto pmr"));
         if (!yaTieneFrentePmr && s.codPilFrentePmr) {
             if (!a.pilastrasExtras) a.pilastrasExtras = [];
