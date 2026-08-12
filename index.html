@@ -1197,8 +1197,16 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
               <div class="form-help" style="margin-top:4px; font-size:11px;">De tus cabinas, cuántas son regaderas (NO suman cabinas ni espacio — son baños dibujados con ducha, con las mismas piezas). La app las acomoda solas en línea a un extremo. También podés marcarlas por cabina abajo en el previsualizador.</div>
             </div>
             <div class="form-row">
-              <label class="form-label">Altura pilastra (calculada)</label>
+              <label class="form-label">Altura pilastra</label>
               <input type="text" class="form-input" id="cfg-altura" readonly>
+              <div class="form-help" id="cfg-altura-help" style="margin-top:4px; font-size:11px; display:none;">SCUDO: escribí la altura especial de la pilastra. El antepecho se ajusta solo para completar hasta ese alto; las puertas no cambian.</div>
+            </div>
+            <div class="form-row" id="cfg-antepecho-row" style="display:none;">
+              <label class="form-label">Antepecho</label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:13px; cursor:pointer;">
+                <input type="checkbox" id="cfg-antepecho-chk" checked> Incluir antepecho
+              </label>
+              <div class="form-help" style="margin-top:4px; font-size:11px;">Si lo desmarcás, el antepecho se quita del cuadro de materiales y de la cotización.</div>
             </div>
           </div>
 
@@ -3910,6 +3918,8 @@ const cfg = {
     terminacion: "ZOCLO",
     acabado: "Laminado Compacto",
     color: "ALUMINA 2103",
+    altoPilastraScudo: null,
+    sinAntepecho: false,
     colorSecundarioActivo: false,
     colorSecundario: "",
     piezasColorSecundario: {},
@@ -4492,6 +4502,21 @@ function bindCfg() {
         cfg.terminacion = e.target.value;
         updateAltura()
     };
+    const inpAltPil = document.getElementById("cfg-altura");
+    if (inpAltPil) inpAltPil.onchange = () => {
+        if ((cfg.modelo || "").toUpperCase() !== "SCUDO") return;
+        const v = parseInt(inpAltPil.value, 10) || 0;
+        cfg.altoPilastraScudo = v > 0 ? v : null;
+        updateAltura();
+        if (typeof renderPreview === "function") renderPreview();
+        if (typeof renderPreviewControls === "function") renderPreviewControls(activeTab);
+        if (typeof recalcularSugerencia === "function") recalcularSugerencia()
+    };
+    const chkAntepecho = document.getElementById("cfg-antepecho-chk");
+    if (chkAntepecho) chkAntepecho.onchange = () => {
+        cfg.sinAntepecho = !chkAntepecho.checked;
+        if (typeof recalcularSugerencia === "function") recalcularSugerencia()
+    };
     $("cfg-acabado").onchange = e => {
         cfg.acabado = e.target.value
     };
@@ -4706,8 +4731,24 @@ function bindCfg() {
 }
 
 function updateAltura() {
+    const esScudo = (cfg.modelo || "").toUpperCase() === "SCUDO";
     const h = CATALOGO.reglaAltura(cfg.modelo, cfg.terminacion);
-    document.getElementById("cfg-altura").value = h ? h + " cm" : "—"
+    const el = document.getElementById("cfg-altura");
+    const help = document.getElementById("cfg-altura-help");
+    const antRow = document.getElementById("cfg-antepecho-row");
+    const antChk = document.getElementById("cfg-antepecho-chk");
+    if (el) {
+        el.readOnly = !esScudo;
+        if (esScudo) {
+            const val = +cfg.altoPilastraScudo > 0 ? cfg.altoPilastraScudo : h;
+            el.value = val != null ? val : ""
+        } else {
+            el.value = h ? h + " cm" : "—"
+        }
+    }
+    if (help) help.style.display = esScudo ? "" : "none";
+    if (antRow) antRow.style.display = esScudo ? "" : "none";
+    if (antChk) antChk.checked = !cfg.sinAntepecho
 }
 
 function actualizarCurvaMingit() {
@@ -6917,7 +6958,8 @@ function pilastraCodigoSegunModelo(codigo, modeloCodigo) {
 
 function alturaPiezaSegunModelo(familia, modeloCodigo, terminacionCodigo, altoTouchless) {
     const alts = CATALOGO.alturasPorModelo[(modeloCodigo || "ESTANDAR").toUpperCase()] || CATALOGO.alturasPorModelo.ESTANDAR;
-    const altPilastra = alts.pilastra != null ? alts.pilastra : alts.pilastraZoclo;
+    const scudoCustom = (modeloCodigo || "").toUpperCase() === "SCUDO" && typeof cfg !== "undefined" && cfg && +cfg.altoPilastraScudo > 0 ? +cfg.altoPilastraScudo : null;
+    const altPilastra = scudoCustom != null ? scudoCustom : (alts.pilastra != null ? alts.pilastra : alts.pilastraZoclo);
     const esTouchless = (modeloCodigo || "").toUpperCase() === "TL_S3";
     const altPuertaPanel = esTouchless && altoTouchless ? altoTouchless : null;
     switch ((familia || "").toUpperCase()) {
@@ -8279,7 +8321,8 @@ function piezasAgregadas() {
             terminacion: cfg.terminacion,
             areas: cfg.areas,
             configByArea: cfg.configByArea,
-            invertir: cfg.invertir
+            invertir: cfg.invertir,
+            sinAntepecho: !!cfg.sinAntepecho
         };
         const ant = antepechosDeProyecto(proyLike);
         if (ant) ant.porArea.forEach(r => r.items.forEach(it => {
@@ -8413,7 +8456,9 @@ async function guardarProyectoActual(descargar) {
         kap: cfg.kap,
         mingitorios: cfg.mingitorios,
         regaderas: cfg.regaderas,
-        alturaPilastra: CATALOGO.reglaAltura(cfg.modelo, cfg.terminacion),
+        altoPilastraScudo: +cfg.altoPilastraScudo > 0 ? +cfg.altoPilastraScudo : null,
+        sinAntepecho: !!cfg.sinAntepecho,
+        alturaPilastra: alturaPiezaSegunModelo("PI", cfg.modelo, cfg.terminacion),
         configByArea: JSON.parse(JSON.stringify(cfg.configByArea)),
         piezas: piezas
     };
@@ -8488,6 +8533,8 @@ function resetConfiguradorNuevo() {
     cfg.colorSecundarioActivo = false;
     cfg.colorSecundario = "";
     cfg.piezasColorSecundario = {};
+    cfg.altoPilastraScudo = null;
+    cfg.sinAntepecho = false;
     const set = (id, v) => {
         const el = document.getElementById(id);
         if (el) el.value = v
@@ -8495,6 +8542,7 @@ function resetConfiguradorNuevo() {
     set("cfg-codigo", "");
     set("cfg-nombre", "");
     if (typeof sincronizarColorSecundarioUI === "function") sincronizarColorSecundarioUI();
+    if (typeof updateAltura === "function") updateAltura();
     if (typeof renderAreaList === "function") renderAreaList();
     if (typeof renderPreview === "function") renderPreview();
     sugerirConsecutivoSiVacio()
@@ -9252,6 +9300,7 @@ function esModeloScudo(proyecto) {
 
 function antepechosDeArea(proyecto, areaName) {
     if (!esModeloScudo(proyecto)) return null;
+    if (proyecto.sinAntepecho) return null;
     const a = (proyecto.configByArea || {})[areaName] || {};
     const N = a.cabinas !== undefined ? a.cabinas : proyecto.cabinas || 0;
     if (!N) return null;
@@ -12495,6 +12544,8 @@ function cargarProyectoEnConfigurador(p) {
     cfg.kap = p.kap || 0;
     cfg.mingitorios = p.mingitorios || 0;
     cfg.regaderas = p.regaderas || 0;
+    cfg.altoPilastraScudo = +p.altoPilastraScudo > 0 ? +p.altoPilastraScudo : null;
+    cfg.sinAntepecho = !!p.sinAntepecho;
     cfg.areas = (p.areas || []).slice();
     cfg.configByArea = JSON.parse(JSON.stringify(p.configByArea || {}));
     Object.keys(cfg.configByArea).forEach(n => {
