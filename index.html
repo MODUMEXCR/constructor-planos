@@ -1207,7 +1207,7 @@ function(t){t.__bidiEngine__=t.prototype.__bidiEngine__=function(t){var r,n,i,a,
           </div>
           <div style="display:flex; margin-top:8px;">
             <button class="btn btn-ghost" id="btn-nuevo-proyecto" style="flex:1; justify-content:center;" title="Guarda el proyecto actual y deja todo en blanco para empezar uno nuevo.">
-              🆕 Crear nuevo proyecto
+              <span style="font-size:16px;line-height:1;margin-right:4px;">+</span> Crear nuevo proyecto
             </button>
           </div>
         </div>
@@ -4565,7 +4565,7 @@ function bindCfg() {
         } else {
             const aMg = typeof activeAreaCfg === "function" ? activeAreaCfg() : null;
             const layMg = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
-            if (aMg && layMg.pmrPanel && !(aMg.nMingitorios > 0) && typeof aplicarNMingitorios === "function") aplicarNMingitorios(1)
+            if (aMg && (layMg.pmrPanel || layMg.receso) && !(aMg.nMingitorios > 0) && typeof aplicarNMingitorios === "function") aplicarNMingitorios(1)
         }
         if (typeof actualizarCurvaMingit === "function") actualizarCurvaMingit()
     };
@@ -4708,7 +4708,7 @@ function actualizarCurvaMingit() {
         return
     }
     const layoutCurva = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
-    const esPmrPanelCurva = !!layoutCurva.pmrPanel;
+    const esPmrPanelCurva = !!(layoutCurva.pmrPanel || layoutCurva.receso);
     const contMing = a ? (a.tiposCabina || []).filter(t => t === "Mingitorio").length : 0;
     if (a && !esPmrPanelCurva) a.nMingitorios = contMing;
     const nOri = esPmrPanelCurva ? (a ? a.nMingitorios || 0 : 0) : contMing;
@@ -4806,7 +4806,7 @@ function recomputarCabinas(banos, orinales) {
         if (typeof recalcularSugerencia === "function") recalcularSugerencia();
         return
     }
-    if (layoutRc.pmrPanel) {
+    if (layoutRc.pmrPanel || layoutRc.receso) {
         a.cabinas = banos;
         cfg.cabinas = banos;
         a.nMingitorios = orinales;
@@ -4876,7 +4876,7 @@ function aplicarNMingitorios(n) {
     const a = typeof activeAreaCfg === "function" ? activeAreaCfg() : null;
     if (!a) return 0;
     const layoutM = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
-    const banos = layoutM.pmrPanel ? Math.max(1, a.cabinas || 1) : Math.max(1, (a.cabinas || 1) - (a.nMingitorios || 0));
+    const banos = (layoutM.pmrPanel || layoutM.receso) ? Math.max(1, a.cabinas || 1) : Math.max(1, (a.cabinas || 1) - (a.nMingitorios || 0));
     recomputarCabinas(banos, n);
     return (typeof activeAreaCfg === "function" ? activeAreaCfg() : {} || {}).nMingitorios || 0
 }
@@ -5836,6 +5836,9 @@ function buildBathroomSvg() {
         for (let k = 0; k < nRec; k++) recSet[cfg.invertir ? k : N - 1 - k] = true;
     const recFrontY = Math.min(floor - 8, 20 + recesoCm * cabHeight / (panelBaseCm || 150));
     const frontYof = i => recSet[i] ? recFrontY : floor;
+    const nOriRec = esReceso ? Math.max(0, parseInt(areaCfg.nMingitorios, 10) || 0) : 0;
+    const hayOriRec = nOriRec > 0 && recesoCm > 0 && (floor - recFrontY > 2);
+    let recFreeX0 = Infinity, recFreeX1 = -Infinity;
     const divShort = i => !!(recSet[i] && recSet[i + 1]);
     const panelLenPxRec = idxSlot => divShort(idxSlot) ? Math.max(6, recFrontY - 20) : panelLenPx(idxSlot);
     let svg = `<svg viewBox="0 0 ${displayW} ${totalH}" width="${displayW}" height="${totalH}">`;
@@ -6019,22 +6022,25 @@ function buildBathroomSvg() {
                 svg += `<text x="${ccx}" y="${floorCuarto-28}" font-size="11" fill="#0a1f3d" font-weight="700" text-anchor="middle">C${i+1}</text>`
             } else {
                 if (recSet[i] && floor - recFrontY > 2) {
+                    recFreeX0 = Math.min(recFreeX0, x);
+                    recFreeX1 = Math.max(recFreeX1, x + w);
                     svg += `<rect x="${x}" y="${recFrontY}" width="${w}" height="${floor-recFrontY}" fill="#eef5ff" stroke="#c7d0d8" stroke-width="0.5" stroke-dasharray="3,2"/>`;
-                    svg += `<text x="${cx}" y="${floor-4}" font-size="6.5" fill="#5a6472" text-anchor="middle">espacio libre</text>`
+                    if (!hayOriRec) svg += `<text x="${cx}" y="${floor-4}" font-size="6.5" fill="#5a6472" text-anchor="middle">espacio libre</text>`
                 }
                 svg += `<g data-piece="cabina-${i}" data-cabina-idx="${i}">`;
                 svg += `<rect x="${x}" y="20" width="${w}" height="${cabHeight}" fill="transparent"/>`;
                 const cDescCl = (areaCfg.centrosDescarga || [])[i];
                 const cDescClX = esPmrLay && cfg.invertir ? floorEndX - Number(cDescCl) * scale : floorStartX + Number(cDescCl) * scale;
                 const fxCenter = cDescCl !== "" && cDescCl != null && !isNaN(cDescCl) ? Math.max(x + 16, Math.min(x + w - 16, cDescClX)) : cx;
-                if (esMingit) {
+                const esUrinalRec = hayOriRec && recSet[i];
+                if (esUrinalRec) {} else if (esMingit) {
                     svg += `<g transform="translate(${fxCenter-14},36)">\n          <ellipse cx="14" cy="28" rx="14" ry="26" fill="#e3e6ec" stroke="#0a1f3d" stroke-width="2"/>\n          <ellipse cx="14" cy="28" rx="9" ry="20" fill="none" stroke="#0a1f3d" stroke-width="1.2"/>\n          <circle cx="14" cy="20" r="3" fill="#0a1f3d"/>\n        </g>`
                 } else {
                     svg += `<g transform="translate(${fxCenter-14},48)">\n          <rect width="28" height="6" rx="2" fill="#0a1f3d"/>\n          <ellipse cx="14" cy="22" rx="14" ry="20" fill="none" stroke="#0a1f3d" stroke-width="2"/>\n        </g>`
                 }
                 svg += `</g>`;
                 if (isAccCabina) svg += `<text x="${cx-11}" y="105" font-size="22" fill="#5db0e0">♿</text>`;
-                if (!esMingit) {
+                if (!esMingit && !esUrinalRec) {
                     const accLayoutSvg = ["L+", "U+", "E+", "C", "P+", "PP"].includes(layout.codigo);
                     const esAccCabSvg = accLayoutSvg && i === accCabinaIdx;
                     const esExtremoMuroSvg = i === 0 && leftWall || i === N - 1 && rightWall;
@@ -6052,7 +6058,7 @@ function buildBathroomSvg() {
                     svg += `<line x1="${hingePx}" y1="${fyR}" x2="${hingePx+dirXsvg*leafPx*Math.cos(Math.PI/9)}" y2="${fyR+dirYsvg*leafPx*Math.sin(Math.PI/9)}" stroke="#0a1f3d" stroke-width="3"/>`;
                     svg += `</g>`
                 }
-                svg += `<text x="${cx}" y="${frontYof(i)-6}" font-size="11" fill="#0a1f3d" font-weight="700" text-anchor="middle">${esMingit?"M":"C"}${i+1}</text>`
+                if (!esUrinalRec) svg += `<text x="${cx}" y="${frontYof(i)-6}" font-size="11" fill="#0a1f3d" font-weight="700" text-anchor="middle">${esMingit?"M":"C"}${i+1}</text>`
             }
         }
         if (s.tipo !== "muro" && s.tipo !== "mamparaCierreMingit") {
@@ -6067,6 +6073,23 @@ function buildBathroomSvg() {
         }
         x += w
     });
+    if (hayOriRec && recFreeX1 > recFreeX0) {
+        const wallXRec = cfg.invertir ? floorStartX : floorEndX;
+        const sgnORec = cfg.invertir ? 1 : -1;
+        const slotRec = (floor - recFrontY) / nOriRec;
+        const mgLenRec = Math.min((recFreeX1 - recFreeX0) * 0.5, 42);
+        for (let k = 0; k < nOriRec; k++) {
+            const cyR = recFrontY + (k + 0.5) * slotRec;
+            svg += `<ellipse cx="${cfg.invertir ? wallXRec + 8 : wallXRec - 8}" cy="${cyR}" rx="6" ry="11" fill="#e3e6ec" stroke="#0a1f3d" stroke-width="1.4"/>`;
+            svg += `<rect x="${cfg.invertir ? wallXRec : wallXRec - 3}" y="${cyR - 11}" width="3" height="22" fill="#0a1f3d"/>`
+        }
+        for (let k = 1; k <= nOriRec; k++) {
+            const dyR = recFrontY + k * slotRec;
+            svg += `<line x1="${wallXRec}" y1="${dyR}" x2="${wallXRec + sgnORec * mgLenRec}" y2="${dyR}" stroke="#0a1f3d" stroke-width="3" stroke-linecap="round"/>`;
+            svg += `<text x="${wallXRec + sgnORec * (mgLenRec + 3)}" y="${dyR - 2.5}" font-size="6.5" fill="#0a1f3d" font-weight="600" text-anchor="${cfg.invertir ? 'start' : 'end'}">${areaCfg.mgTipo || "MG"}${k === nOriRec ? " (cierre)" : ""}</text>`
+        }
+        svg += `<text x="${wallXRec + sgnORec * 26}" y="${recFrontY + 12}" font-size="7.5" fill="#0a1f3d" font-weight="600" text-anchor="${cfg.invertir ? 'start' : 'end'}">${nOriRec} orinal${nOriRec > 1 ? "es" : ""}</text>`
+    }
     const murosTotCm = seq.filter(s => s.tipo === "muro").reduce((t, s) => t + s.ancho, 0);
     const claroCalculado = totalCm - murosTotCm;
     const claroCliente = areaCfg.claroCliente && areaCfg.claroCliente > 0 ? areaCfg.claroCliente : typeof leerDimensionesLugar === "function" ? (leerDimensionesLugar() || {}).paredCabinas || 0 : 0;
@@ -6461,7 +6484,8 @@ function renderPreviewControls(tab) {
             if (tt === "panelCierreIzq") a.panelCierreIzq = v;
             if (tt === "curvaMingitorio") a.curvaMingitorio = v;
             if (tt === "tipo") {
-                a.nMingitorios = (a.tiposCabina || []).filter(t => t === "Mingitorio").length;
+                const layTipo = CATALOGO.layouts.find(l => l.codigo === cfg.layout) || {};
+                if (!(layTipo.pmrPanel || layTipo.receso)) a.nMingitorios = (a.tiposCabina || []).filter(t => t === "Mingitorio").length;
                 if (typeof actualizarCurvaMingit === "function") actualizarCurvaMingit();
                 renderPreviewControls(activeTab);
                 const infoT = typeof leerDimensionesLugar === "function" ? leerDimensionesLugar() : null;
@@ -8604,13 +8628,18 @@ function exportarCSV(proyecto) {
             invertir: areaInvertir,
             totalCabinas: N
         };
+        const _layRecLoop = CATALOGO.layouts.find(l => l.codigo === areaLayout) || {};
+        const _nMgLoop = areaCfg.nMingitorios || 0;
+        const _nRecLoop = Math.max(0, Math.min(parseInt(areaCfg.nReceso, 10) || 0, N));
+        const _hayUrinalRecLoop = !!_layRecLoop.receso && _nMgLoop > 0 && (areaCfg.recesoPmr || 0) > 0 && _nRecLoop > 0;
+        const esAlcobaUrinalCsv = i => _hayUrinalRecLoop && (areaInvertir ? i < _nRecLoop : i >= N - _nRecLoop);
         for (let i = 0; i < N; i++) {
             const tipoCab = (areaCfg.tiposCabina || [])[i] || "Baño";
             const ctx = {
                 ...ctxBase,
                 indiceCabina: i
             };
-            if (tipoCab !== "Mingitorio") {
+            if (tipoCab !== "Mingitorio" && !esAlcobaUrinalCsv(i)) {
                 const c = (areaCfg.puertas || [])[i];
                 if (c) {
                     const p = CATALOGO.piezas.find(x => x.codigo === c);
@@ -8705,7 +8734,7 @@ function exportarCSV(proyecto) {
             agregar(p, "CN", areaName)
         });
         const layoutCsvPR = CATALOGO.layouts.find(l => l.codigo === areaLayout) || {};
-        if (layoutCsvPR.pmrPanel && (areaCfg.nMingitorios || 0) > 0 && (areaCfg.recesoPmr || 0) > 0) {
+        if ((layoutCsvPR.pmrPanel || layoutCsvPR.receso) && (areaCfg.nMingitorios || 0) > 0 && (areaCfg.recesoPmr || 0) > 0) {
             const mgP = CATALOGO.piezas.find(x => x.codigo === (areaCfg.mgTipo || "MG60120"));
             if (mgP) {
                 const subMg = mgP.alto >= 150 ? "MG150" : "MG120";
@@ -10289,6 +10318,8 @@ function drawAreaPro(doc, o) {
     if (nRecP > 0 && recCmP > 0)
         for (let k = 0; k < nRecP; k++) recSetP[areaInvertir ? k : (o.N - 1) - k] = true;
     const recFloorY = Math.min(floorY - 3, yWall + recCmP * sc);
+    const nOriRec = esRecPro ? Math.max(0, parseInt((areaCfg || {}).nMingitorios, 10) || 0) : 0;
+    let recZoneX0 = Infinity, recZoneX1 = -Infinity;
     let _cabRec = -1;
     seq.forEach(s => {
         const w = (s.ancho || 0) * sc, xa = x, xb = x + w, cx = (xa + xb) / 2;
@@ -10331,19 +10362,22 @@ function drawAreaPro(doc, o) {
             }
             else {
                 const fyCab = recSetP[_cabRec] ? recFloorY : floorY;
+                const esUrinalRecP = nOriRec > 0 && recSetP[_cabRec];
                 if (recSetP[_cabRec] && floorY - fyCab > 1) { doc.setFillColor(238, 245, 255); doc.rect(xa, fyCab, w, floorY - fyCab, "F"); }
                 const ih = Math.min(64 * sc, (fyCab - yWall) - 6), iw = ih * 0.67;
-                if (typeof WC_IMG_B64 !== "undefined") doc.addImage(WC_IMG_B64, "PNG", cx - iw / 2, yWall + 3, iw, ih, undefined, "FAST");
-                const ap = (areaCfg.aperturas || [])[s.indiceCabina - 1] || "";
-                const lado = ap.split("_")[0] || (areaInvertir ? "DER" : "IZQ");
-                const sent = (ap.split("_")[1] || "EXT").toUpperCase();
-                const inward = sent === "INT";
-                const hx = lado === "IZQ" ? xa : xb, dir = lado === "IZQ" ? 1 : -1, sgnY = inward ? -1 : 1;
-                doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.9); doc.line(hx, fyCab, hx, fyCab + sgnY * w);
-                doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255); doc.roundedRect(hx - 0.9, fyCab + sgnY * w - (inward ? 1.6 : 0), 1.8, 1.8, 0.5, 0.5, "S");
-                const a0 = inward ? -Math.PI / 2 : Math.PI / 2, a1 = dir === 1 ? 0 : (inward ? -Math.PI : Math.PI);
-                arc(hx, fyCab, w, a0, a1);
-                if (recSetP[_cabRec]) { doc.setDrawColor(148, 163, 184); doc.setLineWidth(0.25); doc.setLineDashPattern([1.2, 1], 0); doc.line(xa, fyCab, xb, fyCab); doc.setLineDashPattern([], 0); doc.setFont("helvetica", "normal"); doc.setFontSize(5.5); doc.setTextColor(90, 100, 114); doc.text("espacio libre", cx, floorY - 2, { align: "center" }); }
+                if (typeof WC_IMG_B64 !== "undefined" && !esUrinalRecP) doc.addImage(WC_IMG_B64, "PNG", cx - iw / 2, yWall + 3, iw, ih, undefined, "FAST");
+                if (!esUrinalRecP) {
+                    const ap = (areaCfg.aperturas || [])[s.indiceCabina - 1] || "";
+                    const lado = ap.split("_")[0] || (areaInvertir ? "DER" : "IZQ");
+                    const sent = (ap.split("_")[1] || "EXT").toUpperCase();
+                    const inward = sent === "INT";
+                    const hx = lado === "IZQ" ? xa : xb, dir = lado === "IZQ" ? 1 : -1, sgnY = inward ? -1 : 1;
+                    doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.9); doc.line(hx, fyCab, hx, fyCab + sgnY * w);
+                    doc.setLineWidth(0.3); doc.setFillColor(255, 255, 255); doc.roundedRect(hx - 0.9, fyCab + sgnY * w - (inward ? 1.6 : 0), 1.8, 1.8, 0.5, 0.5, "S");
+                    const a0 = inward ? -Math.PI / 2 : Math.PI / 2, a1 = dir === 1 ? 0 : (inward ? -Math.PI : Math.PI);
+                    arc(hx, fyCab, w, a0, a1);
+                }
+                if (recSetP[_cabRec]) { recZoneX0 = Math.min(recZoneX0, xa); recZoneX1 = Math.max(recZoneX1, xb); doc.setDrawColor(148, 163, 184); doc.setLineWidth(0.25); doc.setLineDashPattern([1.2, 1], 0); doc.line(xa, fyCab, xb, fyCab); doc.setLineDashPattern([], 0); if (nOriRec === 0) { doc.setFont("helvetica", "normal"); doc.setFontSize(5.5); doc.setTextColor(90, 100, 114); doc.text("espacio libre", cx, floorY - 2, { align: "center" }); } }
                 segsFront.push([xa, xb, s.ancho]);
             }
         }
@@ -10354,6 +10388,37 @@ function drawAreaPro(doc, o) {
     cabMgBoundaries.forEach(bx => panelV(bx));
     // linea de piso punteada
     doc.setDrawColor(150, 150, 150); doc.setLineWidth(0.2); doc.setLineDashPattern([1.4, 1], 0); doc.line(floorStartX, floorY, floorEndX, floorY); doc.setLineDashPattern([], 0);
+    // Orinales en el espacio libre del receso (columna contra la pared del extremo) + mamparas MG,
+    // mismo criterio que drawPrPro (PMR+receso): orinal.png FIEL girado a la pared, con cota de proyeccion.
+    if (esRecPro && nOriRec > 0 && recFloorY < floorY - 0.5 && recZoneX1 > recZoneX0) {
+        const wallXp = areaInvertir ? floorStartX : floorEndX, sgnP = areaInvertir ? 1 : -1;
+        const slotP = (floorY - recFloorY) / nOriRec;
+        let mgDepthCm = 60;
+        { const mgPz = (areaCfg || {}).mgTipo ? CATALOGO.piezas.find(p => p.codigo === areaCfg.mgTipo) : null;
+          if (mgPz && mgPz.familia === "MG" && mgPz.ancho) mgDepthCm = mgPz.ancho;
+          else { const mm = String((areaCfg || {}).mgTipo || "").match(/(\d{2})/); if (mm) mgDepthCm = parseFloat(mm[1]); } }
+        const mgLenP = Math.max(6, Math.min(mgDepthCm * sc, (recZoneX1 - recZoneX0) - 3));
+        for (let k = 0; k < nOriRec; k++) {
+            const cy = recFloorY + (k + 0.5) * slotP;
+            const oL = Math.max(10, Math.min(slotP * 0.9, 20)), oD = oL / 4.49;
+            const oy = areaInvertir ? cy - oD - oL / 2 : cy - oD + oL / 2;
+            try { doc.addImage(ORINAL_IMG_B64, "PNG", wallXp, oy, oL, oD, undefined, "FAST", areaInvertir ? 270 : 90); } catch (e) {}
+        }
+        for (let k = 1; k <= nOriRec; k++) {
+            const dy = recFloorY + k * slotP;
+            const mxa = areaInvertir ? wallXp : wallXp - mgLenP;
+            doc.setFillColor(0, 0, 0); doc.rect(mxa, dy - tM / 2, mgLenP, tM, "F");
+            const cdy = dy + 3.4;
+            doc.setDrawColor(0, 0, 0); doc.setLineWidth(0.2);
+            doc.line(mxa, cdy, wallXp, cdy); arrow(mxa, cdy, 0); arrow(wallXp, cdy, Math.PI);
+            doc.setFont("helvetica", "normal"); doc.setFontSize(5.4); doc.setTextColor(0, 0, 0);
+            doc.text(mgDepthCm.toFixed(1), (mxa + wallXp) / 2, cdy - 0.9, { align: "center" });
+            doc.setFontSize(4.6); doc.setTextColor(90, 90, 90);
+            doc.text(((areaCfg || {}).mgTipo || "MG") + (k === nOriRec ? " (cierre)" : ""), wallXp + sgnP * 1.5, dy - 1.2, { align: areaInvertir ? "left" : "right" });
+        }
+        doc.setFont("helvetica", "bold"); doc.setFontSize(5.5); doc.setTextColor(...NAVY);
+        doc.text(nOriRec + " orinal" + (nOriRec > 1 ? "es" : ""), wallXp + sgnP * 1.5, recFloorY + 5, { align: areaInvertir ? "left" : "right" });
+    }
     // Profundidad del PANEL divisor y proyección del DIVISOR de mingitorio, acotadas sobre
     // la pieza (como el plano real), además de la profundidad general a la izquierda.
     // Halo blanco detrás del texto para que se lea aunque cruce el panel/divisor.
