@@ -5224,6 +5224,8 @@ function redrawCanvasOnly() {
     if (typeof actualizarValidacionModulacion === "function") actualizarValidacionModulacion()
 }
 
+
+
 function renderPreview() {
     const canvas = document.getElementById("preview-canvas");
     if (cfg.areaActivaIdx < 0) {
@@ -6094,20 +6096,16 @@ function buildBathroomSvg() {
                 if (frenteExtraIdx >= 0) svg += `<g data-piece="extra-${frenteExtraIdx}">`;
                 svg += `<rect x="${divX-1.5}" y="${yDoorBot}" width="3" height="${frentePx}" fill="#0a1f3d"/>`;
                 if (frenteExtraIdx >= 0) svg += `</g>`;
-                const plLatOff = 14 * sgnDivS;
-                const hingeX = divX + plLatOff;
-                svg += `<rect x="${Math.min(divX, hingeX)}" y="${yDoorTop-1.5}" width="14" height="3" fill="#0a1f3d"/>`;
-                svg += `<rect x="${hingeX-1.5}" y="${yDoorTop-1.5}" width="3" height="10" fill="#0a1f3d"/>`;
                 const apertV = aperturas[i] || "DER_EXT";
                 const [ladoP, sentP] = apertV.split("_");
-                const hingeTop = true;
+                const hingeTop = ladoP !== "IZQ";
                 const hy = hingeTop ? yDoorTop : yDoorBot;
                 const freeY = hingeTop ? yDoorBot : yDoorTop;
                 const swingRight = sentP !== "INT";
                 const openX = divX + (swingRight ? doorPx : -doorPx);
                 svg += `<g data-piece="puerta-${i}">`;
-                svg += `<line x1="${hingeX}" y1="${hy}" x2="${hingeX+(swingRight?1:-1)*sgnDivS*doorPx*Math.sin(Math.PI/9)}" y2="${hy+(hingeTop?1:-1)*doorPx*Math.cos(Math.PI/9)}" stroke="#0a1f3d" stroke-width="3"/>`;
-                svg += `<rect x="${hingeX-2}" y="${hy-2}" width="4" height="4" fill="#0a1f3d"/>`;
+                svg += `<line x1="${divX}" y1="${hy}" x2="${divX+(swingRight?1:-1)*sgnDivS*doorPx*Math.sin(Math.PI/9)}" y2="${hy+(hingeTop?1:-1)*doorPx*Math.cos(Math.PI/9)}" stroke="#0a1f3d" stroke-width="3"/>`;
+                svg += `<rect x="${divX-2}" y="${hy-2}" width="4" height="4" fill="#0a1f3d"/>`;
                 svg += `<text x="${divX+16*sgnDivS}" y="${(yDoorTop+yDoorBot)/2+3}" font-size="8" fill="#0a1f3d" font-weight="700" text-anchor="${cfg.invertir?'end':'start'}">${s.codigo} (lateral)</text>`;
                 svg += `</g>`;
                 const cotaV = (yy, vv) => `<text x="${divX+9*sgnDivS}" y="${yy}" font-size="7" fill="#dc2626" font-weight="700" text-anchor="middle" transform="rotate(90 ${divX+9*sgnDivS} ${yy})">${vv}.0</text>`;
@@ -6466,10 +6464,7 @@ function renderPreviewControls(tab) {
         // Divisor del cuarto PMR: la separación es PILASTRA (no panel) → va en Pilastras junto
         // con la pilastra lateral; la puerta lateral en Puertas. En Paneles no aparece el cuarto.
         // No lleva selector de apertura (el lado de la puerta lo fija el layout/inversión).
-        if (_esPmrPC && tab === "paneles" && i === _cuartoIdxPC) {
-            html += pmrCtrlHtml("panelPN", _areaPC);
-            continue
-        }
+        if (_esPmrPC && tab === "paneles" && i === _cuartoIdxPC) continue;
         if (_esPmrPC && tab === "puertas" && i === _cuartoIdxPC) {
             html += pmrCtrlHtml("door", _areaPC);
             continue
@@ -6668,14 +6663,6 @@ function renderPreviewControls(tab) {
             pintarFit(recomputarDivisorPmr(aPmr));
             redrawCanvasOnly()
         };
-        const pmrPanelPN = cont.querySelector('[data-pmr="panelpn"]');
-        if (pmrPanelPN) pmrPanelPN.onchange = () => {
-            const v = parseInt(pmrPanelPN.value, 10) || 0;
-            if (v <= 0) return;
-            aPmr.anchoPanelDivisorPmr = Math.max(30, v);
-            pintarFit(recomputarDivisorPmr(aPmr));
-            redrawCanvasOnly()
-        };
         if (pmrDoor) pmrDoor.onchange = () => {
             if (!aPmr.puertas) aPmr.puertas = [];
             aPmr.puertas[cuartoIdxH] = pmrDoor.value;
@@ -6736,20 +6723,11 @@ function pmrCtrlHtml(kind, a) {
     }
     const fitDiv = `<div data-pmr="fitmsg" style="font-size:10px; font-weight:600; color:${fitColor}; margin-top:4px;">${escapeHtml(fitTxt)}</div>`;
     if (kind === "panel") {
-        const esPI = panel <= 120;
-        const widths = [60, 70, 80, 90, 100, 110, 120];
-        if (esPI && widths.indexOf(panel) < 0) widths.push(panel);
+        const widths = [60, 70, 80, 90, 100, 110, 120, 130, 140, 150, 160];
+        if (widths.indexOf(panel) < 0) widths.push(panel);
         widths.sort((x, y) => x - y);
-        const opts = `<option value=""${esPI?"":" selected"}>— Elegir —</option>` + widths.map(w => `<option value="${w}"${esPI&&w===panel?" selected":""}>PI${w} (${w} cm)</option>`).join("");
-        return `\n        <label>\n          <span>Cuarto PMR · pilastra separadora (120 o menos)</span>\n          <select data-pmr="panel">${opts}</select>\n          <div class="form-help" style="font-size:10px; margin-top:2px;">120 cm o menos → pilastra (PI). Si mide más, elegilo en Paneles como panel (PN). Solo uno de los dos.</div>\n          ${fitDiv}\n        </label>`
-    }
-    if (kind === "panelPN") {
-        const esPN = panel > 120;
-        const widths = [130, 140, 150, 160];
-        if (esPN && widths.indexOf(panel) < 0) widths.push(panel);
-        widths.sort((x, y) => x - y);
-        const opts = `<option value=""${esPN?"":" selected"}>— Elegir —</option>` + widths.map(w => `<option value="${w}"${esPN&&w===panel?" selected":""}>PN${w} (${w} cm)</option>`).join("");
-        return `\n        <label>\n          <span>Cuarto PMR · panel separador (más de 120)</span>\n          <select data-pmr="panelpn">${opts}</select>\n          <div class="form-help" style="font-size:10px; margin-top:2px;">Más de 120 cm → panel (PN). Si es 120 o menos, elegilo en Pilastras como pilastra (PI). Solo uno de los dos.</div>\n        </label>`
+        const opts = widths.map(w => `<option value="${w}"${w===panel?" selected":""}>${w} cm</option>`).join("");
+        return `\n        <label>\n          <span>Cuarto PMR · pilastra separadora</span>\n          <select data-pmr="panel">${opts}</select>\n          ${fitDiv}\n        </label>`
     }
     if (kind === "door") {
         const doorPz = CATALOGO.piezas.filter(p => p.familia === "PT" && !p.sufijo && (p.ancho === 90 || p.ancho === 92) && piezaPermitidaPorModelo(p, cfg.modelo, altoTouchlessActual()));
@@ -7636,12 +7614,7 @@ function recomputarDivisorPmr(a) {
     const prof = (typeof leerDimensionesLugar === "function" ? (leerDimensionesLugar() || {}).paredOpuesta : 0) || 0;
     const frente = prof > 0 ? Math.max(0, Math.round(prof - panel - doorW)) : 45;
     if (!a.paneles) a.paneles = [];
-    a.paneles[cuartoIdx] = (panel > 120 ? "PN" : "PI") + panel + sufR;
-    if (panel > 120) {
-        if (!a.aperturas) a.aperturas = [];
-        const _sentDiv = ((a.aperturas[cuartoIdx] || (cfg.invertir ? "IZQ_EXT" : "DER_EXT")).split("_")[1]) || "EXT";
-        a.aperturas[cuartoIdx] = "IZQ_" + _sentDiv;
-    }
+    a.paneles[cuartoIdx] = "PI" + panel + sufR;
     if (!a.pilastrasExtras) a.pilastrasExtras = [];
     const fCode = "PI" + frente + sufR;
     const fx = a.pilastrasExtras.find(ex => (ex.descripcion || "").toLowerCase().includes("frente del cuarto pmr"));
@@ -7788,11 +7761,9 @@ function aplicarSugerencia(s) {
         if (cfg.invertir && s.cierreMingit && (s.nMingit || 0) > 0) a.paneles[(s.nMingit || 0) - 1] = s.codMGCierre || a.mgTipo || "MG60120";
         a.anchoPmrCuarto = s.anchoPmrCuarto || a.anchoPmrCuarto || 162;
         if (s.anchoPanelDivisor) a.anchoPanelDivisorPmr = s.anchoPanelDivisor;
-        const _wDivSug = Math.max(30, parseInt(a.anchoPanelDivisorPmr, 10) || s.anchoPanelDivisor || 100);
-        const _sufRSug = cfg.modelo === "REFORZADO" ? "R" : "";
-        a.paneles[accCabinaIdx] = _wDivSug > 120 ? "PN" + _wDivSug + _sufRSug : (s.codPanelDivisor || "PI" + _wDivSug + _sufRSug);
+        a.paneles[accCabinaIdx] = s.codPanelDivisor || "PN150";
         a.puertas[accCabinaIdx] = s.codPuertaAcc || "PT90";
-        a.aperturas[accCabinaIdx] = _wDivSug > 120 ? "IZQ_EXT" : (cfg.invertir ? "IZQ_EXT" : "DER_EXT");
+        a.aperturas[accCabinaIdx] = cfg.invertir ? "IZQ_EXT" : "DER_EXT";
         const yaTieneFrentePmr = a.pilastrasExtras && a.pilastrasExtras.some(ex => (ex.descripcion || "").toLowerCase().includes("frente del cuarto pmr"));
         if (!yaTieneFrentePmr && s.codPilFrentePmr) {
             if (!a.pilastrasExtras) a.pilastrasExtras = [];
