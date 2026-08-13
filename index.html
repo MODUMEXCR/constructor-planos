@@ -5403,7 +5403,7 @@ function actualizarValidacionModulacion() {
     const diff = claroAjustado - suma;
     const absDiff = Math.abs(diff);
     const rawGap = claro - suma;
-    const tolHerraje = esLayoutE || esLayoutL ? 5 : esDosMuros ? .5 : .5 * nPilMuro;
+    const tolHerraje = esLayoutE || esLayoutL || layout.cierrePanel ? 5 : esDosMuros ? .5 : .5 * nPilMuro;
     el.style.display = "block";
     const verde = () => {
         el.style.background = "#dcfce7";
@@ -5457,7 +5457,7 @@ function actualizarValidacionModulacion() {
         }
     } else if (absDiff <= tolHerraje) {
         verde();
-        const sufijo = esLayoutL ? absDiff > .5 ? ` (layout L: el extremo abierto absorbe ${absDiff.toFixed(1)} cm — tolerancia ±5 cm)` : "" : absDiff > .5 ? ` (herraje absorbe ${absDiff.toFixed(1)} cm)` : "";
+        const sufijo = esLayoutL || layout.cierrePanel ? absDiff > .5 ? ` (el extremo abierto absorbe ${absDiff.toFixed(1)} cm — tolerancia ±5 cm)` : "" : absDiff > .5 ? ` (herraje absorbe ${absDiff.toFixed(1)} cm)` : "";
         el.textContent = `✓ Modulación calza — suma ${suma} cm vs claro ${claro} cm${sufijo}`
     } else if (rawGap > 0 && rawGap <= 5) {
         amarillo();
