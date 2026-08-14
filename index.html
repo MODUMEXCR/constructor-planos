@@ -4199,11 +4199,43 @@ function etiquetaTier(tier) {
     }[tier] || "Especial"
 }
 
+function coloresParaSeleccion() {
+    const lineaAct = (cfg.linea || "").toUpperCase();
+    const esAcero = c => c.tier === "aceroInox";
+    const esEsmaltada = c => c.tier === "antigrafiti";
+    let cols = (CATALOGO.colores || []).filter(c => !c.lineas || c.lineas.some(l => String(l).toUpperCase() === lineaAct));
+    if ((cfg.linea || "") === "Superior") {
+        const ac = cfg.acabado || "Laminado Compacto";
+        if (ac === "Acero Inoxidable") cols = cols.filter(esAcero);
+        else if (ac === "Esmaltada Antigrafiti") cols = cols.filter(esEsmaltada);
+        else cols = cols.filter(c => !esAcero(c) && !esEsmaltada(c));
+    } else {
+        cols = cols.filter(c => !esAcero(c) && !esEsmaltada(c));
+    }
+    return cols;
+}
+
+function aplicarAcabadoAColor() {
+    const validos = coloresParaSeleccion();
+    const ac = cfg.acabado || "";
+    if ((cfg.linea || "") === "Superior" && (ac === "Esmaltada Antigrafiti" || ac === "Acero Inoxidable")) {
+        cfg.color = validos.length ? validos[0].nombre : "";
+    } else {
+        const actual = (cfg.color || "").toLowerCase();
+        const sigueValido = validos.some(c => (c.nombre || "").toLowerCase() === actual);
+        const enCatalogo = (CATALOGO.colores || []).some(c => (c.nombre || "").toLowerCase() === actual);
+        if (actual && enCatalogo && !sigueValido) cfg.color = "";
+    }
+    const hid = document.getElementById("cfg-color");
+    if (hid) hid.value = cfg.color || "";
+    poblarColoresDatalist();
+    poblarColorSecundarioDatalist();
+}
+
 function poblarColoresDatalist() {
     const sel = document.getElementById("cfg-color-sel");
     if (!sel) return;
-    const lineaAct = (cfg.linea || "").toUpperCase();
-    const cols = (CATALOGO.colores || []).filter(c => !c.lineas || c.lineas.some(l => String(l).toUpperCase() === lineaAct));
+    const cols = coloresParaSeleccion();
     const opts = cols.map(c => {
         const label = c.nombreViejo ? `${c.nombre} (${c.nombreViejo})` : c.nombre;
         return `<option value="${escapeHtml(c.nombre)}">${escapeHtml(label)} — ${etiquetaTier(c.tier)}</option>`
@@ -4265,8 +4297,7 @@ const TIER_ETIQUETA = {
 function poblarColorSecundarioDatalist() {
     const dl = document.getElementById("cfg-color-sec-list");
     if (!dl) return;
-    const lineaAct = (cfg.linea || "").toUpperCase();
-    const cols = (CATALOGO.colores || []).filter(c => !c.lineas || c.lineas.some(l => String(l).toUpperCase() === lineaAct));
+    const cols = coloresParaSeleccion();
     dl.innerHTML = cols.map(c => `<option value="${escapeHtml(c.nombre)}">`).join("")
 }
 
@@ -4481,8 +4512,7 @@ function bindCfg() {
         fillAcabadosPorLinea(cfg.linea);
         actualizarBotonSugerirSegunLinea();
         if (typeof actualizarInputTouchless === "function") actualizarInputTouchless();
-        poblarColoresDatalist();
-        poblarColorSecundarioDatalist();
+        aplicarAcabadoAColor();
         if (typeof recalcularSugerencia === "function") recalcularSugerencia()
     };
     $("cfg-modelo").onchange = e => {
@@ -4518,7 +4548,8 @@ function bindCfg() {
         if (typeof recalcularSugerencia === "function") recalcularSugerencia()
     };
     $("cfg-acabado").onchange = e => {
-        cfg.acabado = e.target.value
+        cfg.acabado = e.target.value;
+        aplicarAcabadoAColor()
     };
     const selColor = document.getElementById("cfg-color-sel");
     const espColor = document.getElementById("cfg-color-especial");
@@ -12567,6 +12598,8 @@ function cargarProyectoEnConfigurador(p) {
     set("cfg-terminacion", cfg.terminacion);
     fillAcabadosPorLinea(cfg.linea);
     set("cfg-color", cfg.color);
+    poblarColoresDatalist();
+    poblarColorSecundarioDatalist();
     if (typeof sincronizarColorUI === "function") sincronizarColorUI();
     if (typeof actualizarIndicadorTierColor === "function") actualizarIndicadorTierColor();
     if (typeof sincronizarColorSecundarioUI === "function") sincronizarColorSecundarioUI();
