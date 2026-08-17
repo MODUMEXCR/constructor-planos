@@ -4728,6 +4728,18 @@ function bindCfg() {
                     }
                 }
             }
+        } else if (a && cfg.areaActivaIdx >= 0) {
+            const infoInv2 = typeof leerDimensionesLugar === "function" ? leerDimensionesLugar() : null;
+            if (infoInv2 && infoInv2.paredCabinas > 0) {
+                const nMingitInv2 = (a.tiposCabina || []).filter(t => t === "Mingitorio").length;
+                const sInv2 = sugerirModulacion({
+                    claro: infoInv2.paredCabinas,
+                    N: cfg.cabinas,
+                    layoutCodigo: cfg.layout,
+                    nMingit: nMingitInv2
+                });
+                if (sInv2 && !sInv2.error) aplicarSugerencia(sInv2);
+            }
         }
         sincronizarMurosConLayout();
         renderPreview()
@@ -8959,7 +8971,8 @@ function exportarCSV(proyecto) {
         })
     }
     const lineaCsvVal = csvCell(nombreLinea(proyecto.linea));
-    const csv = lines.map((ln, i) => ln + "," + (i === 0 ? "Linea" : lineaCsvVal)).join("\n");
+    const acabadoCsvVal = csvCell(proyecto.acabado || "");
+    const csv = lines.map((ln, i) => ln + "," + (i === 0 ? "Linea" : lineaCsvVal) + "," + (i === 0 ? "Acabado" : acabadoCsvVal)).join("\n");
     const blob = new Blob([csv], {
         type: "text/csv;charset=utf-8;"
     });
@@ -9834,7 +9847,9 @@ function drawCajetinEsen(doc, proyecto, opts) {
     const obra = proyecto.obra || proyecto.nombre || "—";
     const ubic = ubicacionProyecto(proyecto);
     const presup = proyecto.presupuesto || proyecto.codigo || "—";
-    const acabado = proyecto.acabado || "Laminado compacto 12.7mm";
+    const espesorLinea = proyecto.linea === "Superior" ? "3mm" : "12.7mm";
+    const acabadoBase = proyecto.acabado || "Laminado compacto";
+    const acabado = /\d\s*mm/i.test(acabadoBase) ? acabadoBase : `${acabadoBase} ${espesorLinea}`;
     const color = proyecto.colorSecundarioActivo && proyecto.colorSecundario ? `${proyecto.color}, ${proyecto.colorSecundario} (${etiquetaPiezasColorSecundario(proyecto)})` : proyecto.color || "—";
     const obs = proyecto.observaciones || "Las medidas de la estructura indicadas en este plano son generadas a partir del proyecto " + "arquitectónico y deben asegurarse para garantizar una correcta instalación de las mamparas, " + "paneles, mingitorios y/o puertas.";
     const areaLbl = opts.cantidad && opts.cantidad > 1 ? `${opts.area} (cantidad ${opts.cantidad})` : opts.area;
