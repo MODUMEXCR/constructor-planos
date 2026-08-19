@@ -8978,7 +8978,8 @@ function exportarCSV(proyecto) {
     }
     const lineaCsvVal = csvCell(nombreLinea(proyecto.linea));
     const acabadoCsvVal = csvCell(proyecto.acabado || "");
-    const csv = lines.map((ln, i) => ln + "," + (i === 0 ? "Linea" : lineaCsvVal) + "," + (i === 0 ? "Acabado" : acabadoCsvVal)).join("\n");
+    const regionCsvVal = csvCell(regionDeProyecto(proyecto) || "");
+    const csv = lines.map((ln, i) => ln + "," + (i === 0 ? "Linea" : lineaCsvVal) + "," + (i === 0 ? "Acabado" : acabadoCsvVal) + "," + (i === 0 ? "Region" : regionCsvVal)).join("\n");
     const blob = new Blob([csv], {
         type: "text/csv;charset=utf-8;"
     });
