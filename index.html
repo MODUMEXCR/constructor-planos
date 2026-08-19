@@ -8751,15 +8751,17 @@ function exportarCSV(proyecto) {
     const kap = proyecto.kap ? "SI" : "NO";
     const color = proyecto.color || "Fashion White";
     const grupos = {};
-    const agregar = (pieza, subTipo, areaName, altoOverride) => {
+    const agregar = (pieza, subTipo, areaName, altoOverride, orientacion) => {
         const areaVis = nombreDeArea(areaName);
         const sku = generarSkuLargo(pieza, proyecto, altoOverride);
-        const key = `${sku}|${subTipo}|${areaVis}`;
+        const ori = orientacion || "";
+        const key = `${sku}|${subTipo}|${areaVis}|${ori}`;
         grupos[key] = grupos[key] || {
             sku: sku,
             subTipo: subTipo,
             area: areaVis,
             color: colorDePieza(pieza.familia, proyecto),
+            orientacion: ori,
             cantidad: 0
         };
         grupos[key].cantidad++
@@ -8798,7 +8800,11 @@ function exportarCSV(proyecto) {
                 const c = (areaCfg.puertas || [])[i];
                 if (c) {
                     const p = CATALOGO.piezas.find(x => x.codigo === c);
-                    if (p) agregar(p, determinarSubTipoModumex(p, ctx), areaName, altoDeCabina(p.familia, areaCfg, i))
+                    if (p) {
+                        const apCab = (areaCfg.aperturas || [])[i] || "";
+                        const dirCab = /EXT/.test(apCab) ? "AFUERA" : (/INT/.test(apCab) ? "ADENTRO" : "");
+                        agregar(p, determinarSubTipoModumex(p, ctx), areaName, altoDeCabina(p.familia, areaCfg, i), dirCab)
+                    }
                 }
             }
             const cp = _ultCabContraMuro(i) ? "" : (areaCfg.paneles || [])[i];
@@ -8930,8 +8936,8 @@ function exportarCSV(proyecto) {
     const distribuidor = proyecto.distribuidor || "";
     const lines = ["Codigo,Obra,Distribuidor,SKU,Cantidad,SubTipo,Orientacion,Area,Modelo,Sistema,Color,KAP"];
     Object.values(grupos).forEach(g => {
-        const orientacion = orientacionDeSubTipo(g.subTipo);
-        lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell(g.sku), g.cantidad, csvCell(g.subTipo), orientacion, csvCell(g.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(g.color || color), kap].join(","))
+        const orientacion = g.orientacion || orientacionDeSubTipo(g.subTipo);
+        lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell(g.sku), g.cantidad, csvCell(g.subTipo), csvCell(orientacion), csvCell(g.area), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(g.color || color), kap].join(","))
     });
     (proyecto.herrajesExtra || []).forEach(h => {
         lines.push([csvCell(proyCodigo), csvCell(obraNombre), csvCell(distribuidor), csvCell(h.codigo), h.cantidad || 1, csvCell("HERRAJE" + (h.linea ? "-" + h.linea : "")), "", csvCell("Herrajes extra"), csvCell(modeloNombre), csvCell(sistemaNombre), csvCell(color), kap].join(","))
